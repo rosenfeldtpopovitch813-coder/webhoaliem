@@ -3566,15 +3566,32 @@ function togglePomodoro() {
       pomoInterval = setInterval(() => {
             if (pomoSeconds > 0) {
                 pomoSeconds--;
-                if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') totalStudySeconds++; // Cày mặc định hay tự gõ phút đều cộng điểm!
-                updatePomoUI();
-                updateRankUI(); // cập nhật thẻ thăng cấp
-                
-                if (totalStudySeconds % 120 === 0 && auth && auth.currentUser) {
-                    db.ref('users/' + auth.currentUser.uid).update({
-                        totalStudySeconds: totalStudySeconds
-                    });
+                if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') {
+                    totalStudySeconds++; 
+                    
+                    // 💡 TRÁI TIM MỚI: Tự động cộng Giây và ép lưu thẳng vào ổ cứng
+                    let key = 'htvvm.todayStudySeconds';
+                    let todaySec = Number(localStorage.getItem(key)) || 0;
+                    localStorage.setItem(key, todaySec + 1);
+
+                    // 💡 Tự động đồng bộ lên Firebase mỗi 30 giây để chống mất điểm
+                    if (todaySec % 30 === 0 && auth && auth.currentUser) {
+                        const d = new Date();
+                        const todayKey = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                        db.ref('users/' + auth.currentUser.uid).update({
+                            totalStudySeconds: totalStudySeconds,
+                            ['dailyStudy/' + todayKey]: todaySec + 1
+                        });
+                    }
+                    
+                    // 💡 Gọi hàm cập nhật thanh mục tiêu
+                    if(typeof updateStudyDashboard === 'function') {
+                        try { updateStudyDashboard(); } catch(e){}
+                    }
                 }
+                updatePomoUI();
+                updateRankUI(); // Cập nhật thẻ danh hiệu ra màn hình ngay lập tức
+                
             } else {
                 clearInterval(pomoInterval);
                 isPomoRunning = false;
@@ -3586,7 +3603,7 @@ function togglePomodoro() {
                 btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
             }
         }, 1000);
-      }
+    }
 }
 
 function resetPomodoro() {
