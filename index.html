@@ -3545,80 +3545,100 @@ function updateRankUI() {
 
 function togglePomodoro() {
     const btn = document.getElementById('btn-pomo-action');
+    if (!btn) return;
+
     if (isPomoRunning) {
         clearInterval(pomoInterval);
+        pomoInterval = null;
         isPomoRunning = false;
+        recordSession();
         btn.innerText = 'TIẾP TỤC';
         btn.className = 'bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';
-        enableInputs(); 
-    } else {
-        userCustomTime(); 
-        if (pomoSeconds <= 0) return alert('Ní phải nhập thời gian lớn hơn 0 nghen!');
-
-        isPomoRunning = true;
-        continuousStudySeconds = 0;
-        fiveHourAlerted = false;
-        disableInputs(); 
-        
-        btn.innerText = 'DỪNG LẠI';
-        btn.className = 'bg-red-500 hover:bg-red-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-inner w-full';
-        
-      pomoInterval = setInterval(() => {
-            if (pomoSeconds > 0) {
-                pomoSeconds--;
-                if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') {
-                    totalStudySeconds++; 
-                    
-                    // 💡 TRÁI TIM MỚI: Tự động cộng Giây và ép lưu thẳng vào ổ cứng
-                    let key = 'htvvm.todayStudySeconds';
-                    let todaySec = Number(localStorage.getItem(key)) || 0;
-                    localStorage.setItem(key, todaySec + 1);
-
-                    // 💡 Tự động đồng bộ lên Firebase mỗi 30 giây để chống mất điểm
-                    if (todaySec % 30 === 0 && auth && auth.currentUser) {
-                        const d = new Date();
-                        const todayKey = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-                        db.ref('users/' + auth.currentUser.uid).update({
-                            totalStudySeconds: totalStudySeconds,
-                            ['dailyStudy/' + todayKey]: todaySec + 1
-                        });
-                    }
-                    
-                    // 💡 Gọi hàm cập nhật thanh mục tiêu
-                    if(typeof updateStudyDashboard === 'function') {
-                        try { updateStudyDashboard(); } catch(e){}
-                    }
-                }
-                updatePomoUI();
-                updateRankUI(); // Cập nhật thẻ danh hiệu ra màn hình ngay lập tức
-                
-            } else {
-                clearInterval(pomoInterval);
-                isPomoRunning = false;
-                enableInputs();
-                alert('⏰ Reng reng reng! Hết giờ rồi thằng em ơi!');
-                
-                const btn = document.getElementById('btn-pomo-action');
-                btn.innerText = 'BẮT ĐẦU';
-                btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
-            }
-        }, 1000);
+        enableInputs();
+        syncFocusOverlay();
+        return;
     }
+
+    // The selected preset or edited input already controls pomoSeconds.
+    // Do not call userCustomTime() here because it would convert every preset
+    // (25/5/15 minutes) into the custom mode on start/resume.
+    if (!Number.isFinite(pomoSeconds) || pomoSeconds <= 0) {
+        return alert('Ní phải nhập thời gian lớn hơn 0 nghen!');
+    }
+
+    ensureTodayStore();
+    isPomoRunning = true;
+    continuousStudySeconds = 0;
+    fiveHourAlerted = false;
+    disableInputs();
+
+    btn.innerText = 'DỪNG LẠI';
+    btn.className = 'bg-red-500 hover:bg-red-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-inner w-full';
+    syncFocusOverlay();
+
+    clearInterval(pomoInterval);
+    pomoInterval = setInterval(() => {
+        if (!isPomoRunning) return;
+
+        if (pomoSeconds > 0) {
+            pomoSeconds--;
+
+            // One timer tick = exactly one study second.
+            if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') {
+                recordStudySecond();
+                continuousStudySeconds = safeNum(continuousStudySeconds) + 1;
+            }
+
+            updatePomoUI();
+            updateRankUI();
+            syncFocusOverlay();
+
+        } else {
+            clearInterval(pomoInterval);
+            pomoInterval = null;
+            isPomoRunning = false;
+            enableInputs();
+            recordSession();
+            syncFocusOverlay();
+
+            btn.innerText = 'BẮT ĐẦU';
+            btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
+            alert('⏰ Reng reng reng! Hết giờ rồi thằng em ơi!');
+        }
+    }, 1000);
 }
 
 function resetPomodoro() {
-    if(currentPomoMode === 'custom') {
-        clearInterval(pomoInterval);
-        isPomoRunning = false;
-        enableInputs();
-        pomoSeconds = 25 * 60; 
-        updatePomoUI();
-        const btn = document.getElementById('btn-pomo-action');
+    const wasRunning = isPomoRunning;
+    clearInterval(pomoInterval);
+    pomoInterval = null;
+    isPomoRunning = false;
+    continuousStudySeconds = 0;
+    enableInputs();
+
+    if (currentPomoMode === 'pomo') {
+        pomoSeconds = 25 * 60;
+    } else if (currentPomoMode === 'short') {
+        pomoSeconds = 5 * 60;
+    } else if (currentPomoMode === 'long') {
+        pomoSeconds = 15 * 60;
+    } else {
+        // Custom mode resets to the standard Pomodoro length, matching the old UI.
+        pomoSeconds = 25 * 60;
+    }
+
+    updatePomoUI();
+    updateRankUI();
+    syncFocusOverlay();
+
+    const btn = document.getElementById('btn-pomo-action');
+    if (btn) {
         btn.innerText = 'BẮT ĐẦU';
         btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
-    } else {
-        setPomoMode(currentPomoMode);
     }
+
+    // Resetting after a running session ends that session, without adding time.
+    if (wasRunning) recordSession();
 }
 // ==========================================
 // TÍNH NĂNG VẼ ĐỒ THỊ HÀM SỐ
@@ -3924,7 +3944,7 @@ function toggleAIChat() {
       const uid=auth.currentUser.uid;
       const today=dateKey();
       await db.ref(`users/${uid}`).update({
-        totalStudySeconds:safeNum(window.totalStudySeconds),
+        totalStudySeconds:safeNum(totalStudySeconds),
         lastActiveAt:Date.now(),
         [`dailyStudy/${today}`]:getTodaySeconds(),
         [`dailySessions/${today}`]:getTodaySessions()
@@ -3947,11 +3967,17 @@ function toggleAIChat() {
 
   function recordStudySecond(){
     ensureTodayStore();
-    const n=getTodaySeconds()+1;
-    localStorage.setItem(STORE.todaySeconds,String(n));
-    if(n%30===0) syncStudyStats();
+
+    // Single source of truth for study XP/time.
+    totalStudySeconds = safeNum(totalStudySeconds) + 1;
+    const n = getTodaySeconds() + 1;
+    localStorage.setItem(STORE.todaySeconds, String(n));
+
+    // Keep the UI realtime and sync to Firebase every 30 seconds.
     updateStudyDashboard();
-    if(n/60===getDailyGoal()) toast('🎉 Hoàn thành mục tiêu học hôm nay!');
+    updateRankUI();
+    if(n % 30 === 0) syncStudyStats();
+    if(n / 60 === getDailyGoal()) toast('🎉 Hoàn thành mục tiêu học hôm nay!');
   }
 
   function recordSession(){
@@ -4107,33 +4133,21 @@ function toggleAIChat() {
   // Chống xao nhãng: nếu đổi tab khi timer đang chạy, tự pause và ghi nhận sự kiện.
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden && typeof isPomoRunning!=='undefined' && isPomoRunning){
-      focusLostAt=Date.now(); clearInterval(pomoInterval); isPomoRunning=false;
-      const btn=document.getElementById('btn-pomo-action'); if(btn){btn.textContent='TIẾP TỤC'; btn.className='bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';}
+      focusLostAt=Date.now();
+      clearInterval(pomoInterval);
+      pomoInterval=null;
+      isPomoRunning=false;
+      recordSession();
+      const btn=document.getElementById('btn-pomo-action');
+      if(btn){btn.textContent='TIẾP TỤC'; btn.className='bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';}
       if(typeof enableInputs==='function') enableInputs();
       toast('⏸️ Đã tạm dừng vì bạn rời tab.');
       syncFocusOverlay();
     }
   });
 
-  // Ghi lại phiên khi Pomodoro hoàn tất; patch nhẹ vào existing timer bằng polling state.
-  let wasRunning=false;
- // Ghi lại phiên khi Pomodoro hoàn tất; patch nhẹ vào existing timer bằng polling state.
-        let wasRunning=false;
-        setInterval(()=>{
-          ensureTodayStore();
-          // ĐÃ SỬA: Cho phép cả chế độ 'pomo' và 'custom' được tính giờ cày cuốc lưu vào Database
-          const isStudying = typeof currentPomoMode!=='undefined' && (currentPomoMode==='pomo' || currentPomoMode==='custom');
-          
-          if(typeof isPomoRunning!=='undefined' && isPomoRunning && isStudying){
-            recordStudySecond();
-            continuousStudySeconds=safeNum(continuousStudySeconds)+1;
-          } else if(wasRunning && isStudying) {
-            recordSession();
-            continuousStudySeconds=0;
-          }
-          wasRunning=!!(typeof isPomoRunning!=='undefined' && isPomoRunning);
-          syncFocusOverlay();
-        },1000);
+  // Study time is recorded directly by the Pomodoro interval.
+  // Do not run a second polling timer here or study points would be counted twice.
 
   // AI proxy: API key không còn nằm trong browser bundle. Frontend gọi /api/gemini.
   function aiBubble(content, me=false){ const body=document.getElementById('ai-chat-body'); if(!body) return null; const div=document.createElement('div'); div.className=me?'bg-blue-600 text-white p-3 rounded-2xl rounded-tr-none self-end max-w-[85%] font-medium shadow-sm mt-4':'bg-white border border-slate-200 text-slate-800 p-4 rounded-2xl rounded-tl-none self-start max-w-[90%] shadow-sm mt-4 leading-relaxed'; div.innerHTML=me?html(content):html(content).replace(/\n/g,'<br>'); body.appendChild(div); body.scrollTop=body.scrollHeight; if(!me&&window.MathJax) MathJax.typesetPromise([div]).catch(()=>{}); return div; }
@@ -4175,7 +4189,10 @@ function toggleAIChat() {
   // Khởi động lớp tối ưu sau khi DOM sẵn sàng.
   document.addEventListener('DOMContentLoaded',()=>{
     startWebVisitTimer();
-    ensureTodayStore(); updateStudyDashboard();
+    ensureTodayStore();
+    updatePomoUI();
+    updateRankUI();
+    updateStudyDashboard();
     if(typeof auth!=='undefined' && auth) auth.onAuthStateChanged(u=>{ if(u) loadRole(u); });
     const input=document.getElementById('searchInput'); if(input) input.setAttribute('autocomplete','off');
   });
