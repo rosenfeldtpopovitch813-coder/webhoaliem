@@ -4746,5 +4746,224 @@ window.uploadCustomAvatar = function(e) {
     e.target.value = ''; // Reset khung chọn file
 };
 </script>
+
+<script id="htvvm-pomodoro-reliable-fix">
+/* HTVVM — Pomodoro engine v3
+   - Uses Date.now() as source of truth, not decrement-only intervals.
+   - Exactly one study-time accounting path.
+   - Safe even when browser throttles setInterval.
+*/
+(function(){
+  let pomoTargetAt = 0;
+  let pomoLastAwardAt = 0;
+  let pomoTickId = null;
+  let pomoFinished = false;
+
+  const $ = id => document.getElementById(id);
+  const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+
+  function setBtn(running, paused){
+    const btn = $('btn-pomo-action');
+    if(!btn) return;
+    if(running){
+      btn.textContent = 'DỪNG LẠI';
+      btn.className = 'bg-red-500 hover:bg-red-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-inner w-full';
+    }else if(paused){
+      btn.textContent = 'TIẾP TỤC';
+      btn.className = 'bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';
+    }else{
+      btn.textContent = 'BẮT ĐẦU';
+      btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
+    }
+  }
+
+  function renderRemaining(){
+    const remaining = Math.max(0, Math.ceil((pomoTargetAt - Date.now()) / 1000));
+    if(typeof window.pomoSeconds !== 'undefined') window.pomoSeconds = remaining;
+    if(typeof updatePomoUI === 'function') updatePomoUI();
+    if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+    return remaining;
+  }
+
+  function dateKeyNow(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  function awardStudySeconds(delta){
+    delta = Math.max(0, Math.floor(delta));
+    if(!delta) return;
+    try{
+      if(typeof ensureTodayStore === 'function') ensureTodayStore();
+      const key = 'htvvm.todayStudySeconds';
+      let today = num(localStorage.getItem(key));
+      today += delta;
+      localStorage.setItem(key, String(today));
+      if(typeof window.totalStudySeconds !== 'undefined') window.totalStudySeconds = num(window.totalStudySeconds) + delta;
+      else if(typeof totalStudySeconds !== 'undefined') totalStudySeconds += delta;
+
+      const sessionsGoal = typeof getDailyGoal === 'function' ? getDailyGoal() : 60;
+      void sessionsGoal;
+      if(typeof updateStudyDashboard === 'function') updateStudyDashboard();
+      if(typeof updateRankUI === 'function') updateRankUI();
+
+      // Đồng bộ tối đa mỗi 30 giây; không để lỗi Firebase làm hỏng timer.
+      if(today % 30 < delta){
+        const u = window.auth?.currentUser || (typeof auth !== 'undefined' ? auth?.currentUser : null);
+        const database = window.db || (typeof db !== 'undefined' ? db : null);
+        if(u && database){
+          database.ref('users/'+u.uid).update({
+            totalStudySeconds: (typeof window.totalStudySeconds !== 'undefined' ? num(window.totalStudySeconds) : num(totalStudySeconds)),
+            ['dailyStudy/'+dateKeyNow()]: today,
+            lastActiveAt: Date.now()
+          }).catch(err=>console.warn('Pomodoro Firebase sync:',err));
+        }
+      }
+    }catch(err){
+      console.warn('awardStudySeconds:', err);
+    }
+  }
+
+  function flushAwardUntil(now){
+    if(!pomoLastAwardAt) pomoLastAwardAt = now;
+    const elapsed = Math.floor((now - pomoLastAwardAt)/1000);
+    if(elapsed > 0){
+      awardStudySeconds(elapsed);
+      pomoLastAwardAt += elapsed*1000;
+    }
+  }
+
+  function stopTick(){
+    if(pomoTickId){ clearInterval(pomoTickId); pomoTickId=null; }
+  }
+
+  function tick(){
+    if(!window.isPomoRunning) return;
+    const now = Date.now();
+    flushAwardUntil(now);
+    const remaining = renderRemaining();
+    if(remaining <= 0){
+      finish();
+    }
+  }
+
+  function finish(){
+    if(pomoFinished) return;
+    pomoFinished = true;
+    stopTick();
+    window.isPomoRunning = false;
+    const now = Date.now();
+    if(pomoTargetAt) flushAwardUntil(Math.max(now, pomoTargetAt));
+    window.pomoSeconds = 0;
+    if(typeof updatePomoUI === 'function') updatePomoUI();
+    if(typeof updateRankUI === 'function') updateRankUI();
+    if(typeof syncStudyStats === 'function') syncStudyStats();
+    if(typeof enableInputs === 'function') enableInputs();
+    setBtn(false,false);
+    if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+    if(typeof toast === 'function') toast('⏰ Hết giờ Pomodoro! Giỏi lắm, thêm một phiên cày cuốc.');
+    else alert('⏰ Hết giờ Pomodoro!');
+  }
+
+  window.togglePomodoro = function(){
+    const seconds = num(window.pomoSeconds);
+
+    // PAUSE / RESUME
+    if(window.isPomoRunning){
+      const now = Date.now();
+      flushAwardUntil(now);
+      const remaining = Math.max(0, Math.ceil((pomoTargetAt - now)/1000));
+      window.pomoSeconds = remaining;
+      stopTick();
+      window.isPomoRunning = false;
+      pomoTargetAt = 0;
+      pomoFinished = false;
+      if(typeof enableInputs === 'function') enableInputs();
+      setBtn(false,true);
+      if(typeof updatePomoUI === 'function') updatePomoUI();
+      if(typeof updateRankUI === 'function') updateRankUI();
+      if(typeof syncStudyStats === 'function') syncStudyStats();
+      if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+      return;
+    }
+
+    if(!Number.isFinite(seconds) || seconds <= 0){
+      alert('Ní phải nhập thời gian lớn hơn 0 nghen!');
+      return;
+    }
+
+    try{ if(typeof ensureTodayStore === 'function') ensureTodayStore(); }catch(_){ }
+    pomoFinished = false;
+    pomoTargetAt = Date.now() + seconds*1000;
+    pomoLastAwardAt = Date.now();
+    window.isPomoRunning = true;
+    if(typeof disableInputs === 'function') disableInputs();
+    setBtn(true,false);
+    renderRemaining();
+    stopTick();
+    pomoTickId = setInterval(tick, 250);
+    tick();
+  };
+
+  window.resetPomodoro = function(){
+    const mode = String(window.currentPomoMode || 'pomo');
+    stopTick();
+    window.isPomoRunning = false;
+    pomoTargetAt = 0;
+    pomoLastAwardAt = 0;
+    pomoFinished = false;
+    if(typeof enableInputs === 'function') enableInputs();
+    window.pomoSeconds = mode === 'short' ? 5*60 : mode === 'long' ? 15*60 : 25*60;
+    if(typeof updatePomoUI === 'function') updatePomoUI();
+    if(typeof updateRankUI === 'function') updateRankUI();
+    if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+    setBtn(false,false);
+  };
+
+  // Preset modes — keep their mode and duration stable.
+  window.setPomoMode = function(mode){
+    stopTick();
+    window.isPomoRunning = false;
+    window.currentPomoMode = mode;
+    pomoTargetAt = 0;
+    pomoLastAwardAt = 0;
+    pomoFinished = false;
+    const seconds = mode === 'short' ? 5*60 : mode === 'long' ? 15*60 : 25*60;
+    window.pomoSeconds = seconds;
+    ['pomo','short','long'].forEach(m=>{
+      const el = $('mode-'+m);
+      if(el) el.className = 'flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all';
+    });
+    const active = $('mode-'+mode);
+    if(active) active.className = 'flex-1 py-2 rounded-lg font-extrabold bg-white text-emerald-600 shadow-sm transition-all';
+    if(typeof enableInputs === 'function') enableInputs();
+    if(typeof updatePomoUI === 'function') updatePomoUI();
+    setBtn(false,false);
+    if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+  };
+
+  // Custom input handler.
+  window.userCustomTime = function(){
+    if(window.isPomoRunning) return;
+    window.currentPomoMode = 'custom';
+    const m = Math.max(0, Math.floor(num($('input-m')?.value)));
+    const s = Math.max(0, Math.min(59, Math.floor(num($('input-s')?.value))));
+    window.pomoSeconds = m*60+s;
+    ['pomo','short','long'].forEach(x=>{ const el=$('mode-'+x); if(el) el.className='flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all'; });
+    if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+  };
+
+  // Keep display sane on first paint.
+  document.addEventListener('DOMContentLoaded',()=>{
+    try{
+      if(typeof window.pomoSeconds !== 'number') window.pomoSeconds=25*60;
+      if(typeof updatePomoUI === 'function') updatePomoUI();
+      if(typeof updateRankUI === 'function') updateRankUI();
+      if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
+      setBtn(false,false);
+    }catch(err){ console.warn('Pomodoro init:',err); }
+  });
+})();
+</script>
 </body>
 </html>
