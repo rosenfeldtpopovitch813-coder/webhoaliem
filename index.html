@@ -3506,12 +3506,14 @@ function enableInputs() {
 // LƯU Ý: Danh hiệu là DAILY — chỉ lấy thời gian học của ngày hiện tại.
 // totalStudySeconds vẫn giữ nguyên để phục vụ Tổng thời gian học ở hồ sơ/thống kê.
 function updateRankUI() {
-    // Lấy trực tiếp từ bộ nhớ cục bộ để không bị lỗi ẩn biến
+    // Lấy trực tiếp từ bộ nhớ cục bộ
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     let h = Math.floor(dailySeconds / 3600);
     let m = Math.floor((dailySeconds % 3600) / 60);
+    let s = dailySeconds % 60; // Thêm biến đếm giây
     
-    document.getElementById('rank-time').innerText = `Hôm nay: ${h > 0 ? h + ' giờ ' : ''}${m} phút`;
+    // 💡 ĐÃ SỬA: Hiển thị cả số GIÂY ra màn hình cho dễ theo dõi
+    document.getElementById('rank-time').innerText = `Hôm nay: ${h > 0 ? h + ' giờ ' : ''}${m} phút ${s} giây`;
     
     let icon = document.getElementById('rank-icon');
     let name = document.getElementById('rank-name');
@@ -3531,34 +3533,12 @@ function updateRankUI() {
         name.className = 'text-xl font-extrabold text-amber-600 mb-1';
         progress.className = 'bg-amber-500 h-3 rounded-full transition-all duration-1000';
         next.innerText = `Còn ${60 - m}p nữa để thành Dopamine`;
-    } else if (h === 2) {
+    } else if (h >= 2) {
         icon.innerText = '🚀'; name.innerText = 'Hưng phấn (Dopamine)';
         name.className = 'text-xl font-extrabold text-purple-600 mb-1';
         progress.className = 'bg-purple-500 h-3 rounded-full transition-all duration-1000';
-        next.innerText = `Còn ${60 - m}p nữa để thành Adrenaline`;
-    } else if (h === 3) {
-        icon.innerText = '⚡'; name.innerText = 'Bứt phá (Adrenaline)';
-        name.className = 'text-xl font-extrabold text-orange-600 mb-1';
-        progress.className = 'bg-orange-500 h-3 rounded-full transition-all duration-1000';
-        next.innerText = `Còn ${60 - m}p nữa để thành Serotonin`;
-    } else if (h === 4) {
-        icon.innerText = '🧠'; name.innerText = 'Thông thái (Serotonin)';
-        name.className = 'text-xl font-extrabold text-emerald-600 mb-1';
-        progress.className = 'bg-emerald-500 h-3 rounded-full transition-all duration-1000';
-        next.innerText = `Còn ${60 - m}p nữa để chạm mốc Quá tải`;
-    } else if (h >= 5) {
-        icon.innerText = '🚨'; name.innerText = 'Quá tải (Cortisol)';
-        name.className = 'text-xl font-extrabold text-red-600 mb-1 animate-pulse';
-        progress.className = 'bg-red-500 h-3 rounded-full transition-all duration-1000';
-        percent = 100; // Đầy bình
-        next.innerText = `Web không ép, nhưng khuyên ní nên nghỉ!`;
-        
-        // Bật cảnh báo đúng 1 lần duy nhất khi vừa chạm 5 tiếng
-        if (!fiveHourAlerted && continuousStudySeconds >= 5 * 3600) {
-            alert('🚨 HỆ THỐNG CẢNH BÁO! 🚨\n\nBạn đã tập trung liên tục 5 TIẾNG đồng hồ rồi đó! Não bộ đang tiết ra Cortisol (hormone căng thẳng) kịch trần rồi.\n\nTui nhắc nhẹ vậy thôi, đi uống nước vươn vai xíu đi. Bấm OK xong ní muốn học tiếp tui vẫn cho cày thoải mái nhé =)))');
-            fiveHourAlerted = true;
-        }
-    }
+        next.innerText = `Đang cày rất hăng say!`;
+    } 
     
     if(progress) progress.style.width = percent + '%';
 }
@@ -3586,7 +3566,7 @@ function togglePomodoro() {
       pomoInterval = setInterval(() => {
             if (pomoSeconds > 0) {
                 pomoSeconds--;
-                if (currentPomoMode === 'pomo') totalStudySeconds++; // chỉ tính thời gian học, không tính nghỉ
+                if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') totalStudySeconds++; // Cày mặc định hay tự gõ phút đều cộng điểm!
                 updatePomoUI();
                 updateRankUI(); // cập nhật thẻ thăng cấp
                 
@@ -4120,18 +4100,23 @@ function toggleAIChat() {
 
   // Ghi lại phiên khi Pomodoro hoàn tất; patch nhẹ vào existing timer bằng polling state.
   let wasRunning=false;
-  setInterval(()=>{
-    ensureTodayStore();
-    if(typeof isPomoRunning!=='undefined' && isPomoRunning && typeof currentPomoMode!=='undefined' && currentPomoMode==='pomo'){
-      recordStudySecond();
-      continuousStudySeconds=safeNum(continuousStudySeconds)+1;
-    } else if(wasRunning && typeof currentPomoMode!=='undefined' && currentPomoMode==='pomo') {
-      recordSession();
-      continuousStudySeconds=0;
-    }
-    wasRunning=!!(typeof isPomoRunning!=='undefined' && isPomoRunning);
-    syncFocusOverlay();
-  },1000);
+ // Ghi lại phiên khi Pomodoro hoàn tất; patch nhẹ vào existing timer bằng polling state.
+        let wasRunning=false;
+        setInterval(()=>{
+          ensureTodayStore();
+          // ĐÃ SỬA: Cho phép cả chế độ 'pomo' và 'custom' được tính giờ cày cuốc lưu vào Database
+          const isStudying = typeof currentPomoMode!=='undefined' && (currentPomoMode==='pomo' || currentPomoMode==='custom');
+          
+          if(typeof isPomoRunning!=='undefined' && isPomoRunning && isStudying){
+            recordStudySecond();
+            continuousStudySeconds=safeNum(continuousStudySeconds)+1;
+          } else if(wasRunning && isStudying) {
+            recordSession();
+            continuousStudySeconds=0;
+          }
+          wasRunning=!!(typeof isPomoRunning!=='undefined' && isPomoRunning);
+          syncFocusOverlay();
+        },1000);
 
   // AI proxy: API key không còn nằm trong browser bundle. Frontend gọi /api/gemini.
   function aiBubble(content, me=false){ const body=document.getElementById('ai-chat-body'); if(!body) return null; const div=document.createElement('div'); div.className=me?'bg-blue-600 text-white p-3 rounded-2xl rounded-tr-none self-end max-w-[85%] font-medium shadow-sm mt-4':'bg-white border border-slate-200 text-slate-800 p-4 rounded-2xl rounded-tl-none self-start max-w-[90%] shadow-sm mt-4 leading-relaxed'; div.innerHTML=me?html(content):html(content).replace(/\n/g,'<br>'); body.appendChild(div); body.scrollTop=body.scrollHeight; if(!me&&window.MathJax) MathJax.typesetPromise([div]).catch(()=>{}); return div; }
