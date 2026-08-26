@@ -1099,9 +1099,13 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
   <div class="flex flex-col lg:flex-row justify-between items-center py-4 gap-4">
   
-<button onclick="openProfile()" title="Xem hồ sơ cá nhân" class="hidden lg:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors group cursor-pointer shadow-sm">
-    <div class="w-2 h-2 rounded-full bg-emerald-500 group-hover:bg-blue-500 transition-colors"></div>
-    <span id="user-display-name" class="text-xs font-bold text-slate-600 group-hover:text-blue-600">Đang kết nối...</span>
+<button onclick="openProfile()" title="Xem hồ sơ cá nhân" class="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-colors group cursor-pointer shadow-sm">
+    <!-- Khung chứa Avatar + Chấm xanh Online -->
+    <div class="relative shrink-0">
+        <img id="nav-avatar" src="https://ui-avatars.com/api/?name=U&background=cbd5e1&color=fff" class="w-8 h-8 rounded-full object-cover border border-slate-200 group-hover:border-blue-300 transition-colors" alt="Avatar">
+        <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"></div>
+    </div>
+    <span id="user-display-name" class="text-sm font-extrabold text-slate-700 group-hover:text-blue-600 transition-colors">Đang kết nối...</span>
 </button>
    <!-- 1. Logo -->
    <div class="flex items-center gap-2 cursor-pointer shrink-0" onclick="switchSection('sec-library')">
@@ -2263,19 +2267,17 @@ function openProfile() {
     modal.classList.remove('opacity-0', 'pointer-events-none');
     document.getElementById('profile-modal-content').classList.remove('scale-95');
     
-   // Tải thông tin cá nhân
+    // Tải thông tin cá nhân
     if(auth && auth.currentUser) {
         const uid = auth.currentUser.uid;
         const name = auth.currentUser.displayName || auth.currentUser.email || "U";
         
-        // Mở Database ra check xem có ảnh Custom không
         db.ref('users/' + uid).once('value').then(snap => {
             const data = snap.val() || {};
-            const customAvt = data.customAvatar; // Ảnh tự up
-            const googleAvt = auth.currentUser.photoURL; // Ảnh Gmail
+            const customAvt = data.customAvatar; 
+            const googleAvt = auth.currentUser.photoURL; 
             
             const avtEl = document.getElementById('profile-avatar');
-            // AI siêu việt: Có ảnh tự up thì xài, không có thì xài Gmail, Gmail không có thì xài chữ
             if (customAvt) {
                 avtEl.src = customAvt;
             } else if (googleAvt) {
@@ -2289,12 +2291,12 @@ function openProfile() {
         document.getElementById('profile-email').innerText = auth.currentUser.email;
     }
     
-    // Tổng thời gian học vẫn là số giờ TÍCH LŨY toàn bộ tài khoản.
-    const totalHours = Math.floor(safeNum(totalStudySeconds) / 3600);
+    // SỬA LẠI KHÚC NÀY ĐỂ ĐỌC SỐ CHUẨN KHÔNG BỊ LỖI
+    const totalHours = Math.floor((Number(totalStudySeconds) || 0) / 3600);
     document.getElementById('profile-study-time').innerText = totalHours + 'h';
 
-    // Danh hiệu chỉ tính theo thời gian học CỦA HÔM NAY.
-    const dailySeconds = (typeof getTodaySeconds === 'function') ? getTodaySeconds() : 0;
+    // Tính danh hiệu
+    const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     const dailyHours = Math.floor(dailySeconds / 3600);
     document.getElementById('profile-rank-icon').innerText = '💧';
     document.getElementById('profile-rank-name').innerText = 'Tập sự (H₂O)';
@@ -2394,6 +2396,18 @@ function initFirebase() {
             
             let displayName = user.displayName || user.email || "Học viên";
             if(userName) userName.innerText = String(displayName).split('@')[0];
+            db.ref('users/' + user.uid).once('value').then(snap => {
+                const data = snap.val() || {};
+                const customAvt = data.customAvatar;
+                const googleAvt = user.photoURL;
+                const navAvt = document.getElementById('nav-avatar');
+                
+                if (navAvt) {
+                    if (customAvt) navAvt.src = customAvt;
+                    else if (googleAvt) navAvt.src = googleAvt;
+                    else navAvt.src = `https://ui-avatars.com/api/?name=${displayName.charAt(0)}&background=3b82f6&color=fff&bold=true`;
+                }
+            }); 
             
             // AI tự động kiểm tra chuỗi ngày của học viên
             checkAndUpdateStreak(user);
@@ -3492,7 +3506,8 @@ function enableInputs() {
 // LƯU Ý: Danh hiệu là DAILY — chỉ lấy thời gian học của ngày hiện tại.
 // totalStudySeconds vẫn giữ nguyên để phục vụ Tổng thời gian học ở hồ sơ/thống kê.
 function updateRankUI() {
-    const dailySeconds = (typeof getTodaySeconds === 'function') ? getTodaySeconds() : 0;
+    // Lấy trực tiếp từ bộ nhớ cục bộ để không bị lỗi ẩn biến
+    const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     let h = Math.floor(dailySeconds / 3600);
     let m = Math.floor((dailySeconds % 3600) / 60);
     
@@ -3540,12 +3555,12 @@ function updateRankUI() {
         
         // Bật cảnh báo đúng 1 lần duy nhất khi vừa chạm 5 tiếng
         if (!fiveHourAlerted && continuousStudySeconds >= 5 * 3600) {
-            alert('🚨 HỆ THỐNG CẢNH BÁO! 🚨\n\nNí đã tập trung liên tục 5 TIẾNG đồng hồ rồi đó! Não bộ đang tiết ra Cortisol (hormone căng thẳng) kịch trần rồi.\n\nTui nhắc nhẹ vậy thôi, đi uống nước vươn vai xíu đi. Bấm OK xong ní muốn học tiếp tui vẫn cho cày thoải mái nhé =)))');
+            alert('🚨 HỆ THỐNG CẢNH BÁO! 🚨\n\nBạn đã tập trung liên tục 5 TIẾNG đồng hồ rồi đó! Não bộ đang tiết ra Cortisol (hormone căng thẳng) kịch trần rồi.\n\nTui nhắc nhẹ vậy thôi, đi uống nước vươn vai xíu đi. Bấm OK xong ní muốn học tiếp tui vẫn cho cày thoải mái nhé =)))');
             fiveHourAlerted = true;
         }
     }
     
-    progress.style.width = percent + '%';
+    if(progress) progress.style.width = percent + '%';
 }
 
 function togglePomodoro() {
@@ -4696,8 +4711,11 @@ window.uploadCustomAvatar = function(e) {
             db.ref('users/' + auth.currentUser.uid).update({ customAvatar: base64Avatar })
               .then(() => {
                   avtEl.src = base64Avatar; // Cập nhật ảnh ngay lập tức
+                  const navAvt = document.getElementById('nav-avatar');
+                  if(navAvt) navAvt.src = base64Avatar;   
                   alert('✅ Đổi ảnh đại diện thành công!');
               })
+                  
               .catch(err => {
                   avtEl.src = oldSrc;
                   alert('❌ Lỗi ròi: ' + err.message);
