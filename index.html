@@ -41,7 +41,7 @@
     }
 </script>
 <style>
-body{font-family:'Plus Jakarta Sans',sans-serif; background-color: #f8fafc;}
+body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif; background-color:#f8fafc;}
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -157,7 +157,7 @@ body{
   background-size:56px 56px;
   background-position:center top;
 }
-h1,h2,h3,h4,h5,h6,.font-display{font-family:'Sora','Space Grotesk',sans-serif; letter-spacing:-0.01em;}
+h1,h2,h3,h4,h5,h6,.font-display{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif; letter-spacing:-0.015em;}
 
 /* ===== COMMUNITY — typography ổn định cho tiếng Việt trong Dark Mode ===== */
 #sec-community,
@@ -1009,17 +1009,32 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
 .dashboard-quick{padding:14px;border-radius:15px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.05);color:#E2E8F0;font-weight:800;transition:.2s}.dashboard-quick:hover{background:rgba(255,255,255,.1);transform:translateY(-1px);}
 </style>
 <style id="htvvm-calendar-style">
-.calendar-modal-backdrop{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
-.calendar-box{width:min(94vw,520px);}
+.calendar-modal-backdrop{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+.calendar-box{width:min(96vw,640px);}
 .calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
-.calendar-weekday{font-size:11px;font-weight:800;text-align:center;color:#8291A8;padding:6px 0;}
-.calendar-day{aspect-ratio:1/1;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:1px solid transparent;cursor:default;position:relative;}
-.calendar-day.muted{color:#5B6B85;opacity:.45;}
+.calendar-weekday{font-size:11px;font-weight:900;text-align:center;color:#8291A8;padding:6px 0;}
+.calendar-day{aspect-ratio:1/1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:1px solid transparent;background:rgba(255,255,255,.025);color:#DDE6F2;cursor:pointer;position:relative;transition:.2s;user-select:none;}
+.calendar-day:hover{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.25);transform:translateY(-1px);}
+.calendar-day.muted{color:#5B6B85;opacity:.45;background:transparent;}
 .calendar-day.today{border-color:#22D3EE;background:rgba(34,211,238,.14);color:#67E8F9;box-shadow:0 0 0 1px rgba(34,211,238,.15);}
 .calendar-day.studied::after{content:'';position:absolute;bottom:5px;width:5px;height:5px;border-radius:50%;background:#34D399;box-shadow:0 0 8px rgba(52,211,153,.7);}
 .calendar-day.today.studied::after{background:#FBBF24;}
+.calendar-day.has-event{box-shadow:inset 0 0 0 1px rgba(34,211,238,.4),0 0 20px -12px rgba(34,211,238,.7);}
+.calendar-day.has-event::before{content:'•';position:absolute;top:1px;right:5px;color:#22D3EE;font-size:18px;line-height:1;}
 .calendar-nav-btn{width:40px;height:40px;border-radius:12px;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.05);font-weight:900;}
 .calendar-nav-btn:hover{background:rgba(255,255,255,.09);}
+.calendar-event-item{display:flex;align-items:center;gap:12px;padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035);}
+.calendar-event-datebox{min-width:64px;padding:8px;border-radius:12px;text-align:center;background:rgba(34,211,238,.09);border:1px solid rgba(34,211,238,.15);}
+.calendar-event-datebox b{display:block;font-size:18px;line-height:1;}
+.calendar-event-datebox span{display:block;margin-top:3px;font-size:9px;font-weight:900;color:#67E8F9;text-transform:uppercase;letter-spacing:.08em;}
+.calendar-event-delete{width:34px;height:34px;border-radius:10px;border:1px solid rgba(248,113,113,.15);background:rgba(248,113,113,.06);color:#FCA5A5;font-weight:900;}
+.calendar-event-delete:hover{background:rgba(248,113,113,.12);}
+.dashboard-event-empty{padding:18px;border-radius:16px;border:1px dashed rgba(148,163,184,.18);background:rgba(255,255,255,.025);color:#8291A8;font-size:13px;font-weight:700;}
+.dashboard-event-card{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px;border-radius:18px;background:linear-gradient(135deg,rgba(34,211,238,.09),rgba(52,211,153,.05));border:1px solid rgba(34,211,238,.16);}
+.dashboard-event-days{min-width:100px;text-align:center;padding:12px 14px;border-radius:16px;background:rgba(7,11,18,.35);border:1px solid rgba(34,211,238,.16);}
+.dashboard-event-days strong{display:block;font-size:34px;font-weight:900;line-height:1;color:#67E8F9;}
+.dashboard-event-days span{display:block;margin-top:5px;font-size:10px;font-weight:900;color:#8291A8;text-transform:uppercase;letter-spacing:.08em;}
+@media(max-width:640px){.calendar-box{padding:16px;}.calendar-grid{gap:4px;}.calendar-day{font-size:12px;border-radius:11px}.dashboard-event-card{align-items:flex-start;flex-direction:column}.dashboard-event-days{width:100%;display:flex;align-items:baseline;justify-content:center;gap:7px}.dashboard-event-days strong{font-size:30px}.dashboard-event-days span{margin-top:0}.calendar-event-item{align-items:flex-start}.calendar-event-datebox{min-width:56px;}}
 </style>
 <!-- ========================================== -->
 <!-- 🚀 BỘ TĂNG ÁP UI/UX PREMIUM CHO HTVVM STUDIO -->
@@ -1096,7 +1111,7 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
         transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out;
     }
 </style>
-</head>
+<style id="htvvm-dark-font-polish">html,body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}body{font-synthesis:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}body.htvvm-dark-mode button,body.htvvm-dark-mode input,body.htvvm-dark-mode select,body.htvvm-dark-mode textarea,body.htvvm-dark-mode option,body.htvvm-dark-mode h1,body.htvvm-dark-mode h2,body.htvvm-dark-mode h3,body.htvvm-dark-mode h4,body.htvvm-dark-mode h5,body.htvvm-dark-mode h6{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}</style></head>
 <body class="relative">
 
 <div class="fixed inset-0 overflow-hidden pointer-events-none z-[-1]">
@@ -1166,28 +1181,62 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
  </div>
 </nav>
 
-<!-- CALENDAR -->
-<div id="calendar-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center p-4 calendar-modal-backdrop bg-slate-950/70">
-  <div class="calendar-box rounded-[2rem] border border-slate-700/60 bg-slate-900/95 shadow-2xl p-5 sm:p-6">
+<!-- CALENDAR + EVENTS -->
+<div id="calendar-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center p-4 calendar-modal-backdrop bg-slate-950/75">
+  <div class="calendar-box rounded-[2rem] border border-slate-700/60 bg-slate-900/95 shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
     <div class="flex items-center justify-between gap-3 mb-5">
       <div>
         <div class="text-xs font-black uppercase tracking-[.18em] text-cyan-400">📅 Lịch học tập</div>
-        <div id="calendar-month-title" class="text-2xl font-black mt-1 text-white">Tháng 8 2026</div>
+        <div id="calendar-month-title" class="text-2xl font-black mt-1 text-white">Lịch</div>
       </div>
       <button onclick="closeCalendar()" class="w-10 h-10 rounded-xl bg-white/5 border border-slate-700 hover:bg-white/10 text-slate-300 font-black">✕</button>
     </div>
+
     <div class="flex items-center justify-between mb-4">
       <button onclick="changeCalendarMonth(-1)" class="calendar-nav-btn text-slate-200">‹</button>
       <button onclick="goCalendarToday()" class="px-4 py-2 rounded-xl bg-cyan-500/15 border border-cyan-400/20 text-cyan-300 text-xs font-black">HÔM NAY</button>
       <button onclick="changeCalendarMonth(1)" class="calendar-nav-btn text-slate-200">›</button>
     </div>
+
     <div class="grid grid-cols-7 gap-1 mb-1">
       <div class="calendar-weekday">T2</div><div class="calendar-weekday">T3</div><div class="calendar-weekday">T4</div><div class="calendar-weekday">T5</div><div class="calendar-weekday">T6</div><div class="calendar-weekday">T7</div><div class="calendar-weekday">CN</div>
     </div>
     <div id="calendar-days" class="calendar-grid"></div>
+
+    <div class="calendar-event-panel mt-6 pt-5 border-t border-slate-800">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <div class="text-sm font-black text-white">➕ Thêm sự kiện</div>
+          <div class="text-xs text-slate-500 mt-1">Đặt lịch kiểm tra, deadline, kỳ thi hoặc mục tiêu học tập.</div>
+        </div>
+      </div>
+      <form id="calendar-event-form" class="space-y-3" onsubmit="saveCalendarEvent(event)">
+        <input id="calendar-event-id" type="hidden">
+        <input id="calendar-event-title" maxlength="120" required class="tw-input" placeholder="Tên sự kiện, ví dụ: Thi Hóa giữa kỳ">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input id="calendar-event-date" type="date" required class="tw-input">
+          <input id="calendar-event-time" type="time" class="tw-input">
+        </div>
+        <input id="calendar-event-note" maxlength="300" class="tw-input" placeholder="Ghi chú (không bắt buộc)">
+        <div class="grid grid-cols-2 gap-2">
+          <button type="submit" id="calendar-event-save-btn" class="py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black">LƯU SỰ KIỆN</button>
+          <button type="button" onclick="resetCalendarEventForm()" class="py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-black">XÓA FORM</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="mt-6">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div class="text-sm font-black text-white">📌 Sự kiện sắp tới</div>
+        <div id="calendar-event-count" class="text-xs font-bold text-slate-500">0 sự kiện</div>
+      </div>
+      <div id="calendar-event-list" class="space-y-2"></div>
+    </div>
+
     <div class="flex flex-wrap gap-4 mt-5 pt-4 border-t border-slate-800 text-xs font-bold text-slate-400">
       <span><i class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-2"></i>Đã học</span>
       <span><i class="inline-block w-2 h-2 rounded-full bg-amber-400 mr-2"></i>Hôm nay + đã học</span>
+      <span><i class="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-2"></i>Có sự kiện</span>
     </div>
   </div>
 </div>
@@ -1614,6 +1663,21 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
         </div>
       </section>
     </div>
+
+    <!-- SỰ KIỆN SẮP TỚI -->
+    <section id="dashboard-upcoming-events" class="mt-5 rounded-[2rem] border border-cyan-400/15 bg-slate-900/80 p-6 shadow-xl overflow-hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <p class="text-[11px] text-cyan-300 font-black uppercase tracking-[.18em]">LỊCH CỦA BẠN</p>
+          <h2 class="text-2xl font-black text-white mt-1">⏳ Sự kiện sắp tới</h2>
+          <p class="text-xs text-slate-500 mt-1">Đặt một sự kiện trong Lịch, trang chủ sẽ tự đếm ngược cho bạn.</p>
+        </div>
+        <button onclick="openCalendar()" class="px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 font-black text-sm hover:bg-cyan-500/15">📅 Mở lịch</button>
+      </div>
+      <div id="dashboard-upcoming-event-body" class="mt-5">
+        <div class="dashboard-event-empty">Chưa có sự kiện sắp tới. Bấm “Mở lịch” để đặt một mốc quan trọng.</div>
+      </div>
+    </section>
 
     <div class="grid grid-cols-1 xl:grid-cols-[1.35fr_.65fr] gap-5 h-full">
       <div class="rounded-[2rem] border border-cyan-400/20 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/60 p-6 sm:p-8 shadow-2xl overflow-hidden relative">
@@ -2405,6 +2469,7 @@ function initFirebase() {
         const userName = document.getElementById('user-display-name');
 
         if (user) {
+            if (typeof initCalendarEventsForUser === 'function') initCalendarEventsForUser(user);
             // Đã có acc: Giấu Welcome, Login, Mở Thư viện
             if(welcome) welcome.classList.add('hidden');
             if(login) login.classList.add('hidden');
@@ -2448,6 +2513,7 @@ function initFirebase() {
             }
             
         } else {
+            if (typeof initCalendarEventsForUser === 'function') initCalendarEventsForUser(null);
             // Chưa đăng nhập: đảm bảo dữ liệu chưa từng được tải/hiển thị
             window.__docsLoaded = false;
             docsData = [];
@@ -4515,13 +4581,14 @@ function toggleTheme() {
     // Nếu CSS Dark Mode đang bị TẮT (Nghĩa là web đang Sáng) -> Bật nó lên
     if (darkStyle.disabled) {
         darkStyle.disabled = false;
-        btn.innerText = '☀️'; // Đổi thành mặt trời để bấm tắt
-        localStorage.setItem('htvvm_theme', 'dark'); // Lưu trí nhớ
+        document.body.classList.add('htvvm-dark-mode');
+        btn.innerText = '☀️';
+        localStorage.setItem('htvvm_theme', 'dark');
     } else {
-        // Nếu CSS Dark Mode đang BẬT -> Tắt nó đi (Sáng lại)
         darkStyle.disabled = true;
-        btn.innerText = '🌙'; // Đổi thành mặt trăng để bấm bật
-        localStorage.setItem('htvvm_theme', 'light'); // Lưu trí nhớ
+        document.body.classList.remove('htvvm-dark-mode');
+        btn.innerText = '🌙';
+        localStorage.setItem('htvvm_theme', 'light');
     }
 }
 
@@ -4536,10 +4603,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedTheme === 'light') {
             // Web sáng
             darkStyle.disabled = true;
+            document.body.classList.remove('htvvm-dark-mode');
             if (btn) btn.innerText = '🌙';
         } else {
             // Web tối (Mặc định nếu chưa chọn)
             darkStyle.disabled = false;
+            document.body.classList.add('htvvm-dark-mode');
             if (btn) btn.innerText = '☀️';
         }
     } else {
@@ -4645,6 +4714,9 @@ function joinStudyRoom() {
 
 <script id="htvvm-calendar-script">
 let calendarCursor = new Date();
+let calendarEvents = {};
+let calendarEventsRef = null;
+let calendarEventsBoundForUid = null;
 
 function openCalendar(){
   const m=document.getElementById('calendar-modal');
@@ -4652,7 +4724,10 @@ function openCalendar(){
   calendarCursor=new Date();
   m.classList.remove('hidden');
   m.classList.add('flex');
+  const today=calendarKeyFromDate(new Date());
+  if(!document.getElementById('calendar-event-date').value) document.getElementById('calendar-event-date').value=today;
   renderCalendar();
+  renderCalendarEventList();
 }
 function closeCalendar(){
   const m=document.getElementById('calendar-modal');
@@ -4660,54 +4735,209 @@ function closeCalendar(){
   m.classList.add('hidden');
   m.classList.remove('flex');
 }
-function changeCalendarMonth(delta){
-  calendarCursor.setMonth(calendarCursor.getMonth()+delta,1);
-  renderCalendar();
-}
-function goCalendarToday(){ calendarCursor=new Date(); renderCalendar(); }
+function changeCalendarMonth(delta){calendarCursor.setMonth(calendarCursor.getMonth()+delta,1);renderCalendar();}
+function goCalendarToday(){calendarCursor=new Date();renderCalendar();}
 function calendarPad(n){return String(n).padStart(2,'0');}
 function calendarKey(y,m,d){return `${y}-${calendarPad(m+1)}-${calendarPad(d)}`;}
-function calendarStoredStudyDays(){
-  try{
-    if(!(typeof auth!=='undefined' && auth && auth.currentUser && typeof db!=='undefined' && db)) return {};
-    return window.__calendarStudyDays||{};
-  }catch{return {};}
+function calendarKeyFromDate(d){return calendarKey(d.getFullYear(),d.getMonth(),d.getDate());}
+function escCalendar(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+function getCalendarUser(){return window.auth?.currentUser||null;}
+function calendarEventsStorageKey(uid){return `htvvm.calendar.events.${uid}`;}
+function loadCalendarEventsCache(uid){
+  try{ const raw=localStorage.getItem(calendarEventsStorageKey(uid)); calendarEvents=raw?JSON.parse(raw):{}; }
+  catch{ calendarEvents={}; }
 }
+function saveCalendarEventsCache(uid){try{localStorage.setItem(calendarEventsStorageKey(uid),JSON.stringify(calendarEvents));}catch{} }
+function normalizeCalendarEvent(v,id){
+  return {id:id||v?.id||'',title:String(v?.title||'Sự kiện'),date:String(v?.date||''),time:String(v?.time||''),note:String(v?.note||''),createdAt:Number(v?.createdAt||0)};
+}
+function calendarEventMoment(ev){
+  if(!ev?.date) return NaN;
+  const time=ev.time||'23:59';
+  return new Date(`${ev.date}T${time}:00`).getTime();
+}
+function calendarEventDayDiff(ev,now=new Date()){
+  const [y,m,d]=String(ev.date||'').split('-').map(Number);
+  if(!y||!m||!d) return null;
+  const start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const target=new Date(y,m-1,d);
+  return Math.round((target-start)/86400000);
+}
+function sortedUpcomingCalendarEvents(){
+  const now=Date.now();
+  return Object.values(calendarEvents||{})
+    .map(e=>normalizeCalendarEvent(e,e.id))
+    .filter(e=>Number.isFinite(calendarEventMoment(e)) && calendarEventMoment(e)>=now-60000)
+    .sort((a,b)=>calendarEventMoment(a)-calendarEventMoment(b));
+}
+
+async function initCalendarEventsForUser(user){
+  const uid=user?.uid;
+  if(calendarEventsRef && typeof calendarEventsRef.off==='function') { try{calendarEventsRef.off();}catch{} }
+  calendarEventsRef=null; calendarEventsBoundForUid=null; calendarEvents={};
+  if(!uid){ renderCalendarEventList(); renderDashboardUpcomingEvents(); return; }
+  loadCalendarEventsCache(uid);
+  renderCalendar(); renderCalendarEventList(); renderDashboardUpcomingEvents();
+  try{
+    const database=window.db||((typeof db!=='undefined')?db:null);
+    if(!database)return;
+    calendarEventsRef=database.ref(`users/${uid}/calendarEvents`);
+    calendarEventsRef.on('value',snap=>{
+      const next={};
+      snap.forEach(child=>{ const ev=normalizeCalendarEvent(child.val()||{},child.key); next[child.key]=ev; });
+      calendarEvents=next; saveCalendarEventsCache(uid); calendarEventsBoundForUid=uid;
+      renderCalendar(); renderCalendarEventList(); renderDashboardUpcomingEvents();
+    },err=>{
+      console.warn('calendar events realtime',err);
+      renderCalendarEventList(); renderDashboardUpcomingEvents();
+    });
+  }catch(e){console.warn('calendar events bind',e);}
+}
+
+function ensureCalendarEventsBinding(){
+  const u=getCalendarUser();
+  if(u && calendarEventsBoundForUid!==u.uid) initCalendarEventsForUser(u);
+  if(!u && calendarEventsBoundForUid){initCalendarEventsForUser(null);}
+}
+
 async function loadCalendarStudyDays(){
   try{
     if(!(typeof auth!=='undefined' && auth && auth.currentUser && typeof db!=='undefined' && db)) return;
     const snap=await db.ref(`users/${auth.currentUser.uid}/dailyStudy`).once('value');
     window.__calendarStudyDays=snap.val()||{};
-  }catch(e){ console.warn('calendar study days',e); window.__calendarStudyDays={}; }
+  }catch(e){console.warn('calendar study days',e);window.__calendarStudyDays={};}
 }
+function calendarStoredStudyDays(){try{return window.__calendarStudyDays||{};}catch{return {};}}
+
 async function renderCalendar(){
   const title=document.getElementById('calendar-month-title'), daysEl=document.getElementById('calendar-days');
   if(!title||!daysEl) return;
+  ensureCalendarEventsBinding();
   title.textContent=`Tháng ${calendarCursor.getMonth()+1} ${calendarCursor.getFullYear()}`;
   await loadCalendarStudyDays();
-  const y=calendarCursor.getFullYear(), m=calendarCursor.getMonth();
-  const first=new Date(y,m,1);
-  const last=new Date(y,m+1,0);
-  const mondayIndex=(first.getDay()+6)%7;
-  const cells=[];
-  for(let i=0;i<mondayIndex;i++){
-    const d=new Date(y,m,1-(mondayIndex-i));
-    cells.push({d,muted:true});
-  }
-  for(let d=1;d<=last.getDate();d++) cells.push({d:new Date(y,m,d),muted:false});
-  while(cells.length%7) { const next=new Date(y,m+1,cells.length-(mondayIndex+last.getDate())+1); cells.push({d:next,muted:true}); }
-  const now=new Date(), today=calendarKey(now.getFullYear(),now.getMonth(),now.getDate());
-  const study=calendarStoredStudyDays();
+  const y=calendarCursor.getFullYear(),m=calendarCursor.getMonth();
+  const first=new Date(y,m,1),last=new Date(y,m+1,0);
+  const mondayIndex=(first.getDay()+6)%7, cells=[];
+  for(let i=0;i<mondayIndex;i++){const d=new Date(y,m,1-(mondayIndex-i));cells.push({d,muted:true});}
+  for(let d=1;d<=last.getDate();d++)cells.push({d:new Date(y,m,d),muted:false});
+  while(cells.length%7){const next=new Date(y,m+1,cells.length-(mondayIndex+last.getDate())+1);cells.push({d:next,muted:true});}
+  const now=new Date(),today=calendarKeyFromDate(now),study=calendarStoredStudyDays();
+  const eventsByDate={};
+  Object.values(calendarEvents||{}).forEach(ev=>{if(ev.date)(eventsByDate[ev.date]??=[]).push(ev);});
   daysEl.innerHTML=cells.map(({d,muted})=>{
-    const key=calendarKey(d.getFullYear(),d.getMonth(),d.getDate());
-    const studied=Number(study[key]||0)>0;
-    const cls=['calendar-day',muted?'muted':'',key===today?'today':'',studied?'studied':''].filter(Boolean).join(' ');
+    const key=calendarKeyFromDate(d),studied=Number(study[key]||0)>0,hasEvent=Boolean(eventsByDate[key]?.length);
+    const cls=['calendar-day',muted?'muted':'',key===today?'today':'',studied?'studied':'',hasEvent?'has-event':''].filter(Boolean).join(' ');
     const mins=Math.floor(Number(study[key]||0)/60);
-    const label=studied?`${d.getDate()} • ${mins} phút học`:`${d.getDate()}`;
-    return `<div class="${cls}" title="${label}">${d.getDate()}</div>`;
+    const eventText=hasEvent?` • ${eventsByDate[key].map(e=>e.title).join(', ')}`:'';
+    const label=(studied?`${d.getDate()} • ${mins} phút học`:`${d.getDate()}`)+eventText;
+    return `<button type="button" class="${cls}" title="${escCalendar(label)}" onclick="selectCalendarDate('${key}')">${d.getDate()}</button>`;
   }).join('');
 }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCalendar(); });
+function selectCalendarDate(key){
+  const dateInput=document.getElementById('calendar-event-date'); if(dateInput)dateInput.value=key;
+  const parts=key.split('-').map(Number); if(parts.length===3){calendarCursor=new Date(parts[0],parts[1]-1,1);renderCalendar();}
+  document.getElementById('calendar-event-title')?.focus();
+}
+function resetCalendarEventForm(){
+  const form=document.getElementById('calendar-event-form'); if(form)form.reset();
+  const id=document.getElementById('calendar-event-id'); if(id)id.value='';
+  const date=document.getElementById('calendar-event-date'); if(date)date.value=calendarKeyFromDate(new Date());
+  const btn=document.getElementById('calendar-event-save-btn'); if(btn)btn.textContent='LƯU SỰ KIỆN';
+}
+async function saveCalendarEvent(e){
+  e.preventDefault();
+  const user=getCalendarUser();
+  if(!user)return alert('❌ Bạn cần đăng nhập để lưu sự kiện.');
+  const id=document.getElementById('calendar-event-id')?.value.trim();
+  const title=document.getElementById('calendar-event-title')?.value.trim();
+  const date=document.getElementById('calendar-event-date')?.value;
+  const time=document.getElementById('calendar-event-time')?.value||'';
+  const note=document.getElementById('calendar-event-note')?.value.trim()||'';
+  if(!title||!date)return alert('❌ Hãy nhập tên và ngày sự kiện.');
+  const eventData={title,date,time,note,createdAt:id?(calendarEvents[id]?.createdAt||Date.now()):Date.now(),updatedAt:Date.now()};
+  try{
+    const database=window.db||((typeof db!=='undefined')?db:null);
+    if(!database)throw new Error('Firebase Database chưa sẵn sàng.');
+    const ref=database.ref(`users/${user.uid}/calendarEvents`);
+    if(id)await ref.child(id).update(eventData);else await ref.push(eventData);
+    resetCalendarEventForm();
+    alert('✅ Đã lưu sự kiện. Trang chủ sẽ tự cập nhật đếm ngược.');
+  }catch(err){
+    console.warn('save calendar event',err);
+    // Fallback local cache nếu Firebase tạm lỗi.
+    const eventId=id||`local-${Date.now()}`;
+    calendarEvents[eventId]={id:eventId,...eventData};saveCalendarEventsCache(user.uid);renderCalendar();renderCalendarEventList();renderDashboardUpcomingEvents();
+    resetCalendarEventForm();
+    alert('⚠️ Firebase đang lỗi tạm thời, sự kiện đã được lưu trên thiết bị này.');
+  }
+}
+async function deleteCalendarEvent(id){
+  const ev=calendarEvents?.[id]; if(!ev)return;
+  if(!confirm(`Xóa sự kiện “${ev.title}”?`))return;
+  const user=getCalendarUser();
+  try{
+    const database=window.db||((typeof db!=='undefined')?db:null);
+    if(database && !String(id).startsWith('local-')) await database.ref(`users/${user.uid}/calendarEvents/${id}`).remove();
+  }catch(err){console.warn('delete calendar event',err);}
+  delete calendarEvents[id];if(user)saveCalendarEventsCache(user.uid);renderCalendar();renderCalendarEventList();renderDashboardUpcomingEvents();
+}
+function editCalendarEvent(id){
+  const ev=calendarEvents?.[id];if(!ev)return;
+  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+  set('calendar-event-id',ev.id);set('calendar-event-title',ev.title);set('calendar-event-date',ev.date);set('calendar-event-time',ev.time);set('calendar-event-note',ev.note);
+  const btn=document.getElementById('calendar-event-save-btn');if(btn)btn.textContent='CẬP NHẬT SỰ KIỆN';
+  document.getElementById('calendar-event-title')?.focus();
+}
+function calendarFormatDate(dateStr){
+  const [y,m,d]=String(dateStr||'').split('-').map(Number);if(!y||!m||!d)return dateStr||'';
+  return new Date(y,m-1,d).toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function calendarDaysLabel(ev){
+  const diff=calendarEventDayDiff(ev);
+  if(diff===0)return 'Hôm nay';
+  if(diff===1)return 'Ngày mai';
+  if(diff>1)return `Còn ${diff} ngày`;
+  if(diff<0)return `Đã qua ${Math.abs(diff)} ngày`;
+  return '';
+}
+function renderCalendarEventList(){
+  const box=document.getElementById('calendar-event-list'),count=document.getElementById('calendar-event-count');if(!box)return;
+  const events=Object.values(calendarEvents||{}).map(e=>normalizeCalendarEvent(e,e.id)).sort((a,b)=>{
+    const am=calendarEventMoment(a),bm=calendarEventMoment(b);return (am||Infinity)-(bm||Infinity);
+  });
+  const upcoming=events.filter(e=>calendarEventMoment(e)>=Date.now()-60000);
+  if(count)count.textContent=`${events.length} sự kiện`;
+  if(!events.length){box.innerHTML='<div class="dashboard-event-empty">Chưa có sự kiện nào. Đặt mốc đầu tiên ngay bên trên.</div>';return;}
+  const visible=(upcoming.length?upcoming:events).slice(0,10);
+  box.innerHTML=visible.map(ev=>{
+    const diff=calendarDaysLabel(ev),done=calendarEventMoment(ev)<Date.now()-60000;
+    return `<div class="calendar-event-item ${done?'opacity-60':''}"><div class="calendar-event-datebox"><b>${escCalendar(ev.date.slice(8,10))}</b><span>${escCalendar(ev.date.slice(5,7))}/${escCalendar(ev.date.slice(0,4))}</span></div><div class="min-w-0 flex-1"><div class="font-black text-white truncate">${escCalendar(ev.title)}</div><div class="text-xs text-slate-500 mt-1">${escCalendar(ev.time||'Cả ngày')} · ${escCalendar(diff)}</div>${ev.note?`<div class="text-xs text-slate-400 mt-1 truncate">${escCalendar(ev.note)}</div>`:''}</div><button class="calendar-event-delete shrink-0" title="Xóa" onclick="deleteCalendarEvent('${escCalendar(ev.id)}')">✕</button></div>`;
+  }).join('');
+}
+function renderDashboardUpcomingEvents(){
+  const box=document.getElementById('dashboard-upcoming-event-body');if(!box)return;
+  const events=sortedUpcomingCalendarEvents();
+  if(!events.length){box.innerHTML='<div class="dashboard-event-empty">Chưa có sự kiện sắp tới. Bấm “Mở lịch” để đặt một mốc quan trọng.</div>';return;}
+  const ev=events[0];
+  const diff=calendarEventDayDiff(ev),days=Number(diff);
+  let big=days>0?days:days===0?'0':'—',label=days===0?'Hôm nay':days===1?'Ngày mai':days>1?'Ngày nữa':(calendarEventMoment(ev)-Date.now()<86400000?'Đang diễn ra':'Sắp tới');
+  box.innerHTML=`<div class="dashboard-event-card"><div class="min-w-0 flex-1"><div class="text-[10px] font-black uppercase tracking-[.18em] text-cyan-300">${escCalendar(calendarFormatDate(ev.date))}${ev.time?` · ${escCalendar(ev.time)}`:''}</div><div class="text-2xl font-black text-white mt-1 truncate">${escCalendar(ev.title)}</div>${ev.note?`<div class="text-sm text-slate-400 mt-2">${escCalendar(ev.note)}</div>`:''}<div class="text-sm font-bold text-slate-400 mt-3">${escCalendar(label)}</div></div><div class="dashboard-event-days"><strong>${big}</strong><span>${days>1?'ngày':'trạng thái'}</span></div></div>`;
+}
+
+// Đồng bộ Firebase/Auth -> lịch sự kiện.
+document.addEventListener('DOMContentLoaded',()=>{
+  const bind=()=>{
+    const a=window.auth;
+    if(a&&typeof a.onAuthStateChanged==='function'){
+      a.onAuthStateChanged(user=>initCalendarEventsForUser(user));
+      if(a.currentUser)initCalendarEventsForUser(a.currentUser);
+    }
+  };
+  setTimeout(bind,300);
+  setInterval(()=>{renderDashboardUpcomingEvents();},30000);
+});
+window.addEventListener('beforeunload',()=>{try{calendarEventsRef?.off();}catch{}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCalendar();});
 </script>
 <script id="htvvm-dashboard-sync">
 (function(){
