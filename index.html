@@ -3505,14 +3505,14 @@ function enableInputs() {
 // Hàm cập nhật Giao diện Thăng cấp
 // LƯU Ý: Danh hiệu là DAILY — chỉ lấy thời gian học của ngày hiện tại.
 // totalStudySeconds vẫn giữ nguyên để phục vụ Tổng thời gian học ở hồ sơ/thống kê.
+// Hàm cập nhật Giao diện Thăng cấp (Bản hoàn chỉnh không bị reset)
 function updateRankUI() {
     // Lấy trực tiếp từ bộ nhớ cục bộ
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     let h = Math.floor(dailySeconds / 3600);
     let m = Math.floor((dailySeconds % 3600) / 60);
-    let s = dailySeconds % 60; // Thêm biến đếm giây
+    let s = dailySeconds % 60; // Giữ nguyên đếm giây
     
-    // 💡 ĐÃ SỬA: Hiển thị cả số GIÂY ra màn hình cho dễ theo dõi
     document.getElementById('rank-time').innerText = `Hôm nay: ${h > 0 ? h + ' giờ ' : ''}${m} phút ${s} giây`;
     
     let icon = document.getElementById('rank-icon');
@@ -3520,7 +3520,7 @@ function updateRankUI() {
     let progress = document.getElementById('rank-progress');
     let next = document.getElementById('rank-next');
     
-    // Tính phần trăm thanh kinh nghiệm theo thời gian học TRONG NGÀY (1 tiếng = 100%)
+    // Tính phần trăm thanh kinh nghiệm (1 tiếng = 100%)
     let percent = ((dailySeconds % 3600) / 3600) * 100;
     
     if (h === 0) {
@@ -3533,12 +3533,30 @@ function updateRankUI() {
         name.className = 'text-xl font-extrabold text-amber-600 mb-1';
         progress.className = 'bg-amber-500 h-3 rounded-full transition-all duration-1000';
         next.innerText = `Còn ${60 - m}p nữa để thành Dopamine`;
-    } else if (h >= 2) {
+    } else if (h === 2) {
         icon.innerText = '🚀'; name.innerText = 'Hưng phấn (Dopamine)';
         name.className = 'text-xl font-extrabold text-purple-600 mb-1';
         progress.className = 'bg-purple-500 h-3 rounded-full transition-all duration-1000';
-        next.innerText = `Đang cày rất hăng say!`;
-    } 
+        next.innerText = `Còn ${60 - m}p nữa để thành Adrenaline`;
+    } else if (h === 3) {
+        icon.innerText = '⚡'; name.innerText = 'Bứt phá (Adrenaline)';
+        name.className = 'text-xl font-extrabold text-orange-600 mb-1';
+        progress.className = 'bg-orange-500 h-3 rounded-full transition-all duration-1000';
+        next.innerText = `Còn ${60 - m}p nữa để thành Serotonin`;
+    } else if (h === 4) {
+        icon.innerText = '🧠'; name.innerText = 'Thông thái (Serotonin)';
+        name.className = 'text-xl font-extrabold text-emerald-600 mb-1';
+        progress.className = 'bg-emerald-500 h-3 rounded-full transition-all duration-1000';
+        next.innerText = `Còn ${60 - m}p nữa để chạm mốc Quá tải`;
+    } else if (h >= 5) {
+        icon.innerText = '🚨'; name.innerText = 'Quá tải (Cortisol)';
+        name.className = 'text-xl font-extrabold text-red-600 mb-1 animate-pulse';
+        progress.className = 'bg-red-500 h-3 rounded-full transition-all duration-1000';
+        
+        // 💡 Ổ KHÓA CỨNG: Ép phần trăm luôn luôn là 100% khi trên 5 tiếng, không cho tụt!
+        percent = 100; 
+        next.innerText = `Cảnh báo: Bạn đã học quá giới hạn! Nên nghỉ ngơi đi!`;
+    }
     
     if(progress) progress.style.width = percent + '%';
 }
