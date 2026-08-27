@@ -159,6 +159,23 @@ body{
 }
 h1,h2,h3,h4,h5,h6,.font-display{font-family:'Sora','Space Grotesk',sans-serif; letter-spacing:-0.01em;}
 
+/* ===== COMMUNITY — typography ổn định cho tiếng Việt trong Dark Mode ===== */
+#sec-community,
+#sec-community input,
+#sec-community select,
+#sec-community textarea,
+#sec-community button{
+  font-family:'Be Vietnam Pro','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif !important;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+#sec-community h1,#sec-community h2,#sec-community h3,#sec-community .font-display{
+  font-family:'Be Vietnam Pro','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif !important;
+  letter-spacing:-0.02em;
+}
+#sec-community .community-post-author,#sec-community .community-post-body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif !important;}
+
+
 /* Ambient glow blobs (site background) */
 .blob{filter:blur(90px);opacity:.35;}
 .blob.bg-blue-200{background:var(--accent-cyan) !important;}
@@ -2407,6 +2424,8 @@ function initFirebase() {
                     else if (googleAvt) navAvt.src = googleAvt;
                     else navAvt.src = `https://ui-avatars.com/api/?name=${displayName.charAt(0)}&background=3b82f6&color=fff&bold=true`;
                 }
+                window.__communityAvatar = customAvt || googleAvt || navAvt?.src || '';
+                window.dispatchEvent(new CustomEvent('firebase:user-ready',{detail:{uid:user.uid,avatar:window.__communityAvatar}}));
             }); 
             
             // AI tự động kiểm tra chuỗi ngày của học viên
@@ -4699,191 +4718,165 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCalendar(); }
 
 <script>
 (function(){
-  let communityFeedRef=null, communityBound=false;
+  let communityFeedRef=null;
+  let communityBound=false;
+  let communityLastPosts=[];
+  let communityAuthorAvatarRefs={};
   const cesc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   const ctime=ts=>new Date(Number(ts)||Date.now()).toLocaleString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  
-  function cuser(){
-      const u=(window.auth&&auth.currentUser)?auth.currentUser:null;
-      if(!u) return null;
-      let finalAvt = u.photoURL || '';
-      const navAvt = document.getElementById('nav-avatar');
-      // Lấy luôn ảnh Custom từ Navbar nếu có
-      if(navAvt && navAvt.src && !navAvt.src.includes('ui-avatars.com')) {
-          finalAvt = navAvt.src;
-      }
-      return{uid:u.uid, name:(u.displayName||(u.email?u.email.split('@')[0]:'Học viên')).trim()||'Học viên', photoURL: finalAvt};
+  const defaultAvatar=name=>`https://ui-avatars.com/api/?name=${encodeURIComponent(String(name||'H').charAt(0).toUpperCase())}&background=0891B2&color=fff&bold=true`;
+
+  function getCommunityUser(){
+    const u=(window.auth&&window.auth.currentUser)?window.auth.currentUser:null;
+    if(!u) return null;
+    let finalAvt=window.__communityAvatar||'';
+    const navAvt=document.getElementById('nav-avatar');
+    if(!finalAvt&&navAvt?.src&&!navAvt.src.includes('ui-avatars.com')) finalAvt=navAvt.src;
+    if(!finalAvt) finalAvt=u.photoURL||'';
+    return {uid:u.uid,name:(u.displayName||(u.email?u.email.split('@')[0]:'Học viên')).trim()||'Học viên',photoURL:finalAvt};
   }
-  
-  async function creadb(){if(!window.__firebaseReady&&typeof initFirebase==='function')await initFirebase();const database=window.db||((typeof db!=='undefined')?db:null);if(!database)throw new Error('Firebase Database chưa sẵn sàng.');if(!cuser())throw new Error('Bạn cần đăng nhập để sử dụng cộng đồng.');return database;}
-  
+  window.cuser=getCommunityUser;
+
+  async function getCommunityDb(){
+    if(!window.__firebaseReady&&typeof initFirebase==='function') await initFirebase();
+    const database=window.db||((typeof db!=='undefined')?db:null);
+    if(!database) throw new Error('Firebase Database chưa sẵn sàng.');
+    if(!getCommunityUser()) throw new Error('Bạn cần đăng nhập để sử dụng cộng đồng.');
+    return database;
+  }
+
+  function postAvatar(p){
+    const u=getCommunityUser();
+    if(u&&p.authorUid===u.uid&&u.photoURL)return u.photoURL;
+    return p.photoURL||p.photoUrl||p.avatarURL||communityAuthorAvatarRefs[p.authorUid]||defaultAvatar(p.authorName);
+  }
+  function commentAvatar(c){
+    const u=getCommunityUser();
+    if(u&&c.authorUid===u.uid&&u.photoURL)return u.photoURL;
+    return c.photoURL||c.photoUrl||c.avatarURL||communityAuthorAvatarRefs[c.authorUid]||defaultAvatar(c.authorName);
+  }
+
   function renderPosts(posts){
-      const feed=document.getElementById('community-feed');
-      if(!feed)return;
+    const feed=document.getElementById('community-feed');
+    if(!feed)return;
+    communityLastPosts=posts||[];
+    const activeEl=document.activeElement;
+    let activeId=null,activeVal='';
+    if(activeEl?.id?.startsWith('comment-')){activeId=activeEl.id;activeVal=activeEl.value;}
+    const currentUser=getCommunityUser();
 
-      const activeEl = document.activeElement;
-      let activeId = null; let activeVal = '';
-      if(activeEl && typeof activeEl.id === 'string' && activeEl.id.startsWith('comment-')){
-          activeId = activeEl.id; activeVal = activeEl.value;
-      }
-
-      const currentUser = cuser(); // Lấy user hiện tại để check trạng thái Thả Tim
-
-      if(!posts.length){
-          feed.innerHTML='<div class="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center text-slate-500 font-bold">Chưa có bài viết nào. Hãy là người đầu tiên hỏi bài.</div>';
-      } else {
-          feed.innerHTML=posts.map(p=>{
-              const comments=p.comments&&typeof p.comments==='object'?Object.entries(p.comments).map(([id,v])=>({id,...v})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)):[];
-              const avatar=p.photoURL?`<img src="${cesc(p.photoURL)}" class="w-10 h-10 rounded-full object-cover border border-white/10" alt="">`:`<div class="w-10 h-10 rounded-full bg-cyan-500/15 border border-cyan-400/20 text-cyan-300 flex items-center justify-center font-black">${cesc((p.authorName||'H').charAt(0).toUpperCase())}</div>`;
-              
-              const ch=comments.slice(-8).map(c=>{
-                  const cAvt = c.photoURL ? `<img src="${cesc(c.photoURL)}" class="w-8 h-8 rounded-full object-cover shrink-0 border border-white/5" alt="">` : `<div class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-black text-xs shrink-0">${cesc((c.authorName||'H').charAt(0).toUpperCase())}</div>`;
-                  return `<div class="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">${cAvt}<div class="min-w-0"><div class="text-xs font-black text-slate-200">${cesc(c.authorName||'Học viên')} <span class="text-slate-600 font-bold ml-1">${ctime(c.createdAt)}</span></div><div class="text-sm text-slate-300 mt-1 whitespace-pre-wrap break-words">${cesc(c.body||'')}</div></div></div>`;
-              }).join('');
-              
-              // 💡 TÍNH TOÁN LOGIC THẢ TIM
-              const likes = p.likes || {};
-              const likeCount = Object.keys(likes).length;
-              const isLiked = currentUser && likes[currentUser.uid];
-              const heartIcon = isLiked ? '❤️' : '🤍';
-              const heartColor = isLiked ? 'text-rose-500 bg-rose-500/10 border-rose-500/30' : 'text-slate-400 hover:text-rose-400 bg-white/5 hover:bg-rose-500/10 border-white/5 hover:border-rose-500/20';
-
-              return `<article class="rounded-[2rem] border border-white/10 bg-slate-900/80 shadow-xl overflow-hidden"><div class="p-5 sm:p-6"><div class="flex items-start gap-3">${avatar}<div class="min-w-0 flex-1"><div class="font-black text-white truncate">${cesc(p.authorName||'Học viên')}</div><div class="text-xs text-slate-500 mt-0.5">${ctime(p.createdAt)} · ${cesc(p.subject||'Khác')}</div></div></div><h3 class="text-xl font-black text-white mt-4">${cesc(p.title||'Không có tiêu đề')}</h3><div class="text-slate-300 mt-3 leading-relaxed whitespace-pre-wrap break-words">${cesc(p.body||'')}</div></div><div class="px-5 sm:px-6 py-4 border-t border-white/5 bg-white/[0.02]">
-              
-              <div class="flex items-center justify-between mb-3">
-                  <!-- 💡 GIAO DIỆN NÚT THẢ TIM -->
-                  <button onclick="toggleCommunityLike('${cesc(p.id)}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all font-black text-sm ${heartColor}">
-                      <span>${heartIcon}</span> ${likeCount}
-                  </button>
-                  <div class="text-xs font-black text-slate-500 uppercase tracking-wider">💬 ${comments.length} bình luận</div>
-              </div>
-
-              <div class="space-y-2.5">${ch||'<div class="text-sm text-slate-600 italic">Chưa có bình luận. Giải giúp bạn đầu tiên nào.</div>'}</div><div class="mt-4 flex gap-2"><input id="comment-${cesc(p.id)}" maxlength="1000" class="tw-input flex-1" placeholder="Viết cách giải hoặc góp ý..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();addCommunityComment(\'${cesc(p.id)}\')}"><button onclick="addCommunityComment('${cesc(p.id)}')" class="px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black">Gửi</button></div></div></article>`;
-          }).join('');
-      }
-
-      if(activeId) {
-          setTimeout(() => {
-              const el = document.getElementById(activeId);
-              if(el){ 
-                  el.focus(); 
-                  el.value = ''; 
-                  el.value = activeVal; 
-              }
-          }, 10);
-      }
+    if(!posts.length){
+      feed.innerHTML='<div class="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center text-slate-500 font-bold">Chưa có bài viết nào. Hãy là người đầu tiên hỏi bài.</div>';
+    }else{
+      feed.innerHTML=posts.map(p=>{
+        const comments=p.comments&&typeof p.comments==='object'
+          ?Object.entries(p.comments).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)) : [];
+        const avatar=`<img src="${cesc(postAvatar(p))}" data-community-avatar-uid="${cesc(p.authorUid||'')}" class="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" alt="Avatar" loading="lazy" referrerpolicy="no-referrer">`;
+        const ch=comments.slice(-8).map(c=>{
+          const av=`<img src="${cesc(commentAvatar(c))}" data-community-avatar-uid="${cesc(c.authorUid||'')}" class="w-8 h-8 rounded-full object-cover shrink-0 border border-white/5" alt="Avatar" loading="lazy" referrerpolicy="no-referrer">`;
+          return `<div class="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">${av}<div class="min-w-0"><div class="text-xs font-black text-slate-200">${cesc(c.authorName||'Học viên')} <span class="text-slate-600 font-bold ml-1">${ctime(c.createdAt)}</span></div><div class="text-sm text-slate-300 mt-1 whitespace-pre-wrap break-words community-post-body">${cesc(c.body||'')}</div></div></div>`;
+        }).join('');
+        const likes=p.likes&&typeof p.likes==='object'?p.likes:{};
+        const likeCount=Object.keys(likes).length;
+        const isLiked=!!(currentUser&&likes[currentUser.uid]);
+        const heartIcon=isLiked?'❤️':'🤍';
+        const heartColor=isLiked?'text-rose-500 bg-rose-500/10 border-rose-500/30':'text-slate-400 hover:text-rose-400 bg-white/5 hover:bg-rose-500/10 border-white/5 hover:border-rose-500/20';
+        return `<article class="rounded-[2rem] border border-white/10 bg-slate-900/80 shadow-xl overflow-hidden"><div class="p-5 sm:p-6"><div class="flex items-start gap-3">${avatar}<div class="min-w-0 flex-1"><div class="font-black text-white truncate community-post-author">${cesc(p.authorName||'Học viên')}</div><div class="text-xs text-slate-500 mt-0.5">${ctime(p.createdAt||p.updatedAt)} · ${cesc(p.subject||'Khác')}</div></div></div><h3 class="text-xl font-black text-white mt-4 community-post-author">${cesc(p.title||'Không có tiêu đề')}</h3><div class="text-slate-300 mt-3 leading-relaxed whitespace-pre-wrap break-words community-post-body">${cesc(p.body||'')}</div></div><div class="px-5 sm:px-6 py-4 border-t border-white/5 bg-white/[0.02]"><div class="flex items-center justify-between mb-3"><button onclick="toggleCommunityLike('${cesc(p.id)}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all font-black text-sm ${heartColor}"><span>${heartIcon}</span> ${likeCount}</button><div class="text-xs font-black text-slate-500 uppercase tracking-wider">💬 ${comments.length} bình luận</div></div><div class="space-y-2.5">${ch||'<div class="text-sm text-slate-600 italic">Chưa có bình luận. Giải giúp bạn đầu tiên nào.</div>'}</div><div class="mt-4 flex gap-2"><input id="comment-${cesc(p.id)}" maxlength="1000" class="tw-input flex-1" placeholder="Viết cách giải hoặc góp ý..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();addCommunityComment(\'${cesc(p.id)}\')}" /><button onclick="addCommunityComment('${cesc(p.id)}')" class="px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black">Gửi</button></div></div></article>`;
+      }).join('');
+    }
+    if(activeId)setTimeout(()=>{const el=document.getElementById(activeId);if(el){el.focus();el.value=activeVal;}},10);
   }
-  
+
+  async function syncCommunityAuthorAvatars(posts){
+    const database=window.db||((typeof db!=='undefined')?db:null);
+    if(!database||!posts?.length)return;
+    const uids=[...new Set(posts.flatMap(p=>[p.authorUid,...(p.comments&&typeof p.comments==='object'?Object.values(p.comments).map(c=>c?.authorUid):[])]).filter(Boolean))];
+    await Promise.all(uids.map(async uid=>{
+      const me=getCommunityUser();
+      if(me&&uid===me.uid&&me.photoURL){communityAuthorAvatarRefs[uid]=me.photoURL;return;}
+      if(communityAuthorAvatarRefs[uid])return;
+      try{
+        const snap=await database.ref(`users/${uid}`).once('value');
+        const data=snap.val()||{};
+        const avt=data.customAvatar||data.photoURL||data.avatarURL||'';
+        if(avt)communityAuthorAvatarRefs[uid]=avt;
+      }catch(e){console.debug('community avatar lookup skipped',uid,e?.message||e);}
+    }));
+    renderPosts(communityLastPosts);
+  }
+
+  async function bindCommunityRealtime(){
+    const database=await getCommunityDb();
+    const feed=document.getElementById('community-feed');
+    if(!feed)return;
+    if(communityFeedRef)communityFeedRef.off();
+    communityFeedRef=database.ref('community/posts').limitToLast(100);
+    communityBound=true;
+    feed.innerHTML='<div class="rounded-2xl border border-cyan-400/10 bg-slate-900/60 p-10 text-center text-slate-500 font-bold animate-pulse">Đang đồng bộ cộng đồng realtime...</div>';
+    communityFeedRef.on('value',snap=>{
+      const posts=[];
+      snap.forEach(child=>posts.push({id:child.key,...(child.val()||{})}));
+      posts.sort((a,b)=>(Number(b.updatedAt)||Number(b.createdAt)||0)-(Number(a.updatedAt)||Number(a.createdAt)||0));
+      renderPosts(posts);
+      syncCommunityAuthorAvatars(posts);
+    },err=>{
+      console.error('community load',err); communityBound=false;
+      feed.innerHTML=`<div class="rounded-2xl border border-red-400/20 bg-red-500/5 p-8 text-center text-red-300 font-bold">❌ Không tải được cộng đồng: ${cesc(err?.message||err)}<br><span class="text-xs text-red-200/70">Kiểm tra Firebase Rules cho /community/posts.</span></div>`;
+    });
+  }
+
   window.loadCommunityPosts=async function(force=false){
-      const feed=document.getElementById('community-feed');
-      if(!feed)return;
-      try{
-          const database=await creadb();
-          if(!communityBound||force){
-              if(communityFeedRef)communityFeedRef.off();
-              communityFeedRef=database.ref('community/posts').limitToLast(50);
-              communityFeedRef.on('value',snap=>{
-                  const posts=[];
-                  snap.forEach(child=>posts.push({id:child.key,...(child.val()||{})}));
-                  posts.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-                  renderPosts(posts);
-              },err=>{
-                  console.error('community load',err);
-                  feed.innerHTML='<div class="rounded-2xl border border-red-400/20 bg-red-500/5 p-8 text-center text-red-300 font-bold">❌ Không tải được cộng đồng. Kiểm tra Firebase Rules.</div>';
-              });
-              communityBound=true;
-          }
-      }catch(e){
-          feed.innerHTML=`<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-8 text-center text-amber-300 font-bold">${cesc(e.message)}</div>`;
-      }
-  };
-  
-  window.openCommunity=function(){switchSection('sec-community');setTimeout(()=>loadCommunityPosts(),60);};
-  
-  window.createCommunityPost=async function(){
-      const title=document.getElementById('community-title')?.value.trim()||'';
-      const subject=document.getElementById('community-subject')?.value||'Khác';
-      const body=document.getElementById('community-body')?.value.trim()||'';
-      
-      if(title.length<3)return alert('❌ Tiêu đề phải có ít nhất 3 ký tự.');
-      if(body.length<5)return alert('❌ Nội dung bài viết quá ngắn.');
-      
-      const user=cuser();
-      if(!user)return alert('❌ Bạn cần đăng nhập.');
-      
-      const btn=document.getElementById('community-post-btn');
-      try{
-          const database=await creadb();
-          if(btn){btn.disabled=true;btn.textContent='⏳ Đang đăng...';}
-          
-          await database.ref('community/posts').push({
-              title,
-              subject,
-              body,
-              authorUid:user.uid,
-              authorName:user.name,
-              photoURL:user.photoURL,
-              createdAt:Date.now(),
-              updatedAt:Date.now(), 
-              commentsCount:0,
-              likes: {} // 💡 Khởi tạo kho chứa tim rỗng
-          });
-          
-          document.getElementById('community-title').value='';
-          document.getElementById('community-body').value='';
-      }catch(e){
-          alert('❌ Không đăng được bài: '+e.message);
-          console.error(e)
-      }finally{
-          if(btn){btn.disabled=false;btn.textContent='ĐĂNG BÀI';}
-      }
-  };
-  
-  window.addCommunityComment=async function(postId){
-      const input=document.getElementById('comment-'+postId), body=input?.value.trim()||'';
-      if(!body)return;
-      const user=cuser();
-      if(!user)return alert('❌ Bạn cần đăng nhập.');
-      try{
-          const database=await creadb();
-          await database.ref(`community/posts/${postId}/comments`).push({
-              authorUid:user.uid,
-              authorName:user.name,
-              photoURL:user.photoURL, 
-              body,
-              createdAt:Date.now()
-          });
-          await database.ref(`community/posts/${postId}`).update({updatedAt:Date.now()});
-          if(input)input.value='';
-      }catch(e){
-          alert('❌ Không gửi được bình luận: '+e.message);
-          console.error(e)
-      }
+    const feed=document.getElementById('community-feed'); if(!feed)return;
+    try{if(force||!communityBound||!communityFeedRef)await bindCommunityRealtime();}
+    catch(e){communityBound=false;feed.innerHTML=`<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-8 text-center text-amber-300 font-bold">${cesc(e?.message||e)}</div>`;}
   };
 
-  // 💡 CHỨC NĂNG THẢ TIM BÀI VIẾT (Tự động Update Realtime)
-  window.toggleCommunityLike = async function(postId) {
-      const user = cuser();
-      if(!user) return alert('❌ Bạn cần đăng nhập để thả tim nhé!');
-      
-      try {
-          const database = await creadb();
-          const likeRef = database.ref(`community/posts/${postId}/likes/${user.uid}`);
-          
-          // Kiểm tra xem đã thả tim chưa
-          const snap = await likeRef.once('value');
-          if (snap.exists()) {
-              // Thả rồi thì rút lại (Unlike)
-              await likeRef.remove();
-          } else {
-              // Chưa thả thì cho 1 tim (Like)
-              await likeRef.set(true);
-          }
-      } catch(e) {
-          console.error('Lỗi thả tim:', e);
-          alert('❌ Không thả tim được, kiểm tra lại mạng nha ní!');
-      }
+  window.openCommunity=function(){switchSection('sec-community');setTimeout(()=>window.loadCommunityPosts(false),0);};
+
+  window.createCommunityPost=async function(){
+    const title=document.getElementById('community-title')?.value.trim()||'';
+    const subject=document.getElementById('community-subject')?.value||'Khác';
+    const body=document.getElementById('community-body')?.value.trim()||'';
+    if(title.length<3)return alert('❌ Tiêu đề phải có ít nhất 3 ký tự.');
+    if(body.length<5)return alert('❌ Nội dung bài viết quá ngắn.');
+    const user=getCommunityUser(); if(!user)return alert('❌ Bạn cần đăng nhập.');
+    const btn=document.getElementById('community-post-btn');
+    try{
+      const database=await getCommunityDb(); if(btn){btn.disabled=true;btn.textContent='⏳ Đang đăng...';}
+      const now=Date.now();
+      await database.ref('community/posts').push({title,subject,body,authorUid:user.uid,authorName:user.name,photoURL:user.photoURL||'',createdAt:now,updatedAt:now,commentsCount:0,likes:{}});
+      document.getElementById('community-title').value=''; document.getElementById('community-body').value='';
+    }catch(e){alert('❌ Không đăng được bài: '+(e?.message||e));console.error(e);}
+    finally{if(btn){btn.disabled=false;btn.textContent='ĐĂNG BÀI';}}
   };
+
+  window.addCommunityComment=async function(postId){
+    const input=document.getElementById('comment-'+postId),body=input?.value.trim()||'';
+    if(!body)return; const user=getCommunityUser(); if(!user)return alert('❌ Bạn cần đăng nhập.');
+    try{
+      const database=await getCommunityDb();
+      await database.ref(`community/posts/${postId}/comments`).push({authorUid:user.uid,authorName:user.name,photoURL:user.photoURL||'',body,createdAt:Date.now()});
+      await database.ref(`community/posts/${postId}`).update({updatedAt:Date.now()});
+      if(input)input.value='';
+    }catch(e){alert('❌ Không gửi được bình luận: '+(e?.message||e));console.error(e);}
+  };
+
+  window.toggleCommunityLike=async function(postId){
+    const user=getCommunityUser(); if(!user)return alert('❌ Bạn cần đăng nhập để thả tim nhé!');
+    try{const database=await getCommunityDb();const likeRef=database.ref(`community/posts/${postId}/likes/${user.uid}`);const snap=await likeRef.once('value');if(snap.exists())await likeRef.remove();else await likeRef.set(true);}
+    catch(e){console.error('Lỗi thả tim:',e);alert('❌ Không thả tim được, kiểm tra lại Firebase Rules/mạng nha!');}
+  };
+
+  window.addEventListener('community:avatar-updated',e=>{
+    const uid=e?.detail?.uid,url=e?.detail?.url;
+    if(!uid||!url)return; communityAuthorAvatarRefs[uid]=url; window.__communityAvatar=url;
+    if(communityLastPosts.length)renderPosts(communityLastPosts);
+  });
+
+  window.addEventListener('firebase:user-ready',()=>{
+    const sec=document.getElementById('sec-community');
+    if(sec?.classList.contains('active'))window.loadCommunityPosts(true);
+  });
 })();
 // ==========================================
 // HỆ THỐNG UP ẢNH ĐẠI DIỆN TÙY CHỈNH
@@ -4924,7 +4917,10 @@ window.uploadCustomAvatar = function(e) {
               .then(() => {
                   avtEl.src = base64Avatar; // Cập nhật ảnh ngay lập tức
                   const navAvt = document.getElementById('nav-avatar');
-                  if(navAvt) navAvt.src = base64Avatar;   
+                  if(navAvt) navAvt.src = base64Avatar;
+                  window.__communityAvatar = base64Avatar;
+                  const uid = auth.currentUser?.uid;
+                  if(uid) window.dispatchEvent(new CustomEvent('community:avatar-updated',{detail:{uid,url:base64Avatar}}));
                   alert('✅ Đổi ảnh đại diện thành công!');
               })
                   
