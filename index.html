@@ -2272,21 +2272,50 @@ function switchSection(id) {
 function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function norm(v){return String(v??'').trim().toLowerCase().replace(/,/g,'.').replace(/\s+/g,' ');}
 function getOriginalUrl(u) {
-    return String(u || '').trim();
+    let x = String(u || '').trim();
+    if (!x) return '';
+    // Bảng tính đôi khi lưu host mà thiếu giao thức.
+    if (/^drive\.google\.com\//i.test(x)) x = 'https://' + x;
+    if (/^docs\.google\.com\//i.test(x)) x = 'https://' + x;
+    if (/^www\.google\.com\//i.test(x)) x = 'https://' + x;
+    return x;
 }
-function isDriveFolderUrl(u) {
-    const x = String(u || '').trim();
-    return /drive\.google\.com\/(drive\/)?folders\//i.test(x) || /drive\.google\.com\/drive\/u\/\d+\/folders\//i.test(x);
+function getResourceKind(rowOrUrl) {
+    if (rowOrUrl && typeof rowOrUrl === 'object') {
+        const meta = [rowOrUrl.type,rowOrUrl.kind,rowOrUrl.loai,rowOrUrl['Loại'],rowOrUrl.file_type,rowOrUrl.resource_type]
+          .filter(Boolean).join(' ').toLowerCase();
+        if (/folder|thư\s*mục|thu\s*muc/.test(meta)) return 'folder';
+        return getResourceKind(rowOrUrl.pdf_url || rowOrUrl.link || rowOrUrl.url || '');
+    }
+    const x = getOriginalUrl(rowOrUrl);
+    if (!x) return 'empty';
+    if (/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//i.test(x) || /drive\.google\.com\/(?:drive\/)?folders\//i.test(x)) return 'folder';
+    try {
+        const url = new URL(x, location.href);
+        const path = (url.pathname || '').toLowerCase();
+        const id = url.searchParams.get('id') || '';
+        if (/^\/drive\/(?:u\/\d+\/)?folders\//.test(path) || /\/folders\//.test(path)) return 'folder';
+        // Một số link Drive cũ dùng open?id=... và không ghi /folders/.
+        if (/drive\.google\.com$/i.test(url.hostname) && /^(open|uc|view)$/i.test(path.replace(/^\//,'')) && /folder/i.test(url.search + ' ' + url.hash)) return 'folder';
+        if (url.hostname.toLowerCase()==='drive.google.com' && /folders/i.test(url.hash)) return 'folder';
+        if (id && /drive\.google\.com$/i.test(url.hostname) && rowOrUrl && typeof rowOrUrl === 'string' && /folder/i.test(rowOrUrl)) return 'folder';
+    } catch (_) {}
+    return 'file';
+}
+function isDriveFolderUrl(u) { return getResourceKind(u) === 'folder'; }
+function extractDriveFileId(u) {
+    const x=getOriginalUrl(u);
+    const patterns=[/drive\.google\.com\/file\/d\/([-\w]{20,})/i,/drive\.google\.com\/open\?id=([-\w]{20,})/i];
+    for(const re of patterns){ const m=x.match(re); if(m) return m[1]; }
+    return null;
 }
 function getEmbedUrl(u) {
-    u=String(u||'').trim();
-    if(!u || isDriveFolderUrl(u)) return u;
-    if(u.includes('drive.google.com/file/d/')) {
-        const id=u.match(/[-\w]{25,}/)?.[0];
-        return id ? `https://drive.google.com/file/d/${id}/preview` : u;
-    }
-    return u;
+    const x=getOriginalUrl(u);
+    if(!x || isDriveFolderUrl(x)) return x;
+    const id=extractDriveFileId(x);
+    return id ? `https://drive.google.com/file/d/${id}/preview` : x;
 }
+
 
 // ==========================================
 // HỆ THỐNG AUTHENTICATION (BẮT BUỘC ĐĂNG NHẬP)
@@ -2328,17 +2357,7 @@ function switchSection(id) {
 
 // Hiệu ứng mờ dần chuyển từ Welcome sang Đăng nhập
 function goToLogin() {
-    const welcome = document.getElementById('sec-welcome');
-    const login = document.getElementById('sec-login');
-    
-    if(welcome) welcome.style.opacity = '0';
-    setTimeout(() => {
-        if(welcome) welcome.classList.add('hidden');
-        if(login) {
-            login.classList.remove('hidden');
-            setTimeout(() => login.style.opacity = '1', 50); 
-        }
-    }, 500);
+    // behavior cuối cùng được nâng cấp ở auth/mobile layer bên dưới.
 }
 // ==========================================
 // HỆ THỐNG HỒ SƠ & STREAK (DUOLINGO STYLE)
@@ -2455,6 +2474,17 @@ function initFirebase() {
             auth = firebase.auth();
             provider = new firebase.auth.GoogleAuthProvider();
 
+            // Giữ phiên đăng nhập bền vững trên cùng trình duyệt/thiết bị.
+            try {
+                await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+            } catch (persistenceError) {
+                console.warn('Firebase persistence:', persistenceError);
+            }
+            if (!window.__authStateReadyPromise) {
+                window.__authStateReadyPromise = new Promise(resolve => { window.__resolveAuthStateReady = resolve; });
+            }
+            window.__authStateResolved = false;
+
             // QUAN TRỌNG: đồng bộ ra window vì hệ thống phòng dùng window.db/window.auth.
             window.db = db;
             window.auth = auth;
@@ -2463,6 +2493,9 @@ function initFirebase() {
 
             // Theo dõi trạng thái tài khoản
             auth.onAuthStateChanged(user => {
+        window.__authStateResolved = true;
+        if (typeof window.__resolveAuthStateReady === 'function') { window.__resolveAuthStateReady(user || null); window.__resolveAuthStateReady = null; }
+        window.__authUser = user || null;
         const welcome = document.getElementById('sec-welcome');
         const login = document.getElementById('sec-login');
         const nav = document.getElementById('main-nav');
@@ -2922,7 +2955,7 @@ async function loadExamList() {
         rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         c.innerHTML = rooms.map(r => {
             const tQ = (+r.config.abcd || 0) + (+r.config.tf || 0) + (+r.config.short || 0);
-            return `<article class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col hover:-translate-y-1 transition-transform duration-300"><div class="flex justify-between items-start mb-3"><div class="text-xs font-extrabold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-inner"><div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>ĐANG MỞ</div></div><h3 class="text-xl font-extrabold text-slate-900 mb-4 line-clamp-2">${esc(r.title)}</h3><div class="flex gap-2 mb-8 text-xs font-bold text-slate-600"><span class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">⏱ ${r.config.timeLimit || 0} phút</span><span class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">📝 ${tQ} câu</span></div><div class="mt-auto flex gap-3"><button onclick="viewLeaderboard('${r.id}')" class="w-1/3 py-3 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 font-extrabold border border-amber-200 text-sm transition-colors flex items-center justify-center gap-1">🏆 BXH</button><button onclick="prepareJoin('${r.id}', '${r.config.pdfUrl || ''}')" class="w-2/3 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1">🚀 VÀO THI</button></div></article>`;
+            return `<article class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col hover:-translate-y-1 transition-transform duration-300"><div class="flex justify-between items-start mb-3"><div class="text-xs font-extrabold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-inner"><div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>ĐANG MỞ</div></div><h3 class="text-xl font-extrabold text-slate-900 mb-4 line-clamp-2">${esc(r.title)}</h3><div class="flex gap-2 mb-8 text-xs font-bold text-slate-600"><span class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">⏱ ${r.config.timeLimit || 0} phút</span><span class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">📝 ${tQ} câu</span></div><div class="mt-auto flex gap-3"><button onclick="viewLeaderboard('${r.id}')" class="w-1/3 py-3 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 font-extrabold border border-amber-200 text-sm transition-colors flex items-center justify-center gap-1">🏆 BXH</button><button onclick='prepareJoin(${JSON.stringify(String(r.id))}, ${JSON.stringify(String(r.config.pdfUrl || ''))})' class="w-2/3 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1">🚀 VÀO THI</button></div></article>`;
         }).join('');
     } catch (e) { c.innerHTML = `<div class="col-span-full p-8 text-center text-red-600 font-bold bg-red-50 rounded-xl border border-red-100">❌ Lỗi tải phòng: ${esc(e.message)}</div>`; }
 }
@@ -4235,6 +4268,7 @@ function toggleAIChat() {
 
   // Chống xao nhãng: nếu đổi tab khi timer đang chạy, tự pause và ghi nhận sự kiện.
   document.addEventListener('visibilitychange',()=>{
+    if(window.__htvvmStudyV5Active) return;
     if(document.hidden && typeof isPomoRunning!=='undefined' && isPomoRunning){
       focusLostAt=Date.now();
       clearInterval(pomoInterval);
@@ -5403,6 +5437,402 @@ window.uploadCustomAvatar = function(e) {
       if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
       setBtn(false,false);
     }catch(err){ console.warn('Pomodoro init:',err); }
+  });
+})();
+</script>
+
+<style id="htvvm-final-responsive-fixes">
+  /* ===== FINAL RESPONSIVE LAYER ===== */
+  html,body{overflow-x:hidden;max-width:100%;}
+  button,input,select,textarea{touch-action:manipulation;}
+
+  /* Auth: desktop = modal, mobile = full-screen redirect-like view */
+  #sec-login.htvvm-login-desktop{
+    z-index:10001 !important;
+    background:rgba(7,11,18,.72) !important;
+    backdrop-filter:blur(14px) saturate(130%) !important;
+    -webkit-backdrop-filter:blur(14px) saturate(130%) !important;
+  }
+  #sec-login.htvvm-login-desktop > div{
+    width:min(92vw,430px) !important;
+    max-height:min(90vh,760px);
+    overflow:auto;
+  }
+  #sec-login.htvvm-login-mobile{
+    z-index:10001 !important;
+    background:var(--bg-deep,#070B12) !important;
+    overflow:auto;
+  }
+  #sec-login .htvvm-login-back{display:none;}
+  #sec-login.htvvm-login-desktop .htvvm-login-back{
+    display:flex;position:absolute;top:14px;left:14px;align-items:center;justify-content:center;
+    width:38px;height:38px;border-radius:12px;border:1px solid var(--border-strong,rgba(148,163,184,.22));
+    background:rgba(255,255,255,.05);color:var(--text-secondary,#B9C4D6);font-weight:900;cursor:pointer;
+  }
+  #sec-login.htvvm-login-desktop .htvvm-login-back:hover{background:rgba(255,255,255,.1);}
+
+  /* Exam: the paper and answer form become a real mobile app layout. */
+  #sec-taking-exam{overscroll-behavior:contain;}
+  #sec-taking-exam #student-pdf{background:#fff;}
+  #exam-doc-helper{display:none;}
+  @media (max-width:1023px){
+    #sec-taking-exam{height:100dvh !important;min-height:100dvh !important;overflow-y:auto !important;padding:8px !important;}
+    #sec-taking-exam > div{height:auto !important;min-height:100% !important;display:flex !important;flex-direction:column !important;gap:10px !important;}
+    #sec-taking-exam > div > div:first-child{flex:none !important;width:100% !important;height:48dvh !important;min-height:300px !important;}
+    #sec-taking-exam > div > div:last-child{flex:none !important;width:100% !important;min-height:52dvh !important;height:auto !important;}
+    #sec-taking-exam .p-3{padding:10px !important;}
+    #sec-taking-exam #timer{font-size:16px !important;padding:7px 12px !important;}
+    #sec-taking-exam #student-sheet{padding:12px !important;}
+    #sec-taking-exam #submit-btn{font-size:16px !important;padding:13px 12px !important;}
+    #exam-doc-helper{display:flex !important;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:8px;background:rgba(34,211,238,.05);border-bottom:1px solid rgba(148,163,184,.12);}
+    #exam-doc-helper a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 14px;border-radius:12px;background:#0891B2;color:#fff;font-weight:900;font-size:13px;text-decoration:none;}
+    #exam-doc-helper span{font-size:11px;font-weight:800;color:#8291A8;text-align:center;}
+  }
+  @media (max-width:640px){
+    #sec-welcome{padding:18px !important;}
+    #sec-welcome .w-28{width:88px;height:88px;font-size:48px;}
+    #sec-welcome h1{font-size:42px;line-height:1.02;}
+    #sec-welcome p{font-size:14px;margin-bottom:28px;}
+    #sec-welcome button{width:100%;font-size:17px;padding:15px 18px;}
+    #main-nav > div{padding-left:8px !important;padding-right:8px !important;}
+    #main-nav > div > div{flex-direction:row !important;flex-wrap:wrap !important;gap:8px !important;padding:8px 0 !important;}
+    #main-nav > div > div > .flex.items-center.gap-2.bg-slate-100{order:3;width:100%;overflow-x:auto;padding:5px;scrollbar-width:none;}
+    #main-nav > div > div > .flex.items-center.gap-2.bg-slate-100::-webkit-scrollbar{display:none;}
+    #main-nav .nav-btn{padding:8px 11px !important;font-size:11px !important;}
+    #main-nav > div > div > .flex.items-center.gap-3.shrink-0{margin-left:auto;gap:6px !important;}
+    #main-nav > div > div > .flex.items-center.gap-3.shrink-0 > button:first-child{display:none;}
+    #main-nav #theme-toggle-btn{width:38px;height:38px;font-size:17px;}
+    #main-nav .w-10.h-10{width:36px;height:36px;}
+    #main-nav span.font-extrabold.text-xl{font-size:15px;}
+    #sec-student-join{padding-top:24px !important;padding-bottom:24px !important;}
+    #sec-student-join > div{padding:20px !important;border-radius:24px !important;}
+    #sec-exam-list{padding-top:24px !important;padding-bottom:24px !important;}
+    #sec-exam-list > div:first-child{gap:10px;align-items:flex-start;}
+    #sec-exam-list h2{font-size:24px;line-height:1.1;}
+  }
+
+  /* Document cards / external resources: no accidental Vercel relative URLs. */
+  #document-grid article{min-width:0;}
+  #document-grid a{overflow-wrap:anywhere;}
+  .htvvm-folder-note{font-size:11px;font-weight:800;color:#8291A8;margin-top:7px;text-align:center;}
+</style>
+<script id="htvvm-final-engine-v5">
+(function(){
+  'use strict';
+  window.__htvvmStudyV5Active=true;
+
+  const LS={day:'htvvm.studyDay',seconds:'htvvm.todayStudySeconds',sessions:'htvvm.todaySessions',goal:'htvvm.dailyGoalMinutes'};
+  const pad=n=>String(Math.max(0,Math.floor(Number(n)||0))).padStart(2,'0');
+  const dateKey=d=>{d=d||new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;};
+  const mobile=()=>window.matchMedia?.('(max-width: 767px)').matches || navigator.maxTouchPoints>1;
+  // Khởi tạo nguồn trạng thái duy nhất cho Pomodoro, tránh undefined ở lần mở trang đầu tiên.
+  if(!Number.isFinite(Number(window.pomoSeconds))) window.pomoSeconds=25*60;
+  if(typeof window.currentPomoMode!=='string') window.currentPomoMode='pomo';
+  if(typeof window.isPomoRunning!=='boolean') window.isPomoRunning=false;
+  const safe=fn=>{try{return fn()}catch(e){console.warn('HTVVM safe:',e);return null;}};
+
+  function resetDailyStore(reason=''){
+    const today=dateKey();
+    if(localStorage.getItem(LS.day)!==today){
+      localStorage.setItem(LS.day,today);
+      localStorage.setItem(LS.seconds,'0');
+      localStorage.setItem(LS.sessions,'0');
+      if(typeof window.updateRankUI==='function') window.updateRankUI();
+      if(typeof window.updateStudyDashboard==='function') window.updateStudyDashboard();
+      if(reason) window.dispatchEvent(new CustomEvent('htvvm:day-rollover',{detail:{date:today,reason}}));
+      return true;
+    }
+    if(localStorage.getItem(LS.seconds)==null)localStorage.setItem(LS.seconds,'0');
+    if(localStorage.getItem(LS.sessions)==null)localStorage.setItem(LS.sessions,'0');
+    return false;
+  }
+
+  function scheduleMidnight(){
+    clearTimeout(window.__htvvmMidnightTimer);
+    const now=new Date(), next=new Date(now);
+    next.setHours(24,0,0,50);
+    window.__htvvmMidnightTimer=setTimeout(()=>{resetDailyStore('midnight');scheduleMidnight();},Math.max(500,next-now));
+  }
+  window.__htvvmResetToday=resetDailyStore;
+  resetDailyStore('startup');
+  scheduleMidnight();
+  setInterval(()=>resetDailyStore('poll'),30000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)resetDailyStore('visible');});
+
+  // ---------- Auth UX ----------
+  function enterApp(){
+    const welcome=document.getElementById('sec-welcome'),login=document.getElementById('sec-login'),nav=document.getElementById('main-nav');
+    welcome?.classList.add('hidden');welcome?.classList.remove('htvvm-login-desktop');
+    login?.classList.add('hidden');login?.classList.remove('htvvm-login-desktop','htvvm-login-mobile');login?.style.setProperty('opacity','0');
+    nav?.classList.remove('hidden');
+    if(typeof window.switchSection==='function') window.switchSection('sec-dashboard');
+    if(location.hash==='#login') history.replaceState(null,'',location.pathname+location.search);
+  }
+  function ensureAuthReady(){
+    if(window.__authStateResolved) return Promise.resolve(window.__authUser || window.auth?.currentUser || null);
+    if(window.__authStateReadyPromise) return window.__authStateReadyPromise;
+    return new Promise(resolve=>{
+      const timer=setInterval(()=>{if(window.__authStateResolved){clearInterval(timer);resolve(window.__authUser||window.auth?.currentUser||null);}},100);
+      setTimeout(()=>{clearInterval(timer);resolve(window.auth?.currentUser||null);},8000);
+    });
+  }
+  function ensureLoginBackButton(){
+    const card=document.querySelector('#sec-login > div'); if(!card || card.querySelector('.htvvm-login-back')) return;
+    const b=document.createElement('button');b.type='button';b.className='htvvm-login-back';b.setAttribute('aria-label','Quay lại');b.textContent='←';
+    b.onclick=()=>{const l=document.getElementById('sec-login');l?.classList.add('hidden');l?.classList.remove('htvvm-login-desktop','htvvm-login-mobile');l?.style.setProperty('opacity','0');document.getElementById('sec-welcome')?.classList.remove('hidden');};
+    card.appendChild(b);
+  }
+  window.goToLogin=async function(){
+    const user=await ensureAuthReady();
+    if(user || window.auth?.currentUser){enterApp();return;}
+    const welcome=document.getElementById('sec-welcome'),login=document.getElementById('sec-login');
+    if(!login)return;
+    ensureLoginBackButton();
+    if(mobile()){
+      welcome?.classList.add('hidden');
+      login.classList.remove('hidden','htvvm-login-desktop');
+      login.classList.add('htvvm-login-mobile');
+      login.style.opacity='1';
+      history.replaceState(null,'',location.pathname+location.search+'#login');
+    }else{
+      // Desktop: giữ Welcome phía sau và bật card đăng nhập dạng popup.
+      login.classList.remove('hidden','htvvm-login-mobile');
+      login.classList.add('htvvm-login-desktop');
+      login.style.opacity='1';
+    }
+  };
+
+  window.loginWithGoogle=async function(){
+    const err=document.getElementById('login-error'); if(err)err.classList.add('hidden');
+    try{
+      if(!window.auth || !window.provider){await window.initFirebase?.();}
+      if(!window.auth) throw new Error('Firebase Auth chưa sẵn sàng.');
+      if(mobile()){
+        // Mobile: redirect ổn định hơn popup, đặc biệt trên Safari/Chrome mobile.
+        await window.auth.signInWithRedirect(window.provider);
+      }else{
+        await window.auth.signInWithPopup(window.provider);
+      }
+    }catch(e){
+      console.error('Google login:',e);
+      if(err){err.textContent='❌ '+(e?.message||'Không thể đăng nhập Google.');err.classList.remove('hidden');}
+    }
+  };
+
+  // ---------- Robust Drive/file/folder URLs ----------
+  const getUrl=window.getOriginalUrl||((x)=>String(x||'').trim());
+  function urlKind(rowOrUrl){
+    if(rowOrUrl&&typeof rowOrUrl==='object'){
+      const meta=[rowOrUrl.type,rowOrUrl.kind,rowOrUrl.loai,rowOrUrl['Loại'],rowOrUrl.file_type,rowOrUrl.resource_type].filter(Boolean).join(' ').toLowerCase();
+      if(/folder|thư\s*mục|thu\s*muc/.test(meta))return 'folder';
+      return urlKind(rowOrUrl.pdf_url||rowOrUrl.link||rowOrUrl.url||'');
+    }
+    const x=getUrl(rowOrUrl);if(!x)return 'empty';
+    if(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//i.test(x)||/drive\.google\.com\/(?:drive\/)?folders\//i.test(x))return 'folder';
+    try{
+      const u=new URL(x,location.href),p=u.pathname.toLowerCase();
+      if(/\/folders\//.test(p))return 'folder';
+      const q=(u.search||'')+' '+(u.hash||'');
+      if(/folder/i.test(q)&&/drive\.google\.com/i.test(u.hostname))return 'folder';
+    }catch(_){ }
+    return 'file';
+  }
+  function normalizeResource(rowOrUrl){
+    let x=typeof rowOrUrl==='object'?(rowOrUrl.pdf_url||rowOrUrl.link||rowOrUrl.url||''):rowOrUrl;
+    x=getUrl(x);if(!x)return '';
+    if(/^(drive\.google\.com|docs\.google\.com)\//i.test(x))x='https://'+x;
+    return x;
+  }
+  function embedResource(x){
+    x=normalizeResource(x);if(!x||urlKind(x)==='folder')return x;
+    const m=x.match(/drive\.google\.com\/file\/d\/([-\w]{20,})/i)||x.match(/drive\.google\.com\/open\?id=([-\w]{20,})/i);
+    return m?`https://drive.google.com/file/d/${m[1]}/preview`:x;
+  }
+  window.getOriginalUrl=normalizeResource;window.isDriveFolderUrl=x=>urlKind(x)==='folder';window.getEmbedUrl=embedResource;
+
+  function renderDocsFinal(data){
+    const c=document.getElementById('document-grid');if(!c)return;
+    const rows=(Array.isArray(data)?data:[]).filter(d=>String(d?.title||d?.Title||d?.Tên||'').trim());
+    if(!rows.length){c.innerHTML='<div class="col-span-full bg-white rounded-3xl p-10 text-center font-bold border border-slate-200 text-slate-500 shadow-sm">Không tìm thấy tài liệu nào phù hợp với bộ lọc.</div>';return;}
+    const esc2=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\\'/g,'&#039;');
+    c.innerHTML=rows.map(d=>{
+      const title=String(d.title||d.Title||d.Tên||'').trim(),url=normalizeResource(d),kind=urlKind(d),subject=d.chapter||d.mon||d['Môn']||'TỔNG HỢP';
+      const label=kind==='folder'?'📁 MỞ THƯ MỤC':'↗ MỞ TÀI LIỆU';
+      const cls=kind==='folder'?'bg-emerald-500/10 text-emerald-300 border-emerald-400/20 hover:bg-emerald-500 hover:text-white':'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-600 hover:text-white';
+      return `<article class="relative bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full group"><div class="absolute -right-12 top-6 bg-red-500 text-white text-[10px] font-extrabold px-12 py-1.5 rotate-45 shadow-sm z-10 tracking-widest">CHÍNH THỨC</div><div class="flex justify-between items-start mb-5 pr-8"><div class="w-11 h-11 ${kind==='folder'?'bg-emerald-500/10 text-emerald-300':'bg-blue-50 text-blue-600'} rounded-xl flex items-center justify-center shadow-inner text-xl">${kind==='folder'?'📁':'📄'}</div><span class="px-3 py-1 bg-slate-100 text-slate-500 font-extrabold text-[10px] uppercase rounded-md tracking-wider">${esc2(subject).toUpperCase()}</span></div><h2 class="text-lg font-extrabold text-slate-900 mb-5 line-clamp-3 group-hover:text-blue-600 transition-colors leading-snug break-words">${esc2(title)}</h2><div class="space-y-2 mt-auto text-xs font-semibold"><p class="flex items-start gap-2 text-slate-600"><span class="w-5 text-center text-slate-400">👤</span>Tải lên: <span class="text-red-600">Admin Hệ Thống</span></p><p class="flex items-start gap-2 text-slate-600"><span class="w-5 text-center text-slate-400">🔗</span>${kind==='folder'?'Đây là thư mục Google Drive — không dùng preview PDF.':'Mở liên kết tài liệu trực tiếp.'}</p></div><div class="mt-6 pt-4 border-t border-slate-100">${url?`<a target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" href="${esc2(url)}" class="block w-full text-center py-3 rounded-xl ${cls} font-extrabold text-sm transition-colors border shadow-sm">${label}</a>${kind==='folder'?'<div class="htvvm-folder-note">Mở tab mới để xem toàn bộ file trong thư mục.</div>':''}`:'<div class="w-full p-2.5 bg-slate-50 rounded-xl text-center font-bold text-slate-400 border border-slate-100 text-sm">Đang cập nhật</div>'}</div></article>`;
+    }).join('');
+  }
+  window.renderDocs=renderDocsFinal;
+
+  function setExamDoc(url){
+    const frame=document.getElementById('student-pdf');if(!frame)return;
+    const parent=frame.parentElement;if(!parent)return;
+    const kind=urlKind(url),src=embedResource(url);
+    let helper=document.getElementById('exam-doc-helper');
+    if(!helper){helper=document.createElement('div');helper.id='exam-doc-helper';parent.insertBefore(helper,frame);}
+    helper.innerHTML='';
+    if(src){
+      frame.src=kind==='folder'?'about:blank':src;
+      const a=document.createElement('a');a.href=src;a.target='_blank';a.rel='noopener noreferrer';a.textContent=kind==='folder'?'📁 Mở thư mục đề':'📄 Mở đề trong tab mới';helper.appendChild(a);
+      const s=document.createElement('span');s.textContent=kind==='folder'?'Thư mục không hỗ trợ preview trực tiếp trong iframe.':'Nếu khung xem trước không tải trên điện thoại, mở đề ở tab riêng.';helper.appendChild(s);
+    }else{
+      frame.src='about:blank';helper.innerHTML='<span>Chưa có link đề được gắn cho phòng này.</span>';
+    }
+  }
+  window.__htvvmSetExamDoc=setExamDoc;
+
+  // ---------- Exam mobile + robust room join ----------
+  window.prepareJoin=async function(id){
+    currentRoomId=String(id||'').trim().toUpperCase();
+    if(!currentRoomId)return alert('Mã phòng không hợp lệ.');
+    try{
+      const database=window.db||window.firebase?.database?.();if(!database)throw new Error('Firebase Database chưa sẵn sàng.');
+      const snap=await database.ref('rooms/'+currentRoomId).once('value');
+      if(!snap.exists())return alert('❌ Không tìm thấy phòng '+currentRoomId+'.');
+      const r=snap.val()||{};document.getElementById('join-title').textContent=r.title||'Phòng thi';document.getElementById('join-room-code').textContent='MÃ PHÒNG: '+currentRoomId+(r.creatorName?' • '+r.creatorName:'');
+      setExamDoc(r.config?.pdfUrl||'');switchSection('sec-student-join');
+    }catch(e){console.error(e);alert('❌ Không thể mở phòng: '+(e?.message||e));}
+  };
+
+  let examEndAt=0,examLastAt=0,examTick=null;
+  const renderExamTimer=()=>{const left=Math.max(0,Math.ceil((examEndAt-Date.now())/1000));timeRemaining=left;const t=document.getElementById('timer');if(t)t.textContent=`${pad(Math.floor(left/60))}:${pad(left%60)}`;return left;};
+  window.startExam=async function(){
+    const nameEl=document.getElementById('studentName');studentName=String(nameEl?.value||'').trim();if(!studentName)return alert('Nhập tên!');
+    try{
+      const database=window.db||window.firebase?.database?.();const s=await database.ref('rooms/'+currentRoomId).once('value');if(!s.exists())throw new Error('Phòng thi không còn tồn tại.');
+      const r=s.val()||{},cfg=r.config||{};answers={};timeSpent=0;timeRemaining=Math.max(1,Number(cfg.timeLimit)||15)*60;
+      const title=document.getElementById('taking-title');if(title)title.textContent=r.title||'Đề thi';
+      document.getElementById('student-sheet').innerHTML=sheetHTML(cfg,false);document.getElementById('result').classList.add('hidden');document.getElementById('submit-btn').style.display='block';
+      setExamDoc(cfg.pdfUrl||'');switchSection('sec-taking-exam');
+      if(typeof restoreDraft==='function')setTimeout(()=>safe(()=>restoreDraft()),150);
+      window._examStartedAt=Date.now();examEndAt=Date.now()+timeRemaining*1000;examLastAt=Date.now();clearInterval(examTick);
+      examTick=setInterval(()=>{
+        const now=Date.now();timeSpent=Math.floor((now-window._examStartedAt)/1000);const left=renderExamTimer();
+        if(left<=0){clearInterval(examTick);examTick=null;safe(()=>submitExam());}
+      },250);renderExamTimer();
+    }catch(e){console.error('startExam',e);alert('❌ Không thể vào phòng: '+(e?.message||e));}
+  };
+  const legacySubmit=window.submitExam;
+  window.submitExam=async function(){clearInterval(examTick);examTick=null;timeSpent=Math.max(0,Math.floor((Date.now()-(window._examStartedAt||Date.now()))/1000));return legacySubmit?legacySubmit():undefined;};
+
+  // Recreate exam list with safe room-button data and responsive cards.
+  window.loadExamList=async function(){
+    switchSection('sec-exam-list');const c=document.getElementById('live-exams-container');if(!c)return;c.innerHTML='<div class="col-span-full p-10 text-center font-bold text-slate-500 bg-slate-50 rounded-2xl animate-pulse">Đang tải danh sách phòng thi...</div>';
+    try{
+      const database=window.db||db,s=await database.ref('rooms').once('value');if(!s.exists()){c.innerHTML='<div class="col-span-full p-10 text-center font-bold text-slate-500 bg-slate-50 rounded-2xl border">Chưa có phòng thi nào đang mở.</div>';return;}
+      const rooms=[];s.forEach(x=>{const v=x.val()||{};if(v.config)rooms.push({id:x.key,...v});});rooms.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      if(!rooms.length){c.innerHTML='<div class="col-span-full p-10 text-center font-bold text-slate-500 bg-slate-50 rounded-2xl border">Chưa có phòng thi nào đang mở.</div>';return;}
+      c.innerHTML=rooms.map(r=>{const q=(+r.config?.abcd||0)+(+r.config?.tf||0)+(+r.config?.short||0),rid=JSON.stringify(String(r.id)).replace(/</g,'\\u003c'),btn=`prepareJoin(${rid})`;return `<article class="bg-white rounded-[2rem] p-5 sm:p-6 shadow-sm border border-slate-200 flex flex-col"><div class="flex justify-between items-start mb-3"><div class="text-xs font-extrabold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>ĐANG MỞ</div></div><h3 class="text-xl font-extrabold text-slate-900 mb-4 line-clamp-3 break-words">${esc(String(r.title||'Phòng thi'))}</h3><div class="flex flex-wrap gap-2 mb-7 text-xs font-bold text-slate-600"><span class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">⏱ ${Number(r.config?.timeLimit)||0} phút</span><span class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">📝 ${q} câu</span></div><div class="mt-auto grid grid-cols-1 sm:grid-cols-3 gap-2"><button onclick="viewLeaderboard(${rid})" class="py-3 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 font-extrabold border border-amber-200 text-sm">🏆 BXH</button><button onclick="${btn}" class="sm:col-span-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-sm shadow-md">🚀 VÀO THI</button></div></article>`;}).join('');
+    }catch(e){c.innerHTML=`<div class="col-span-full p-8 text-center text-red-600 font-bold bg-red-50 rounded-xl border">❌ Lỗi tải phòng: ${esc(e?.message||e)}</div>`;}
+  };
+
+  // ---------- Study-time engine: Date.now + split at midnight ----------
+  let studyRunning=false,studyTarget=0,studyAwardedAt=0,studyTick=null,studyFinished=false;
+  function getTodaySecondsLocal(){resetDailyStore('read');return Number(localStorage.getItem(LS.seconds)||0)||0;}
+  function addPastDayToFirebase(day,seconds){
+    const user=window.auth?.currentUser||auth?.currentUser,database=window.db||db;if(!user||!database||seconds<=0)return;
+    database.ref(`users/${user.uid}/dailyStudy/${day}`).transaction(v=>(Number(v)||0)+seconds).catch(e=>console.warn('dailyStudy transaction',e));
+  }
+  async function syncStudyNow(){
+    try{
+      resetDailyStore('sync');
+      const user=window.auth?.currentUser || (typeof auth!=='undefined'?auth?.currentUser:null);
+      const database=window.db || (typeof db!=='undefined'?db:null);
+      if(!user||!database)return;
+      const today=dateKey();
+      const total=Number(totalStudySeconds)||0;
+      const todaySeconds=Number(localStorage.getItem(LS.seconds)||0)||0;
+      const sessions=Number(localStorage.getItem(LS.sessions)||0)||0;
+      await database.ref('users/'+user.uid).update({
+        totalStudySeconds:total,
+        ['dailyStudy/'+today]:todaySeconds,
+        ['dailySessions/'+today]:sessions,
+        lastActiveAt:Date.now()
+      });
+      if(typeof window.loadDashboardLeaderboards==='function')window.loadDashboardLeaderboards();
+    }catch(e){console.warn('HTVVM study sync:',e);}
+  }
+  function refreshStudyDashboard(){
+    resetDailyStore('ui');
+    const seconds=Number(localStorage.getItem(LS.seconds)||0)||0;
+    const mins=Math.floor(seconds/60),goal=Math.max(5,Math.min(600,Number(localStorage.getItem(LS.goal)||60)||60));
+    const pct=Math.min(100,(seconds/(goal*60))*100);
+    const p=document.getElementById('today-goal-progress');if(p)p.style.width=pct+'%';
+    const t=document.getElementById('today-goal-text');if(t)t.textContent=`${mins} / ${goal} phút`;
+    const l=document.getElementById('today-goal-label');if(l)l.textContent=`${goal} phút`;
+    const m=document.getElementById('today-study-min');if(m)m.textContent=mins;
+    const sess=document.getElementById('today-session-count');if(sess)sess.textContent=Number(localStorage.getItem(LS.sessions)||0)||0;
+    if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();
+  }
+  window.refreshStudyDashboard=refreshStudyDashboard;
+  function recordStudySession(){
+    resetDailyStore('session');
+    const n=(Number(localStorage.getItem(LS.sessions)||0)||0)+1;
+    localStorage.setItem(LS.sessions,String(n));
+    refreshStudyDashboard();
+    void syncStudyNow();
+  }
+  function addStudyInterval(from,to){
+    if(to<=from)return 0;let cursor=from,total=0,updatedToday=false;
+    while(cursor<to){
+      const d=new Date(cursor),day=dateKey(d),mid=new Date(d);mid.setHours(24,0,0,0);const end=Math.min(to,mid.getTime());const sec=Math.max(0,Math.floor((end-cursor)/1000));
+      if(sec>0){total+=sec;if(day===dateKey()){
+        resetDailyStore('study');localStorage.setItem(LS.seconds,String(getTodaySecondsLocal()+sec));updatedToday=true;
+      }else addPastDayToFirebase(day,sec);}
+      cursor += Math.max(1000,sec*1000);if(sec===0)cursor=end+1;
+    }
+    if(total>0){totalStudySeconds=(Number(totalStudySeconds)||0)+total;if(updatedToday){refreshStudyDashboard();if(typeof window.updateRankUI==='function')window.updateRankUI();if(getTodaySeconds()%30<total)void syncStudyNow();} }
+    return total;
+  }
+  function flushStudy(now){if(!studyAwardedAt)studyAwardedAt=now;const elapsed=Math.floor((now-studyAwardedAt)/1000);if(elapsed>0){addStudyInterval(studyAwardedAt,studyAwardedAt+elapsed*1000);studyAwardedAt+=elapsed*1000;}}
+  function stopStudyTick(){clearInterval(studyTick);studyTick=null;}
+  function setStudyButton(state){const b=document.getElementById('btn-pomo-action');if(!b)return;if(state==='running'){b.textContent='DỪNG LẠI';b.className='bg-red-500 hover:bg-red-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-inner w-full';}else if(state==='paused'){b.textContent='TIẾP TỤC';b.className='bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';}else{b.textContent='BẮT ĐẦU';b.className='bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';}}
+  function tickStudy(){if(!studyRunning)return;const now=Date.now();flushStudy(now);const left=Math.max(0,Math.ceil((studyTarget-now)/1000));window.pomoSeconds=left;if(typeof window.updatePomoUI==='function')window.updatePomoUI();if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();if(typeof window.updateRankUI==='function')window.updateRankUI();if(left<=0)finishStudy();}
+  function finishStudy(){if(studyFinished)return;studyFinished=true;const now=Date.now();flushStudy(Math.min(Math.max(now,studyTarget),now));window.pomoSeconds=0;studyRunning=false;isPomoRunning=false;window.isPomoRunning=false;stopStudyTick();if(typeof window.enableInputs==='function')window.enableInputs();setStudyButton('idle');refreshStudyDashboard();if(typeof window.updateRankUI==='function')window.updateRankUI();void syncStudyNow();if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();recordStudySession();if(typeof window.toast==='function')window.toast('⏰ Hết giờ Pomodoro! Giỏi lắm, thêm một phiên học.');}
+  window.togglePomodoro=function(){
+    const seconds=Number(window.pomoSeconds)||0;
+    if(studyRunning){const now=Date.now();flushStudy(now);const left=Math.max(0,Math.ceil((studyTarget-now)/1000));window.pomoSeconds=left;studyRunning=false;isPomoRunning=false;window.isPomoRunning=false;studyTarget=0;stopStudyTick();if(typeof window.enableInputs==='function')window.enableInputs();setStudyButton('paused');if(typeof window.updatePomoUI==='function')window.updatePomoUI();if(typeof window.updateRankUI==='function')window.updateRankUI();refreshStudyDashboard();void syncStudyNow();if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();recordStudySession();return;}
+    if(seconds<=0)return alert('Nhập thời gian lớn hơn 0 nghen!');
+    resetDailyStore('study-start');studyFinished=false;studyTarget=Date.now()+seconds*1000;studyAwardedAt=Date.now();studyRunning=true;isPomoRunning=true;window.isPomoRunning=true;if(typeof window.disableInputs==='function')window.disableInputs();setStudyButton('running');if(typeof window.updatePomoUI==='function')window.updatePomoUI();stopStudyTick();studyTick=setInterval(tickStudy,250);tickStudy();
+  };
+  window.resetPomodoro=function(){studyRunning=false;isPomoRunning=false;window.isPomoRunning=false;studyFinished=false;studyTarget=0;studyAwardedAt=0;stopStudyTick();if(typeof window.enableInputs==='function')window.enableInputs();const mode=window.currentPomoMode||'pomo';window.pomoSeconds=mode==='short'?300:mode==='long'?900:1500;if(typeof window.updatePomoUI==='function')window.updatePomoUI();if(typeof window.updateRankUI==='function')window.updateRankUI();if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();setStudyButton('idle');};
+  window.setPomoMode=function(mode){studyRunning=false;isPomoRunning=false;window.isPomoRunning=false;studyFinished=false;studyTarget=0;studyAwardedAt=0;stopStudyTick();window.currentPomoMode=mode;currentPomoMode=mode;window.pomoSeconds=mode==='short'?300:mode==='long'?900:1500;if(typeof window.enableInputs==='function')window.enableInputs();if(typeof window.updatePomoUI==='function')window.updatePomoUI();if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();setStudyButton('idle');['pomo','short','long'].forEach(m=>{const e=document.getElementById('mode-'+m);if(e)e.className='flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all';});const active=document.getElementById('mode-'+mode);if(active)active.className='flex-1 py-2 rounded-lg font-extrabold bg-white text-emerald-600 shadow-sm transition-all';};
+  window.userCustomTime=function(){studyRunning=false;isPomoRunning=false;window.isPomoRunning=false;studyTarget=0;studyAwardedAt=0;stopStudyTick();window.currentPomoMode='custom';currentPomoMode='custom';const m=Math.max(0,parseInt(document.getElementById('input-m')?.value||'0',10)||0),s=Math.max(0,Math.min(59,parseInt(document.getElementById('input-s')?.value||'0',10)||0));window.pomoSeconds=m*60+s;if(typeof window.enableInputs==='function')window.enableInputs();if(typeof window.updatePomoUI==='function')window.updatePomoUI();if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();setStudyButton('idle');};
+
+  // Keep the daily rank/UI alive when the page is open for hours.
+  setInterval(()=>{resetDailyStore('study-ui');refreshStudyDashboard();if(typeof window.updateRankUI==='function')window.updateRankUI();},10000);
+
+  // On mobile the room/route code may fire before auth settles; let the existing route handler retry.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden && studyRunning){
+      const now=Date.now();
+      flushStudy(now);
+      const left=Math.max(0,Math.ceil((studyTarget-now)/1000));
+      window.pomoSeconds=left;
+      studyRunning=false;isPomoRunning=false;window.isPomoRunning=false;studyTarget=0;stopStudyTick();
+      if(typeof window.enableInputs==='function')window.enableInputs();
+      setStudyButton('paused');
+      if(typeof window.updatePomoUI==='function')window.updatePomoUI();
+      refreshStudyDashboard();
+      if(typeof window.updateRankUI==='function')window.updateRankUI();
+      void syncStudyNow();
+      if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();
+      recordStudySession();
+      if(typeof window.toast==='function')window.toast('⏸️ Đã tạm dừng vì bạn rời tab.');
+    }
+  });
+
+  document.addEventListener('htvvm:day-rollover',()=>{
+    if(studyRunning) studyAwardedAt=Date.now();
+    refreshStudyDashboard();
+  });
+
+  window.addEventListener('firebase:user-ready',()=>{void syncStudyNow();});
+  window.addEventListener('hashchange',()=>{if(location.hash==='#login'&&!window.auth?.currentUser)window.goToLogin();});
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    ensureLoginBackButton();
+    resetDailyStore('dom-ready');scheduleMidnight();
   });
 })();
 </script>
