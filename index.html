@@ -5517,3 +5517,365 @@ window.uploadCustomAvatar = function(e) {
   .htvvm-folder-note{font-size:11px;font-weight:800;color:#8291A8;margin-top:7px;text-align:center;}
 </style>
 <script id="htvvm-final-engine-v5">
+(function(){
+  'use strict';
+  window.__htvvmStudyV5Active=true;
+
+  const LS={day:'htvvm.studyDay',seconds:'htvvm.todayStudySeconds',sessions:'htvvm.todaySessions',goal:'htvvm.dailyGoalMinutes'};
+  const pad=n=>String(Math.max(0,Math.floor(Number(n)||0))).padStart(2,'0');
+  const dateKey=d=>{d=d||new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;};
+  const mobile=()=>window.matchMedia?.('(max-width: 767px)').matches || navigator.maxTouchPoints>1;
+  const safe=fn=>{try{return fn()}catch(e){console.warn('HTVVM safe:',e);return null;}};
+
+  if(typeof window.totalStudySeconds === 'undefined') window.totalStudySeconds = 0;
+  if(!Number.isFinite(Number(window.pomoSeconds))) window.pomoSeconds=25*60;
+  if(typeof window.currentPomoMode!=='string') window.currentPomoMode='pomo';
+  if(typeof window.isPomoRunning!=='boolean') window.isPomoRunning=false;
+
+  function resetDailyStore(reason=''){
+    const today=dateKey();
+    if(localStorage.getItem(LS.day)!==today){
+      localStorage.setItem(LS.day,today);
+      localStorage.setItem(LS.seconds,'0');
+      localStorage.setItem(LS.sessions,'0');
+      if(typeof window.updateRankUI==='function') window.updateRankUI();
+      if(typeof window.updateStudyDashboard==='function') window.updateStudyDashboard();
+      if(reason) window.dispatchEvent(new CustomEvent('htvvm:day-rollover',{detail:{date:today,reason}}));
+      return true;
+    }
+    if(localStorage.getItem(LS.seconds)==null)localStorage.setItem(LS.seconds,'0');
+    if(localStorage.getItem(LS.sessions)==null)localStorage.setItem(LS.sessions,'0');
+    return false;
+  }
+
+  function scheduleMidnight(){
+    clearTimeout(window.__htvvmMidnightTimer);
+    const now=new Date(), next=new Date(now);
+    next.setHours(24,0,0,50);
+    window.__htvvmMidnightTimer=setTimeout(()=>{
+        resetDailyStore('midnight');
+        // Bơm Popup Chào ngày mới có ảnh
+        const welcomeImageUrl = 'https://i.pinimg.com/736x/83/9a/c0/839ac013f993d0ba75fc03c14c5b3671.jpg'; // Nhớ thay ảnh của ní!
+        const popupHTML = `
+        <div id="new-day-modal" class="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity" style="animation: fadeIn 0.4s ease-out forwards;">
+            <div class="bg-white rounded-[2rem] p-6 max-w-md w-full text-center shadow-2xl transform transition-transform" style="animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;">
+                <img src="${welcomeImageUrl}" alt="Chào ngày mới" class="w-full h-48 rounded-2xl mb-5 shadow-inner object-cover border border-slate-100">
+                <h2 class="text-3xl font-black text-slate-800 mb-2">🌅 Ngày Mới Bùng Nổ!</h2>
+                <p class="text-sm text-slate-500 font-bold mb-6">Tiến độ và danh hiệu đã được làm mới. Khởi động Pomodoro và nối dài chuỗi kỷ luật của bạn nào!</p>
+                <button onclick="document.getElementById('new-day-modal').remove()" class="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-white font-black text-lg shadow-md hover:scale-105 transition-all">
+                    🚀 CHIẾN THÔI
+                </button>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', popupHTML);
+        scheduleMidnight();
+    },Math.max(500,next-now));
+  }
+  window.__htvvmResetToday=resetDailyStore;
+  resetDailyStore('startup');
+  scheduleMidnight();
+  setInterval(()=>resetDailyStore('poll'),30000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)resetDailyStore('visible');});
+
+  // ---------- UI Pomodoro ----------
+  window.updatePomoUI = function(){
+    const total = Math.max(0, Math.floor(Number(window.pomoSeconds)||0));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    const minEl = document.getElementById('input-m');
+    const secEl = document.getElementById('input-s');
+    if(minEl) minEl.value = pad(m);
+    if(secEl) secEl.value = pad(s);
+  };
+
+  window.syncFocusOverlay = function(){
+    const total = Math.max(0, Math.floor(Number(window.pomoSeconds)||0));
+    const clock = document.getElementById('focus-clock');
+    const status = document.getElementById('focus-status');
+    if(clock) clock.textContent = `${pad(Math.floor(total/60))}:${pad(total%60)}`;
+    if(status) status.textContent = window.isPomoRunning
+      ? 'Đang tập trung — không mở tab linh tinh nhé.'
+      : 'Đang tạm dừng — bấm ▶ để tiếp tục.';
+  };
+
+  // ---------- Study-time engine: Date.now + split at midnight ----------
+  let studyTargetAt = 0, studyAwardedAt = 0, studyTickId = null, studyFinished = false;
+
+  function getTodaySecondsLocal(){resetDailyStore('read');return Number(localStorage.getItem(LS.seconds)||0)||0;}
+  function getTodaySessionsLocal(){resetDailyStore('read');return Number(localStorage.getItem(LS.sessions)||0)||0;}
+  
+  function addPastDayToFirebase(day,seconds){
+    const user=window.auth?.currentUser||auth?.currentUser,database=window.db||db;if(!user||!database||seconds<=0)return;
+    database.ref(`users/${user.uid}/dailyStudy/${day}`).transaction(v=>(Number(v)||0)+seconds).catch(e=>console.warn('dailyStudy transaction',e));
+  }
+
+  async function syncStudyNow(){
+    try{
+      resetDailyStore('sync');
+      const user=window.auth?.currentUser || (typeof auth!=='undefined'?auth?.currentUser:null);
+      const database=window.db || (typeof db!=='undefined'?db:null);
+      if(!user||!database)return;
+      const today=dateKey();
+      const total=Number(window.totalStudySeconds)||0;
+      const todaySeconds=getTodaySecondsLocal();
+      const sessions=getTodaySessionsLocal();
+      await database.ref('users/'+user.uid).update({
+        totalStudySeconds:total,
+        ['dailyStudy/'+today]:todaySeconds,
+        ['dailySessions/'+today]:sessions,
+        lastActiveAt:Date.now()
+      });
+      if(typeof window.loadDashboardLeaderboards==='function')window.loadDashboardLeaderboards();
+    }catch(e){console.warn('HTVVM study sync:',e);}
+  }
+
+  window.updateStudyDashboard = function(){
+    resetDailyStore('ui');
+    const seconds=getTodaySecondsLocal();
+    const mins=Math.floor(seconds/60),goal=Math.max(5,Math.min(600,Number(localStorage.getItem(LS.goal)||60)||60));
+    const pct=Math.min(100,(seconds/(goal*60))*100);
+    const p=document.getElementById('today-goal-progress');if(p)p.style.width=pct+'%';
+    const t=document.getElementById('today-goal-text');if(t)t.textContent=`${mins} / ${goal} phút`;
+    const l=document.getElementById('today-goal-label');if(l)l.textContent=`${goal} phút`;
+    const m=document.getElementById('today-study-min');if(m)m.textContent=mins;
+    const sess=document.getElementById('today-session-count');if(sess)sess.textContent=getTodaySessionsLocal();
+    if(typeof window.syncFocusOverlay==='function')window.syncFocusOverlay();
+  }
+
+  window.updateRankUI = function(){
+      const dailySeconds = getTodaySecondsLocal();
+      let h = Math.floor(dailySeconds / 3600), m = Math.floor((dailySeconds % 3600) / 60), s = dailySeconds % 60;
+      let rt=document.getElementById('rank-time'); if(rt) rt.innerText = `Hôm nay: ${h > 0 ? h + ' giờ ' : ''}${m} phút ${s} giây`;
+      let icon = document.getElementById('rank-icon'), name = document.getElementById('rank-name'), progress = document.getElementById('rank-progress'), next = document.getElementById('rank-next');
+      let percent = ((dailySeconds % 3600) / 3600) * 100;
+      
+      if(!icon||!name||!progress||!next) return;
+
+      if (h === 0) {
+          icon.innerText = '💧'; name.innerText = 'Tập sự (H₂O)';
+          name.className = 'text-xl font-extrabold text-blue-600 mb-1';
+          progress.className = 'bg-blue-500 h-3 rounded-full transition-all duration-1000';
+          next.innerText = `Còn ${60 - m}p nữa để thành Caffein`;
+      } else if (h === 1) {
+          icon.innerText = '☕'; name.innerText = 'Tỉnh táo (Caffein)';
+          name.className = 'text-xl font-extrabold text-amber-600 mb-1';
+          progress.className = 'bg-amber-500 h-3 rounded-full transition-all duration-1000';
+          next.innerText = `Còn ${60 - m}p nữa để thành Dopamine`;
+      } else if (h === 2) {
+          icon.innerText = '🚀'; name.innerText = 'Hưng phấn (Dopamine)';
+          name.className = 'text-xl font-extrabold text-purple-600 mb-1';
+          progress.className = 'bg-purple-500 h-3 rounded-full transition-all duration-1000';
+          next.innerText = `Còn ${60 - m}p nữa để thành Adrenaline`;
+      } else if (h === 3) {
+          icon.innerText = '⚡'; name.innerText = 'Bứt phá (Adrenaline)';
+          name.className = 'text-xl font-extrabold text-orange-600 mb-1';
+          progress.className = 'bg-orange-500 h-3 rounded-full transition-all duration-1000';
+          next.innerText = `Còn ${60 - m}p nữa để thành Serotonin`;
+      } else if (h === 4) {
+          icon.innerText = '🧠'; name.innerText = 'Thông thái (Serotonin)';
+          name.className = 'text-xl font-extrabold text-emerald-600 mb-1';
+          progress.className = 'bg-emerald-500 h-3 rounded-full transition-all duration-1000';
+          next.innerText = `Còn ${60 - m}p nữa để chạm mốc Quá tải`;
+      } else if (h >= 5) {
+          icon.innerText = '🚨'; name.innerText = 'Quá tải (Cortisol)';
+          name.className = 'text-xl font-extrabold text-red-600 mb-1 animate-pulse';
+          progress.className = 'bg-red-500 h-3 rounded-full transition-all duration-1000';
+          percent = 100; // Khóa cứng
+          next.innerText = `Cảnh báo: Bạn đã học quá giới hạn! Nên nghỉ ngơi đi!`;
+      }
+      progress.style.width = percent + '%';
+  }
+
+  function recordSession(){
+    resetDailyStore('session');
+    const n = getTodaySessionsLocal() + 1;
+    localStorage.setItem(LS.sessions, String(n));
+    window.updateStudyDashboard();
+    void syncStudyNow();
+  }
+
+  function addStudyInterval(from,to){
+    if(to<=from)return 0;
+    let cursor=from, total=0, updatedToday=false;
+    while(cursor<to){
+      const d=new Date(cursor), day=dateKey(d), mid=new Date(d); mid.setHours(24,0,0,0);
+      const end=Math.min(to,mid.getTime()); const sec=Math.max(0,Math.floor((end-cursor)/1000));
+      if(sec>0){
+          total+=sec;
+          if(day===dateKey()){
+              resetDailyStore('study');
+              localStorage.setItem(LS.seconds,String(getTodaySecondsLocal()+sec));
+              updatedToday=true;
+          }else{
+              addPastDayToFirebase(day,sec);
+          }
+      }
+      cursor += Math.max(1000,sec*1000); if(sec===0)cursor=end+1;
+    }
+    if(total>0){
+        window.totalStudySeconds = (Number(window.totalStudySeconds)||0)+total;
+        if(updatedToday){
+            window.updateStudyDashboard();
+            window.updateRankUI();
+            if(getTodaySecondsLocal()%30 < total) void syncStudyNow();
+        } 
+    }
+    return total;
+  }
+
+  function flushStudy(now){
+      if(!studyAwardedAt)studyAwardedAt=now;
+      const elapsed=Math.floor((now-studyAwardedAt)/1000);
+      if(elapsed>0){
+          if(window.currentPomoMode === 'pomo' || window.currentPomoMode === 'custom'){
+              addStudyInterval(studyAwardedAt,studyAwardedAt+elapsed*1000);
+          }
+          studyAwardedAt+=elapsed*1000;
+      }
+  }
+
+  function stopStudyTick(){clearInterval(studyTickId);studyTickId=null;}
+
+  function setStudyButton(state){
+    const b=document.getElementById('btn-pomo-action');if(!b)return;
+    if(state==='running'){b.textContent='DỪNG LẠI';b.className='bg-red-500 hover:bg-red-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-inner w-full';}
+    else if(state==='paused'){b.textContent='TIẾP TỤC';b.className='bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';}
+    else{b.textContent='BẮT ĐẦU';b.className='bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';}
+  }
+
+  function disablePomoInputs(){
+      document.getElementById('input-m').disabled = true;
+      document.getElementById('input-s').disabled = true;
+      document.getElementById('input-m').classList.add('opacity-80', 'cursor-not-allowed', 'text-emerald-600');
+      document.getElementById('input-s').classList.add('opacity-80', 'cursor-not-allowed', 'text-emerald-600');
+  }
+
+  function enablePomoInputs(){
+      document.getElementById('input-m').disabled = false;
+      document.getElementById('input-s').disabled = false;
+      document.getElementById('input-m').classList.remove('opacity-80', 'cursor-not-allowed', 'text-emerald-600');
+      document.getElementById('input-s').classList.remove('opacity-80', 'cursor-not-allowed', 'text-emerald-600');
+  }
+
+  function tick(){
+    if(!window.isPomoRunning) return;
+    const now = Date.now();
+    flushStudy(now);
+    const remaining = Math.max(0, Math.ceil((studyTargetAt - now) / 1000));
+    window.pomoSeconds = remaining;
+    window.updatePomoUI();
+    window.syncFocusOverlay();
+    
+    if(remaining <= 0){
+        studyFinished = true;
+        stopStudyTick();
+        window.isPomoRunning = false;
+        if(studyTargetAt) flushStudy(Math.max(Date.now(), studyTargetAt));
+        window.pomoSeconds = 0;
+        window.updatePomoUI();
+        enablePomoInputs();
+        setStudyButton('stopped');
+        recordSession();
+        window.syncFocusOverlay();
+        alert('⏰ Reng reng reng! Hết giờ rồi thằng em ơi!');
+    }
+  }
+
+  window.togglePomodoro = function(){
+    const seconds = Number(window.pomoSeconds) || 0;
+
+    // Đang chạy -> PAUSE
+    if(window.isPomoRunning){
+      const now = Date.now();
+      flushStudy(now);
+      const remaining = Math.max(0, Math.ceil((studyTargetAt - now)/1000));
+      window.pomoSeconds = remaining;
+      stopStudyTick();
+      window.isPomoRunning = false;
+      studyTargetAt = 0;
+      studyFinished = false;
+      enablePomoInputs();
+      setStudyButton('paused');
+      window.updatePomoUI();
+      window.syncFocusOverlay();
+      return;
+    }
+
+    if(seconds <= 0) return alert('Ní phải nhập thời gian lớn hơn 0 nghen!');
+
+    resetDailyStore('start');
+    studyFinished = false;
+    studyTargetAt = Date.now() + seconds*1000;
+    studyAwardedAt = Date.now();
+    window.isPomoRunning = true;
+    disablePomoInputs();
+    setStudyButton('running');
+    window.pomoSeconds = Math.max(0, Math.ceil((studyTargetAt - Date.now()) / 1000));
+    window.updatePomoUI();
+    stopStudyTick();
+    studyTickId = setInterval(tick, 250);
+    tick();
+  };
+
+  window.resetPomodoro = function(){
+    const mode = String(window.currentPomoMode || 'pomo');
+    const wasRunning = window.isPomoRunning;
+    stopStudyTick();
+    window.isPomoRunning = false;
+    studyTargetAt = 0;
+    studyAwardedAt = 0;
+    studyFinished = false;
+    enablePomoInputs();
+    window.pomoSeconds = mode === 'short' ? 5*60 : mode === 'long' ? 15*60 : 25*60;
+    window.updatePomoUI();
+    window.syncFocusOverlay();
+    setStudyButton('stopped');
+    if(wasRunning) recordSession();
+  };
+
+  window.setPomoMode = function(mode){
+    stopStudyTick();
+    window.isPomoRunning = false;
+    window.currentPomoMode = mode;
+    studyTargetAt = 0; studyAwardedAt = 0; studyFinished = false;
+    window.pomoSeconds = mode === 'short' ? 5*60 : mode === 'long' ? 15*60 : 25*60;
+    ['pomo','short','long'].forEach(m=>{
+      const el = document.getElementById('mode-'+m);
+      if(el) el.className = 'flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all';
+    });
+    const active = document.getElementById('mode-'+mode);
+    if(active) active.className = 'flex-1 py-2 rounded-lg font-extrabold bg-white text-emerald-600 shadow-sm transition-all';
+    enablePomoInputs();
+    window.updatePomoUI();
+    setStudyButton('stopped');
+    window.syncFocusOverlay();
+  };
+
+  window.userCustomTime = function(){
+    if(window.isPomoRunning) return;
+    window.currentPomoMode = 'custom';
+    const minEl = document.getElementById('input-m');
+    const secEl = document.getElementById('input-s');
+    const m = Math.max(0, Math.floor(Number(minEl?.value)||0));
+    const s = Math.max(0, Math.min(59, Math.floor(Number(secEl?.value)||0)));
+    window.pomoSeconds = m*60+s;
+    ['pomo','short','long'].forEach(x=>{ const el=document.getElementById('mode-'+x); if(el) el.className='flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all'; });
+    window.syncFocusOverlay();
+  };
+
+  // Keep display sane on first paint.
+  document.addEventListener('DOMContentLoaded',()=>{
+    try{
+      if(typeof window.pomoSeconds !== 'number') window.pomoSeconds=25*60;
+      window.updatePomoUI();
+      window.updateRankUI();
+      window.updateStudyDashboard();
+      window.syncFocusOverlay();
+      setStudyButton('stopped');
+    }catch(err){ console.warn('Pomodoro init:',err); }
+  });
+
+})();
+</script>
+</body>
+</html>
