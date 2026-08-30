@@ -2377,6 +2377,9 @@ function openProfile() {
     document.getElementById('profile-study-time').innerText = totalHours + 'h';
 
     // Tính danh hiệu
+    // FIX: đảm bảo đã kiểm tra/reset đúng ngày (lastStudyDate) trước khi đọc số giây học hôm nay,
+    // tránh hiển thị nhầm dữ liệu của ngày hôm trước khi mở hồ sơ sau nửa đêm.
+    if (typeof window.ensureTodayStore === 'function') window.ensureTodayStore();
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     const dailyHours = Math.floor(dailySeconds / 3600);
     document.getElementById('profile-rank-icon').innerText = '💧';
@@ -3592,6 +3595,10 @@ function enableInputs() {
 // totalStudySeconds vẫn giữ nguyên để phục vụ Tổng thời gian học ở hồ sơ/thống kê.
 // Hàm cập nhật Giao diện Thăng cấp (Bản hoàn chỉnh không bị reset)
 function updateRankUI() {
+    // FIX: kiểm tra/reset theo ngày (lastStudyDate) TRƯỚC khi đọc số giây học hôm nay.
+    // Trước đây hàm này đọc thẳng localStorage nên khi tab bị treo qua nửa đêm mà
+    // không có hành động nào khác, danh hiệu/thanh tiến trình vẫn hiển thị số liệu cũ.
+    if (typeof window.ensureTodayStore === 'function') window.ensureTodayStore();
     // Lấy trực tiếp từ bộ nhớ cục bộ
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     let h = Math.floor(dailySeconds / 3600);
@@ -3946,20 +3953,42 @@ function toggleAIChat() {
   function storeSet(key, value){ try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) { console.warn('localStorage unavailable',e); } }
   function toast(msg, ms=2200){ const el=document.getElementById('study-toast'); if(!el) return; el.textContent=msg; el.classList.remove('hidden'); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.add('hidden'),ms); }
 
+  // lastStudyDate tương đương với STORE.day ('htvvm.studyDay'): ngày cuối cùng đã cập nhật
+  // bộ đếm giờ học. So sánh với ngày hiện tại (local time) mỗi lần ensureTodayStore() chạy.
   function ensureTodayStore(){
     const today=dateKey();
     if(localStorage.getItem(STORE.day)!==today){
+      // Sang ngày mới (kể cả trường hợp không mở web nhiều ngày liền, vd lần cuối là 28/08,
+      // mở lại vào 30/08): CHỈ reset bộ đếm của "hôm nay" về 0, không đụng tới lịch sử
+      // các ngày trước (lịch sử được lưu riêng theo key dailyStudy/{ngày} trên Firebase).
       localStorage.setItem(STORE.day,today);
       localStorage.setItem(STORE.todaySeconds,'0');
       localStorage.setItem(STORE.sessions,'0');
-      // Sang ngày mới: XP/danh hiệu phải quay về 0 ngay lập tức.
+      // Sang ngày mới: XP/danh hiệu + toàn bộ UI liên quan phải quay về 0 ngay lập tức.
       if(typeof updateRankUI==='function') updateRankUI();
+      if(typeof updateStudyDashboard==='function') updateStudyDashboard();
     }
   }
   function getTodaySeconds(){ ensureTodayStore(); return safeNum(localStorage.getItem(STORE.todaySeconds)); }
   function getTodaySessions(){ ensureTodayStore(); return safeNum(localStorage.getItem(STORE.sessions)); }
   function getDailyGoal(){ const n=safeNum(localStorage.getItem(STORE.goal),60); return n>0?n:60; }
   window.setDailyGoal=function(min){ const n=Math.max(5,Math.min(600,safeNum(min,60))); localStorage.setItem(STORE.goal,String(n)); updateStudyDashboard(); toast(`🎯 Mục tiêu hôm nay: ${n} phút`); };
+
+  // ------------------------------------------------------------------
+  // FIX QUAN TRỌNG: các hàm ensureTodayStore/updateStudyDashboard/syncStudyStats/
+  // getDailyGoal/toast ở trên chỉ tồn tại BÊN TRONG closure này. Bộ đếm Pomodoro
+  // đang thực sự chạy (định nghĩa ở cuối file, phần "window.togglePomodoro") gọi các
+  // hàm này qua kiểm tra `typeof ensureTodayStore === 'function'` ở phạm vi global —
+  // do KHÔNG được export nên các kiểm tra đó luôn là false và logic reset theo ngày
+  // KHÔNG BAO GIỜ chạy trong lúc học thật (đây chính là nguyên nhân gây lỗi cộng dồn
+  // thời gian học sang ngày mới). Export ra window để các module khác gọi đúng logic.
+  window.ensureTodayStore = ensureTodayStore;
+  window.getTodayStudySeconds = getTodaySeconds;
+  window.getTodaySessions = getTodaySessions;
+  window.updateStudyDashboard = updateStudyDashboard;
+  window.syncStudyStats = syncStudyStats;
+  window.getDailyGoal = getDailyGoal;
+  window.toast = toast;
 
   let dashboardLeaderboardRefs = {study:null, streak:null};
   function formatStudyTime(sec){
@@ -4298,6 +4327,19 @@ function toggleAIChat() {
     updateStudyDashboard();
     if(typeof auth!=='undefined' && auth) auth.onAuthStateChanged(u=>{ if(u) loadRole(u); });
     const input=document.getElementById('searchInput'); if(input) input.setAttribute('autocomplete','off');
+  });
+
+  // FIX: tự động phát hiện sang ngày mới KỂ CẢ KHI người dùng không thao tác gì
+  // (không bấm Pomodoro, không F5 lại trang) — ví dụ mở web từ tối hôm trước rồi để
+  // đó qua đêm. Không dựa vào "24h kể từ lúc mở web", mà so sánh ngày thực tế (YYYY-MM-DD)
+  // theo local time mỗi 20 giây một lần và mỗi khi tab được focus lại.
+  setInterval(()=>{ ensureTodayStore(); updateStudyDashboard(); }, 20000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible'){
+      ensureTodayStore();
+      updateStudyDashboard();
+      updateRankUI();
+    }
   });
 })();
 </script>
