@@ -9,19 +9,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Các thư viện dưới đây chỉ được gọi bên trong hàm, khi người dùng thao tác (đã kiểm tra toàn bộ điểm gọi) -->
-<!-- => dùng defer để không chặn render trang đầu tiên, không đổi hành vi -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script defer src="https://meet.jit.si/external_api.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.4/3Dmol-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://meet.jit.si/external_api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.4/3Dmol-min.js"></script>
 <!-- THƯ VIỆN VẼ ĐỒ THỊ (CHART.JS & MATH.JS) -->
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
 <!-- THƯ VIỆN CHO CHEMMAKER -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
   window.MathJax = {
     tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], packages: {'[+]': ['mhchem']} },
@@ -29,7 +27,7 @@
   };
 </script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-<script defer type="text/javascript" src="https://jsme-editor.github.io/dist/jsme/jsme.nocache.js"></script>
+<script type="text/javascript" src="https://jsme-editor.github.io/dist/jsme/jsme.nocache.js"></script>
 
 <script>
     tailwind.config = {
@@ -48,9 +46,6 @@ body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif; backgrou
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-/* Trạng thái focus rõ ràng khi điều hướng bằng bàn phím (không ảnh hưởng click chuột) */
-:focus-visible{outline:2px solid #2563eb!important;outline-offset:2px!important;border-radius:6px;}
 
 .app-section{display:none; animation: fadeIn 0.4s ease-out forwards;}
 .app-section.active{display:block}
@@ -1116,9 +1111,57 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
         transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out;
     }
 </style>
-<style id="htvvm-dark-font-polish">html,body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}body{font-synthesis:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}body.htvvm-dark-mode button,body.htvvm-dark-mode input,body.htvvm-dark-mode select,body.htvvm-dark-mode textarea,body.htvvm-dark-mode option,body.htvvm-dark-mode h1,body.htvvm-dark-mode h2,body.htvvm-dark-mode h3,body.htvvm-dark-mode h4,body.htvvm-dark-mode h5,body.htvvm-dark-mode h6{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}</style></head>
+<style id="htvvm-dark-font-polish">html,body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}body{font-synthesis:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}body.htvvm-dark-mode button,body.htvvm-dark-mode input,body.htvvm-dark-mode select,body.htvvm-dark-mode textarea,body.htvvm-dark-mode option,body.htvvm-dark-mode h1,body.htvvm-dark-mode h2,body.htvvm-dark-mode h3,body.htvvm-dark-mode h4,body.htvvm-dark-mode h5,body.htvvm-dark-mode h6{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}</style>
+
+<style id="htvvm-dashboard-upgrade-css">
+.dashboard-quote-card{position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(167,139,250,.20);background:radial-gradient(circle at 50% 0,rgba(139,92,246,.13),transparent 40%),linear-gradient(145deg,#11182a,#0b1220 64%,#12102a);box-shadow:0 24px 70px rgba(0,0,0,.30)}
+.dashboard-quote-card:before{content:"“";position:absolute;left:5%;top:-30px;font:900 190px/1 Georgia,serif;color:rgba(167,139,250,.07);pointer-events:none}
+.dashboard-quote-spacious{min-height:330px;display:flex;align-items:center;justify-content:center;padding:34px 24px}
+.dashboard-quote-inner{position:relative;z-index:1;width:min(900px,100%);text-align:center;display:flex;flex-direction:column;align-items:center}
+.dashboard-quote-label{margin:14px 0 0;color:#c4b5fd;font-size:10px;font-weight:950;letter-spacing:.22em}
+.dashboard-quote-text{margin:22px 0 0;max-width:850px;color:#f8fafc;font-size:clamp(28px,4vw,44px);font-weight:950;line-height:1.15;letter-spacing:-.03em;text-wrap:balance}
+.dashboard-quote-byline{margin-top:20px;display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;color:#cbd5e1;font-size:12px;font-weight:800}
+.dashboard-quote-dot{color:#8b5cf6}
+.dashboard-quote-source{display:inline-flex;margin-top:12px;color:#67e8f9;font-size:11px;font-weight:900;text-decoration:none;border-bottom:1px solid rgba(103,232,249,.25);padding-bottom:2px}
+.dashboard-quote-source:hover{color:#fff;border-color:rgba(255,255,255,.45)}
+.dashboard-mini-arena{background:linear-gradient(145deg,rgba(34,211,238,.10),rgba(139,92,246,.08));border-color:rgba(34,211,238,.25);box-shadow:inset 0 1px rgba(255,255,255,.04),0 10px 28px rgba(34,211,238,.05)}
+.dashboard-mini-arena:hover{border-color:rgba(34,211,238,.45);box-shadow:0 12px 30px rgba(34,211,238,.10)}
+.dashboard-quote-accent{width:44px;height:4px;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#8b5cf6);box-shadow:0 0 18px rgba(34,211,238,.35)}
+.dashboard-arena-card{position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(34,211,238,.23);background:radial-gradient(circle at 50% 0,rgba(34,211,238,.16),transparent 40%),linear-gradient(145deg,#091a2e,#07111e 65%,#0c1b32);box-shadow:0 24px 70px rgba(0,0,0,.38)}
+.dashboard-arena-card:after{content:"";position:absolute;inset:auto -10% -80px;height:180px;transform:perspective(420px) rotateX(58deg);background-image:linear-gradient(rgba(73,193,245,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(73,193,245,.09) 1px,transparent 1px);background-size:42px 42px;pointer-events:none}
+.dashboard-arena-room{border:1px solid rgba(82,205,249,.14);border-radius:16px;background:rgba(255,255,255,.035);padding:12px;backdrop-filter:blur(8px)}
+.dashboard-arena-room .room-code{font:900 18px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:3px;color:#ffd45c}
+.dashboard-arena-room .room-title{margin-top:6px;font-size:12px;font-weight:900;color:#f3f8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.study-break-backdrop{position:fixed;inset:0;z-index:99990;background:rgba(2,8,20,.74);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;padding:18px}
+.study-break-backdrop.show{display:flex;animation:studyBreakFade .22s ease-out}
+@keyframes studyBreakFade{from{opacity:0}to{opacity:1}}
+.study-break-modal{width:min(720px,100%);position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(145deg,#111a2d,#091321);box-shadow:0 35px 100px rgba(0,0,0,.58)}
+.study-break-image-wrap{padding:14px 14px 0}.study-break-image{width:100%;height:220px;object-fit:cover;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(135deg,#16253e,#0a1220)}
+.study-break-content{padding:22px}.study-break-kicker{font-size:10px;letter-spacing:2px;font-weight:950;color:#fbbf24;text-transform:uppercase}.study-break-content h2{margin:6px 0 8px;font-size:clamp(24px,4vw,36px);font-weight:950;line-height:1.1;color:#f8fafc}.study-break-content p{margin:0;color:#b4c2d4;font-size:14px;line-height:1.65}.study-break-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 22px 22px}.study-break-actions button{min-height:52px;border-radius:15px;font-weight:950}.study-break-continue{background:linear-gradient(100deg,#06b6d4,#0ea5e9);color:#fff;box-shadow:0 10px 24px rgba(14,165,233,.2)}.study-break-stop{background:#1a2538;border:1px solid #334155;color:#f8fafc}
+.study-break-upload{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;border:1px dashed rgba(148,163,184,.25);border-radius:13px;background:rgba(255,255,255,.03)}.study-break-upload span{font-size:11px;color:#94a3b8}.study-break-upload button{padding:8px 11px;border-radius:9px;background:#18253a;border:1px solid #334155;color:#dbeafe;font-weight:900;font-size:10px}
+@media(max-width:640px){.study-break-image{height:165px}.study-break-actions{grid-template-columns:1fr}.dashboard-quote-card,.dashboard-arena-card{border-radius:24px}.dashboard-quote-spacious{min-height:300px;padding:28px 18px}.dashboard-quote-text{font-size:28px}}
+</style>
+
+<style id="chem-arena-module-css">
+.chem-arena-shell{position:relative;overflow:hidden;min-height:680px;border-radius:30px;padding:28px;color:#fff;background:radial-gradient(circle at 50% 5%,#1b78b8 0,#0d3e70 24%,#092b53 50%,#06182f 76%,#020b18 100%);border:1px solid rgba(77,213,255,.28);box-shadow:0 30px 80px rgba(0,0,0,.45),inset 0 1px rgba(255,255,255,.06)}
+.chem-arena-shell:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(4,19,40,.04),rgba(1,9,24,.52))}
+.chem-arena-bg-glow{position:absolute;left:50%;top:-240px;transform:translateX(-50%);width:900px;height:650px;border-radius:50%;background:radial-gradient(ellipse,rgba(71,211,255,.28),transparent 68%);filter:blur(2px)}
+.chem-arena-grid{position:absolute;left:-15%;right:-15%;bottom:-145px;height:380px;transform:perspective(430px) rotateX(59deg);transform-origin:center top;background-image:linear-gradient(rgba(73,193,245,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(73,193,245,.12) 1px,transparent 1px);background-size:56px 56px}
+.chem-arena-horizon{position:absolute;left:0;right:0;bottom:0;height:42%;clip-path:polygon(0 35%,8% 26%,14% 39%,22% 23%,30% 40%,39% 20%,47% 39%,56% 26%,64% 42%,73% 23%,82% 38%,90% 25%,100% 32%,100% 100%,0 100%);background:linear-gradient(to bottom,rgba(5,47,92,.03),rgba(2,14,33,.88))}
+.chem-arena-head,.chem-arena-menu,.chem-arena-room-list,.chem-arena-foot{position:relative;z-index:2}
+.chem-arena-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.chem-arena-eyebrow{font-size:10px;letter-spacing:4px;color:#74ddff;font-weight:900}.chem-arena-head h2{font-size:clamp(42px,7vw,82px);line-height:.88;letter-spacing:-4px;font-weight:1000;margin:8px 0 8px;background:linear-gradient(#fff,#a9eeff 45%,#42c8ff 72%,#2d78d7);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 5px 0 rgba(3,35,72,.9))}.chem-arena-head h2 span{color:#ffd45c}.chem-arena-head p{margin:0;color:#89dcf4;font-size:9px;letter-spacing:4px;font-weight:900}.chem-arena-user{min-width:230px;padding:11px 13px;border:1px solid rgba(81,206,255,.28);border-radius:15px;background:rgba(5,28,59,.75);display:flex;align-items:center;gap:9px}.chem-arena-user>span{font-size:24px}.chem-arena-user small{display:block;color:#82b4d2;font-size:9px;font-weight:800}.chem-arena-user strong{display:block;margin-top:2px;font-size:12px}
+.chem-arena-menu{display:grid;grid-template-columns:1.15fr repeat(3,1fr);gap:10px;margin-top:34px}.chem-arena-menu button{min-height:58px;border:1px solid rgba(91,203,247,.25);border-radius:15px;background:linear-gradient(100deg,rgba(14,63,112,.92),rgba(5,30,65,.96));color:#fff;font-weight:900;box-shadow:inset 0 1px rgba(255,255,255,.07),0 8px 18px rgba(0,0,0,.18)}.chem-arena-menu .chem-arena-cta{background:linear-gradient(100deg,#ff9d25,#e86210);border-color:rgba(255,205,82,.62);box-shadow:inset 0 1px rgba(255,255,255,.18),0 4px 0 rgba(112,42,0,.65),0 10px 20px rgba(0,0,0,.22)}
+.chem-arena-room-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:22px}.chem-room-card{border:1px solid rgba(82,205,249,.18);border-radius:16px;padding:16px;background:rgba(7,28,55,.74);backdrop-filter:blur(8px)}.chem-room-card h4{font-size:17px;font-weight:950;margin:5px 0 9px}.chem-room-meta{display:flex;gap:7px;flex-wrap:wrap;color:#8dbbd2;font-size:10px}.chem-room-pill{padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}.chem-room-actions{display:flex;gap:8px;margin-top:13px}.chem-room-actions button{flex:1;padding:9px 10px;border-radius:10px;font-weight:900;background:#103f6e;color:#fff;border:1px solid rgba(82,205,249,.18)}.chem-room-actions button.primary{background:#0aa36a}.chem-arena-foot{display:flex;gap:14px;flex-wrap:wrap;color:rgba(153,207,235,.65);font-size:9px;font-weight:800;letter-spacing:.5px;margin-top:25px}.chem-arena-foot code{color:#8ce8ff}
+.arena-studio{background:linear-gradient(145deg,#0b1424,#060c16);border:1px solid rgba(82,205,249,.18);border-radius:28px;padding:26px;box-shadow:0 30px 80px rgba(0,0,0,.45)}.arena-kicker{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(34,211,238,.12);color:#67e8f9;border:1px solid rgba(34,211,238,.22);font-size:10px;font-weight:900;letter-spacing:1.5px}.arena-editor-card{border:1px solid rgba(148,163,184,.12);border-radius:22px;background:#0c1628;padding:18px}.arena-status-pill,.arena-count{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:28px;padding:0 9px;border-radius:9px;background:#12223b;color:#8de8ff;font-size:10px;font-weight:900;border:1px solid rgba(82,205,249,.16)}.arena-input{width:100%;border:1px solid rgba(148,163,184,.14);border-radius:13px;background:#07111e;color:#f8fafc;padding:12px 13px;outline:none;font-weight:700}.arena-input:focus{border-color:#22d3ee;box-shadow:0 0 0 3px rgba(34,211,238,.08)}.arena-input option{background:#0c1628;color:#fff}.arena-textarea{min-height:125px;resize:vertical}.arena-textarea.small{min-height:88px;margin-top:12px}.arena-btn{min-height:48px;padding:0 16px;border-radius:13px;font-weight:950;border:1px solid transparent}.arena-btn-main{background:linear-gradient(100deg,#0ea5e9,#06b6d4);color:#fff;box-shadow:0 8px 20px rgba(6,182,212,.18)}.arena-btn-soft{background:#132039;color:#dbeafe;border-color:#273653}.arena-tip{margin-top:10px;color:#71829c;font-size:11px;line-height:1.6}.arena-tip code{color:#67e8f9}.arena-q-list{display:grid;gap:9px;max-height:630px;overflow:auto}.arena-q-item{border:1px solid rgba(148,163,184,.1);border-radius:14px;padding:12px;background:#091322}.arena-q-item .q-title{font-size:12px;font-weight:900;line-height:1.5}.arena-q-item .q-meta{display:flex;gap:6px;flex-wrap:wrap;color:#71829c;font-size:9px;margin-top:7px}.arena-q-item .q-actions{display:flex;gap:6px;margin-top:10px}.arena-q-item button{padding:7px 9px;border-radius:8px;background:#14233c;color:#fff;font-size:10px;font-weight:900}.arena-q-item button.danger{background:#4a202a;color:#fecaca}
+.sec-arena-live{display:block}
+.chem-live{position:absolute;inset:0;overflow:hidden;color:#fff;background:#031022;background-image:radial-gradient(circle at 50% 0,#1d6cae 0,#0b365e 35%,#061a34 66%,#020a16 100%)}.chem-live:before{content:"";position:absolute;inset:auto -20% -160px;height:430px;transform:perspective(430px) rotateX(59deg);transform-origin:center top;background-image:linear-gradient(rgba(73,193,245,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(73,193,245,.11) 1px,transparent 1px);background-size:56px 56px;pointer-events:none}.chem-live-top{position:relative;z-index:5;height:76px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:0 18px;background:rgba(3,20,41,.74);border-bottom:1px solid rgba(81,206,255,.17);backdrop-filter:blur(16px)}.chem-live-brand b{display:block;font-size:17px;letter-spacing:1px}.chem-live-brand span{display:block;color:#68dfff;font-size:9px;margin-top:2px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}.chem-live-room{text-align:center;color:#8fb9d3;font-size:9px;font-weight:900;letter-spacing:1px}.chem-live-room strong{display:block;color:#ffd85f;font-size:19px;letter-spacing:5px;margin-top:3px}.chem-live-top-actions{display:flex;justify-content:flex-end;gap:7px}.chem-icon-btn{width:38px;height:38px;border-radius:11px;border:1px solid rgba(81,206,255,.22);background:rgba(9,46,82,.86);color:#fff;font-weight:900}.chem-live-main{position:relative;z-index:2;height:calc(100vh - 76px);display:grid;grid-template-columns:270px 1fr;gap:12px;padding:12px}.chem-live-left{display:grid;grid-template-rows:minmax(0,1fr) 220px;gap:12px;min-height:0}.chem-side-card{border:1px solid rgba(81,206,255,.16);border-radius:16px;background:rgba(5,28,55,.73);backdrop-filter:blur(12px);padding:14px;min-height:0;overflow:hidden}.chem-side-title{display:flex;justify-content:space-between;color:#83d9f3;font-size:10px;font-weight:900;letter-spacing:1px;margin-bottom:10px}.arena-live-players{display:grid;gap:7px;overflow:auto;max-height:100%}.arena-live-player{padding:9px 10px;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:rgba(255,255,255,.03)}.arena-live-player .bar{height:7px;border-radius:999px;background:#06101f;overflow:hidden;margin-top:6px}.arena-live-player .bar i{display:block;height:100%;background:linear-gradient(90deg,#17c86a,#62ef9a);transition:width .3s}.arena-live-player.is-me{border-color:rgba(91,221,255,.35);box-shadow:0 0 0 1px rgba(91,221,255,.08)}.arena-live-log{display:grid;gap:6px;overflow:auto;height:calc(100% - 22px);font-size:9px;color:#a8c9dc}.arena-live-log div{padding:7px 8px;border-radius:9px;background:rgba(255,255,255,.035)}
+.chem-battle-card{min-width:0;border:1px solid rgba(81,206,255,.18);border-radius:18px;background:rgba(3,18,36,.72);box-shadow:0 25px 60px rgba(0,0,0,.35);overflow:hidden;display:flex;flex-direction:column}.chem-battle-top{min-height:82px;display:grid;grid-template-columns:minmax(0,1fr) 150px minmax(0,1fr);align-items:center;gap:10px;padding:9px 12px;background:linear-gradient(100deg,#124d87,#0a2e5e);border-bottom:1px solid rgba(81,206,255,.13)}.chem-fighter{display:flex;align-items:center;gap:8px;min-width:0}.chem-fighter.enemy{justify-content:flex-end}.chem-fighter-avatar{width:46px;height:46px;flex:0 0 46px;border-radius:50%;display:grid;place-items:center;border:1px solid #45d8ff;background:#0b386c;font-size:23px}.chem-fighter-info{min-width:0;flex:1}.chem-fighter-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:900;margin-bottom:4px}.chem-hp{height:13px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.23);background:#031328}.chem-hp i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#12c35c,#68eb98);transition:width .35s}.chem-hp.enemy i{background:linear-gradient(90deg,#e33d47,#ff786f)}.chem-fighter-info small{display:block;margin-top:3px;color:#a0c5dd;font-size:8px}.chem-clock{text-align:center}.chem-clock small{display:block;color:#79cee9;font-size:8px;font-weight:900}.chem-clock strong{display:block;color:#ffdb54;font-size:24px}.chem-clock em{display:block;color:#a4c9de;font-size:8px;font-style:normal}.chem-arena-stage{position:relative;min-height:205px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 90px 22px;background:radial-gradient(ellipse at 50% 110%,rgba(44,186,236,.24),transparent 50%),linear-gradient(#0c4276,#082d5a 55%,#061c3e)}.chem-stage-glow{position:absolute;inset:auto 15% 0;height:85px;background:radial-gradient(ellipse,rgba(66,217,255,.18),transparent 70%);filter:blur(6px)}.chem-fighter-big{position:relative;z-index:2;font-size:76px;filter:drop-shadow(0 9px 7px rgba(0,0,0,.4));animation:chemArenaIdle 2.2s ease-in-out infinite}.chem-fighter-big.enemy{transform:scaleX(-1);animation-name:chemArenaEnemyIdle}@keyframes chemArenaIdle{50%{transform:translateY(-6px)}}@keyframes chemArenaEnemyIdle{0%,100%{transform:scaleX(-1) translateY(0)}50%{transform:scaleX(-1) translateY(-6px)}}.chem-vs-badge{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);width:74px;height:74px;border-radius:50%;display:grid;place-items:center;border:4px solid #55deff;background:rgba(3,22,50,.94);box-shadow:0 0 0 4px rgba(78,213,255,.08),0 0 25px rgba(61,201,255,.25);font-weight:1000;color:#ffda5c;font-size:22px}.chem-question-card{flex:1;min-height:0;padding:18px;border-top:1px solid rgba(78,200,246,.12);background:#061f42;overflow:auto}.chem-question-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;font-size:9px;font-weight:900}.chem-question-meta span{color:#54caee}.chem-question-meta strong{color:#ffd15c}.chem-qtext{font-size:17px;font-weight:850;line-height:1.58;min-height:62px;margin-bottom:12px}.chem-answers{display:grid;grid-template-columns:1fr 1fr;gap:9px}.chem-answer{min-height:62px;display:grid;grid-template-columns:44px 1fr;align-items:center;text-align:left;border:1px solid rgba(84,201,244,.22);border-radius:13px;overflow:hidden;background:linear-gradient(100deg,#0c477f,#082e5a);color:#fff}.chem-answer b{height:100%;display:grid;place-items:center;font-size:16px;background:#1b73a7}.chem-answer span{padding:9px 11px;font-size:12px;overflow-wrap:anywhere}.chem-answer:hover{border-color:#59dfff;transform:translateY(-1px)}.chem-answer.locked{pointer-events:none;opacity:.8}.chem-answer.correct{border-color:#36dd81;background:#145f44}.chem-answer.correct b{background:#119c51}.chem-answer.wrong{border-color:#ef5353;background:#692d39}.chem-answer.wrong b{background:#b83840}.arena-live-center{height:100%;min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.arena-live-symbol{font-size:56px;filter:drop-shadow(0 0 18px rgba(73,211,255,.25))}.arena-live-center h3{margin:8px 0 5px;font-size:24px;font-weight:1000}.arena-live-center p{color:#8fb6ca;font-size:12px;max-width:480px;line-height:1.55}.arena-host-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}.arena-host-actions button{padding:10px 13px;border-radius:10px;background:#ef8e22;color:#fff;font-weight:950}.arena-explanation{margin-top:12px;padding:11px 13px;border:1px solid rgba(82,205,249,.14);border-radius:11px;background:rgba(0,0,0,.16);font-size:11px;color:#b1d2e2;line-height:1.55}.arena-final-ranking{width:min(560px,100%);margin:12px auto 18px;display:grid;gap:6px}.arena-rank-row{display:grid;grid-template-columns:44px 1fr 70px 70px;gap:8px;align-items:center;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);font-size:11px}.arena-rank-row b{font-size:13px}.arena-rank-row span{color:#a7c7da}.arena-rank-row strong{text-align:right;color:#7fe6ff}.arena-rank-row em{text-align:right;color:#ffd45e;font-style:normal}
+@media(max-width:900px){.chem-arena-menu{grid-template-columns:1fr 1fr}.chem-arena-head{flex-direction:column}.chem-arena-user{width:100%}.chem-live-main{grid-template-columns:1fr}.chem-live-left{display:none}.chem-battle-top{grid-template-columns:minmax(0,1fr) 90px minmax(0,1fr)}.chem-arena-stage{padding:0 32px 18px;min-height:160px}.chem-fighter-big{font-size:54px}.chem-vs-badge{width:62px;height:62px}.chem-qtext{font-size:14px}}
+@media(max-width:620px){.chem-arena-shell{padding:18px;min-height:610px}.chem-arena-menu{grid-template-columns:1fr}.chem-arena-head h2{font-size:52px}.chem-arena-foot{display:none}.chem-arena-user{min-width:0}.chem-live-top{grid-template-columns:1fr auto;height:68px}.chem-live-brand span{max-width:55vw}.chem-live-room{display:none}.chem-battle-top{min-height:68px;grid-template-columns:minmax(0,1fr) 62px minmax(0,1fr);padding:7px 5px}.chem-fighter-avatar{width:34px;height:34px;flex-basis:34px;font-size:17px}.chem-fighter-name{font-size:8px}.chem-fighter-info small{font-size:6px}.chem-hp{height:10px}.chem-clock strong{font-size:15px}.chem-clock small,.chem-clock em{font-size:5px}.chem-arena-stage{min-height:135px}.chem-fighter-big{font-size:45px}.chem-vs-badge{width:56px;height:56px;font-size:18px}.chem-question-card{padding:11px}.chem-answers{grid-template-columns:1fr;gap:6px}.chem-answer{min-height:52px}.chem-qtext{font-size:12px;line-height:1.45}}
+</style>
+
+</head>
 <body class="relative">
-<a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:bg-white focus:text-blue-700 focus:font-bold focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg">Bỏ qua, đi tới nội dung chính</a>
 
 <div class="fixed inset-0 overflow-hidden pointer-events-none z-[-1]">
     <div class="blob w-96 h-96 bg-blue-200 rounded-full top-[-10%] left-[-10%]"></div>
@@ -1126,7 +1169,7 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
 </div>
 
 <!-- THÔNG BÁO LỖI FIREBASE -->
-<div id="firebase-error" role="alert" aria-live="assertive" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-xl p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 shadow-xl flex items-start gap-3">
+<div id="firebase-error" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-xl p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 shadow-xl flex items-start gap-3">
     <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
     <div id="firebase-error-text"></div>
 </div>
@@ -1166,7 +1209,7 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
            💖 Ủng hộ
        </button>
        <!-- 💡 NÚT CÔNG TẮC SÁNG/TỐI Ở ĐÂY NÈ -->
-       <button onclick="toggleTheme()" id="theme-toggle-btn" aria-label="Chuyển chế độ sáng/tối" class="w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-sm text-xl z-50">
+       <button onclick="toggleTheme()" id="theme-toggle-btn" class="w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-sm text-xl z-50">
            ☀️
        </button>
        <div class="hidden lg:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -1186,7 +1229,6 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
   </div>
  </div>
 </nav>
-<span id="main-content" tabindex="-1"></span>
 
 <!-- CALENDAR + EVENTS -->
 <div id="calendar-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center p-4 calendar-modal-backdrop bg-slate-950/75">
@@ -1671,6 +1713,21 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
       </section>
     </div>
 
+    <!-- GÓC TRUYỀN CẢM HỨNG: CHỪA KHÔNG GIAN LỚN CHO DANH NGÔN MỖI NGÀY -->
+    <section class="dashboard-quote-card dashboard-quote-spacious mt-5">
+      <div class="dashboard-quote-inner">
+        <div class="dashboard-quote-accent"></div>
+        <p class="dashboard-quote-label">MỘT CÂU CHO NGÀY HÔM NAY</p>
+        <blockquote id="daily-motivation-text" class="dashboard-quote-text">Hãy tin vào những nỗ lực nhỏ được lặp lại đủ lâu.</blockquote>
+        <div class="dashboard-quote-byline">
+          <span id="daily-motivation-author">— Đang tải nguồn</span>
+          <span class="dashboard-quote-dot">•</span>
+          <span id="daily-motivation-date"></span>
+        </div>
+        <a id="daily-motivation-source" class="dashboard-quote-source" href="#" target="_blank" rel="noopener noreferrer">↗ Nguồn gốc câu nói</a>
+      </div>
+    </section>
+
     <!-- SỰ KIỆN SẮP TỚI -->
     <section id="dashboard-upcoming-events" class="mt-5 rounded-[2rem] border border-cyan-400/15 bg-slate-900/80 p-6 shadow-xl overflow-hidden">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1699,30 +1756,8 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
             <button onclick="openProfile()" class="shrink-0 px-4 py-3 rounded-2xl bg-white/10 border border-white/10 hover:bg-white/15 text-white font-bold">👤 Hồ sơ</button>
           </div>
 
-          <!-- TÓM TẮT HÔM NAY: dữ liệu thật, mirror từ Mục tiêu hôm nay / Pomodoro (sec-study) -->
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-5 mb-6">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <p id="dashboard-greeting" class="text-lg font-black text-white">Xin chào 👋</p>
-              <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-400/20">
-                <span class="text-lg" aria-hidden="true">🔥</span>
-                <span><span id="dashboard-streak" class="text-orange-300 font-black">0</span><span class="text-orange-300/70 text-xs font-bold"> ngày streak</span></span>
-              </div>
-            </div>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-black uppercase tracking-widest text-slate-400">🎯 Mục tiêu học hôm nay</span>
-              <span id="dashboard-goal-label" class="text-sm font-black text-emerald-400">60 phút</span>
-            </div>
-            <div class="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
-              <div id="dashboard-goal-progress" class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width:0%"></div>
-            </div>
-            <div class="flex items-center justify-between mt-2 mb-4">
-              <p id="dashboard-goal-text" class="text-[11px] font-bold text-slate-500">0 / 60 phút</p>
-              <p class="text-[11px] font-bold text-slate-500"><span id="dashboard-session-count">0</span> phiên hôm nay</p>
-            </div>
-            <button onclick="switchSection('sec-study')" class="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black transition-colors">🚀 Tiếp tục học ngay</button>
-          </div>
-
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <button onclick="openChemArena()" class="dashboard-mini dashboard-mini-arena">⚔️<span>Đấu trường Hóa</span><small>Realtime • 8 người</small></button>
             <button onclick="switchSection('sec-library')" class="dashboard-mini">📚<span>Thư viện</span><small>Tài liệu</small></button>
             <button onclick="openTeacherConfig()" class="dashboard-mini">⚙️<span>Tạo đề thi</span><small>Phòng thi</small></button>
             <button onclick="openChemMaker()" class="dashboard-mini">✍️<span>Soạn PDF</span><small>Đề Hóa</small></button>
@@ -1892,7 +1927,7 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
    <div class="lg:w-7/12 flex flex-col bg-slate-50 border rounded-2xl overflow-hidden shadow-inner">
        <div class="flex-1 overflow-auto p-4 relative text-center">
            <div id="preview-placeholder" class="m-auto text-slate-500 font-semibold mt-10">Chưa có tài liệu xem trước</div>
-           <img id="preview-img" alt="Xem trước tài liệu" class="hidden max-w-full rounded-xl mx-auto"><iframe id="preview-pdf" title="Xem trước tệp PDF" class="hidden w-full h-full min-h-[800px] border-0"></iframe>
+           <img id="preview-img" class="hidden max-w-full rounded-xl mx-auto"><iframe id="preview-pdf" class="hidden w-full h-full min-h-[800px] border-0"></iframe>
        </div>
    </div>
    <div class="lg:w-5/12 flex flex-col bg-white rounded-2xl border shadow-sm overflow-hidden">
@@ -1910,6 +1945,165 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
   <button onclick="loadExamList()" class="px-5 py-2.5 bg-white border rounded-xl font-bold hover:bg-slate-50">Làm mới danh sách</button>
  </div>
  <div id="live-exams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+</section>
+
+<!-- ============================================================
+     CHEM ARENA — ĐẤU TRƯỜNG HÓA HỌC REALTIME
+     Visual lấy cảm hứng từ Battle Arena ở file 1:
+     nền xanh sâu, horizon, grid 3D, thanh HP, VS, countdown.
+     Dữ liệu/room dùng Firebase hiện có của HTVVM.
+     ============================================================ -->
+<section id="sec-arena" class="app-section max-w-7xl mx-auto px-4 py-8">
+  <div class="chem-arena-shell">
+    <div class="chem-arena-bg-glow"></div>
+    <div class="chem-arena-grid"></div>
+    <div class="chem-arena-horizon"></div>
+
+    <div class="chem-arena-head">
+      <div>
+        <div class="chem-arena-eyebrow">HTVVM × HÓA LIEMS</div>
+        <h2>CHEM <span>ARENA</span></h2>
+        <p>ĐẤU TRƯỜNG HÓA HỌC TRỰC TUYẾN • REALTIME FIREBASE</p>
+      </div>
+      <div class="chem-arena-user">
+        <span>⚗️</span>
+        <div><small>NGƯỜI CHƠI</small><strong id="arena-user-name">Đang kết nối...</strong></div>
+      </div>
+    </div>
+
+    <div class="chem-arena-menu">
+      <button class="chem-arena-cta" onclick="arenaCreateRoom()">⚔️ TẠO PHÒNG ĐẤU</button>
+      <button onclick="arenaJoinPrompt()">🚀 VÀO PHÒNG BẰNG MÃ</button>
+      <button onclick="arenaOpenQuestionStudio()">🧪 KHO CÂU HỎI CỦA TÔI</button>
+      <button onclick="arenaLoadRooms()">🌐 PHÒNG ĐANG MỞ</button>
+    </div>
+
+    <div id="arena-room-list" class="chem-arena-room-list"></div>
+
+    <div class="chem-arena-foot">
+      <span>▣ Câu hỏi mặc định: Hóa học THPT</span>
+      <span>⌁ Có thể nhập LaTeX / MathJax / mhchem: <code>\ce{H2SO4}</code></span>
+      <span>● Mỗi phòng tối đa 8 người</span>
+    </div>
+  </div>
+</section>
+
+<!-- ARENA CREATOR STUDIO -->
+<section id="sec-arena-creator" class="app-section max-w-7xl mx-auto px-4 py-8">
+  <div class="arena-studio">
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
+      <div>
+        <span class="arena-kicker">CHEM QUESTION STUDIO</span>
+        <h2 class="text-3xl md:text-4xl font-black text-white mt-2">Tạo câu hỏi cho anh em thi ngay</h2>
+        <p class="text-slate-400 mt-2 max-w-3xl">Câu hỏi được lưu vào Firebase theo tài khoản tạo. Bạn có thể tạo nhanh, sửa, xóa và phát hành vào phòng đấu.</p>
+      </div>
+      <button onclick="openChemArena()" class="px-5 py-3 rounded-xl bg-slate-800 text-white font-extrabold border border-slate-700">← Về đấu trường</button>
+    </div>
+
+    <div class="grid lg:grid-cols-[1.05fr_.95fr] gap-6">
+      <div class="arena-editor-card">
+        <div class="flex items-center justify-between gap-3 mb-5">
+          <div><h3 class="text-xl font-black text-white">✍️ Soạn câu hỏi</h3><p class="text-xs text-slate-500">Trắc nghiệm 4 lựa chọn • 1 đáp án đúng</p></div>
+          <span id="arena-editor-status" class="arena-status-pill">MỚI</span>
+        </div>
+        <input id="arena-q-id" type="hidden">
+        <textarea id="arena-q-text" class="arena-input arena-textarea" placeholder="Ví dụ: Chất nào là chất oxi hóa mạnh trong phản ứng...?"></textarea>
+        <div class="grid md:grid-cols-2 gap-3 mt-3">
+          <input id="arena-opt-A" class="arena-input" placeholder="A. Đáp án">
+          <input id="arena-opt-B" class="arena-input" placeholder="B. Đáp án">
+          <input id="arena-opt-C" class="arena-input" placeholder="C. Đáp án">
+          <input id="arena-opt-D" class="arena-input" placeholder="D. Đáp án">
+        </div>
+        <div class="grid md:grid-cols-3 gap-3 mt-3">
+          <select id="arena-correct" class="arena-input"><option value="A">Đáp án đúng: A</option><option value="B">Đáp án đúng: B</option><option value="C">Đáp án đúng: C</option><option value="D">Đáp án đúng: D</option></select>
+          <select id="arena-diff" class="arena-input"><option value="NB">Nhận biết</option><option value="TH">Thông hiểu</option><option value="VD">Vận dụng</option><option value="VDC">Vận dụng cao</option></select>
+          <select id="arena-topic" class="arena-input"><option>Ester - Lipid</option><option>Carbohydrate</option><option>Nitrogen</option><option>Polymer</option><option>Điện hóa</option><option>Vô cơ</option><option>Hữu cơ</option><option>Đại cương</option><option>Tự chọn</option></select>
+        </div>
+        <textarea id="arena-explain" class="arena-input arena-textarea small" placeholder="Giải thích / mẹo / phương trình phản ứng (không bắt buộc)"></textarea>
+        <div class="grid sm:grid-cols-2 gap-3 mt-3">
+          <button onclick="arenaSaveQuestion()" class="arena-btn arena-btn-main">💾 LƯU CÂU HỎI</button>
+          <button onclick="arenaResetEditor()" class="arena-btn arena-btn-soft">↺ TẠO CÂU MỚI</button>
+        </div>
+        <div class="arena-tip">💡 Dùng <code>$...$</code> hoặc <code>\ce{...}</code> để hiển thị công thức đẹp bằng MathJax.</div>
+      </div>
+
+      <div class="arena-editor-card">
+        <div class="flex items-center justify-between gap-3 mb-5">
+          <div><h3 class="text-xl font-black text-white">📚 Kho câu hỏi đã tạo</h3><p class="text-xs text-slate-500">Các câu của tài khoản hiện tại</p></div>
+          <span id="arena-question-count" class="arena-count">0</span>
+        </div>
+        <div id="arena-question-bank" class="arena-q-list"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARENA LIVE ROOM -->
+<section id="sec-arena-live" class="app-section fixed inset-0 z-[400]">
+  <div class="chem-live">
+    <div class="chem-live-top">
+      <div class="chem-live-brand"><b>CHEM ARENA</b><span id="arena-live-title">Phòng đấu</span></div>
+      <div class="chem-live-room">MÃ PHÒNG <strong id="arena-live-code">------</strong></div>
+      <div class="chem-live-top-actions"><button onclick="arenaCopyCode()" class="chem-icon-btn">⧉</button><button onclick="arenaLeaveRoom()" class="chem-icon-btn">✕</button></div>
+    </div>
+
+    <div class="chem-live-main">
+      <div class="chem-live-left">
+        <div class="chem-side-card">
+          <div class="chem-side-title">👥 NGƯỜI CHƠI <span id="arena-player-count">0/8</span></div>
+          <div id="arena-live-players" class="arena-live-players"></div>
+        </div>
+        <div class="chem-side-card">
+          <div class="chem-side-title">📜 NHẬT KÝ</div>
+          <div id="arena-live-log" class="arena-live-log"></div>
+        </div>
+      </div>
+
+      <div class="chem-battle-card">
+        <div class="chem-battle-top">
+          <div class="chem-fighter">
+            <div class="chem-fighter-avatar" id="arena-me-avatar">🧪</div>
+            <div class="chem-fighter-info"><div id="arena-me-name" class="chem-fighter-name">Bạn</div><div class="chem-hp"><i id="arena-me-hp"></i></div><small id="arena-me-hp-text">200 / 200 HP</small></div>
+          </div>
+          <div class="chem-clock"><small id="arena-live-phase">PHÒNG CHỜ</small><strong id="arena-live-timer">--</strong><em id="arena-live-qmeta">HÓA HỌC</em></div>
+          <div class="chem-fighter enemy">
+            <div class="chem-fighter-info"><div id="arena-target-name" class="chem-fighter-name">Đối thủ</div><div class="chem-hp enemy"><i id="arena-target-hp"></i></div><small id="arena-target-hp-text">200 / 200 HP</small></div>
+            <div class="chem-fighter-avatar">⚗️</div>
+          </div>
+        </div>
+
+        <div class="chem-arena-stage">
+          <div class="chem-stage-glow"></div>
+          <div class="chem-fighter-big" id="arena-me-fighter">🧙‍♂️</div>
+          <div class="chem-vs-badge" id="arena-vs-badge">VS</div>
+          <div class="chem-fighter-big enemy" id="arena-target-fighter">🧟</div>
+        </div>
+
+        <div class="chem-question-card" id="arena-question-card">
+          <div id="arena-lobby-view" class="arena-live-center">
+            <div class="arena-live-symbol">⚗️</div>
+            <h3>Chờ quản trò bắt đầu</h3>
+            <p id="arena-lobby-help">Chia sẻ mã phòng cho bạn bè. Bạn có thể tối đa 8 người.</p>
+            <div class="arena-host-actions" id="arena-host-actions"></div>
+          </div>
+          <div id="arena-playing-view" class="hidden">
+            <div class="chem-question-meta"><span id="arena-question-diff">VẬN DỤNG</span><strong id="arena-turn-label">TRẢ LỜI</strong></div>
+            <div id="arena-question-text" class="chem-qtext"></div>
+            <div id="arena-answers" class="chem-answers"></div>
+            <div id="arena-explanation" class="arena-explanation hidden"></div>
+          </div>
+          <div id="arena-ended-view" class="hidden arena-live-center">
+            <div class="arena-live-symbol">🏆</div>
+            <h3 id="arena-ended-title">KẾT THÚC</h3>
+            <p id="arena-ended-desc"></p>
+            <div id="arena-final-ranking" class="arena-final-ranking"></div>
+            <button onclick="openChemArena()" class="arena-btn arena-btn-main max-w-sm">⚔️ VỀ ĐẤU TRƯỜNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- SECTION: HỌC SINH ĐĂNG KÝ -->
@@ -2407,6 +2601,9 @@ function openProfile() {
     document.getElementById('profile-study-time').innerText = totalHours + 'h';
 
     // Tính danh hiệu
+    // FIX: đảm bảo đã kiểm tra/reset đúng ngày (lastStudyDate) trước khi đọc số giây học hôm nay,
+    // tránh hiển thị nhầm dữ liệu của ngày hôm trước khi mở hồ sơ sau nửa đêm.
+    if (typeof window.ensureTodayStore === 'function') window.ensureTodayStore();
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     const dailyHours = Math.floor(dailySeconds / 3600);
     document.getElementById('profile-rank-icon').innerText = '💧';
@@ -3622,6 +3819,10 @@ function enableInputs() {
 // totalStudySeconds vẫn giữ nguyên để phục vụ Tổng thời gian học ở hồ sơ/thống kê.
 // Hàm cập nhật Giao diện Thăng cấp (Bản hoàn chỉnh không bị reset)
 function updateRankUI() {
+    // FIX: kiểm tra/reset theo ngày (lastStudyDate) TRƯỚC khi đọc số giây học hôm nay.
+    // Trước đây hàm này đọc thẳng localStorage nên khi tab bị treo qua nửa đêm mà
+    // không có hành động nào khác, danh hiệu/thanh tiến trình vẫn hiển thị số liệu cũ.
+    if (typeof window.ensureTodayStore === 'function') window.ensureTodayStore();
     // Lấy trực tiếp từ bộ nhớ cục bộ
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     let h = Math.floor(dailySeconds / 3600);
@@ -3720,6 +3921,7 @@ function togglePomodoro() {
             if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') {
                 recordStudySecond();
                 continuousStudySeconds = safeNum(continuousStudySeconds) + 1;
+                if (typeof window.__checkStudyBreakMilestone === 'function') window.__checkStudyBreakMilestone();
             }
 
             updatePomoUI();
@@ -3936,7 +4138,31 @@ function toggleAIChat() {
     <div class="mt-8 text-xs text-slate-500 font-bold">Ctrl + Shift + F để bật/tắt • Esc để thoát</div>
   </div>
 </div>
-<div id="study-toast" role="status" aria-live="polite" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] hidden px-5 py-3 rounded-xl bg-slate-900 text-white text-sm font-extrabold shadow-2xl"></div>
+
+<!-- STUDY BREAK / ANTI-AFK -->
+<div id="study-break-backdrop" class="study-break-backdrop" aria-hidden="true">
+  <div class="study-break-modal">
+    <div class="study-break-image-wrap">
+      <img id="study-break-image" class="study-break-image" alt="Lời nhắc nghỉ ngơi" />
+    </div>
+    <div class="study-break-content">
+      <div id="study-break-kicker" class="study-break-kicker">NHẮC NGHỈ • 1 GIỜ</div>
+      <h2 id="study-break-title">Bạn đã chiến đấu rất lâu rồi.</h2>
+      <p id="study-break-message">Bạn yêu ơi, học được một tiếng rồi đó. Nghỉ mắt và uống chút nước nhé!</p>
+      <div class="study-break-upload">
+        <span>🖼️ Ảnh nhắc nghỉ của bạn — lưu riêng trên thiết bị</span>
+        <button type="button" onclick="document.getElementById('study-break-image-input').click()">Chọn ảnh</button>
+        <input id="study-break-image-input" type="file" accept="image/*" hidden onchange="handleStudyBreakImage(event)">
+      </div>
+    </div>
+    <div class="study-break-actions">
+      <button id="study-break-continue" class="study-break-continue" onclick="continueAfterStudyBreak()">💙 Tiếp tục</button>
+      <button id="study-break-stop" class="study-break-stop" onclick="stopAfterStudyBreak()">💜 Oke bé yêu !</button>
+    </div>
+  </div>
+</div>
+
+<div id="study-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] hidden px-5 py-3 rounded-xl bg-slate-900 text-white text-sm font-extrabold shadow-2xl"></div>
 
 
 <script>
@@ -3976,20 +4202,42 @@ function toggleAIChat() {
   function storeSet(key, value){ try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) { console.warn('localStorage unavailable',e); } }
   function toast(msg, ms=2200){ const el=document.getElementById('study-toast'); if(!el) return; el.textContent=msg; el.classList.remove('hidden'); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.add('hidden'),ms); }
 
+  // lastStudyDate tương đương với STORE.day ('htvvm.studyDay'): ngày cuối cùng đã cập nhật
+  // bộ đếm giờ học. So sánh với ngày hiện tại (local time) mỗi lần ensureTodayStore() chạy.
   function ensureTodayStore(){
     const today=dateKey();
     if(localStorage.getItem(STORE.day)!==today){
+      // Sang ngày mới (kể cả trường hợp không mở web nhiều ngày liền, vd lần cuối là 28/08,
+      // mở lại vào 30/08): CHỈ reset bộ đếm của "hôm nay" về 0, không đụng tới lịch sử
+      // các ngày trước (lịch sử được lưu riêng theo key dailyStudy/{ngày} trên Firebase).
       localStorage.setItem(STORE.day,today);
       localStorage.setItem(STORE.todaySeconds,'0');
       localStorage.setItem(STORE.sessions,'0');
-      // Sang ngày mới: XP/danh hiệu phải quay về 0 ngay lập tức.
+      // Sang ngày mới: XP/danh hiệu + toàn bộ UI liên quan phải quay về 0 ngay lập tức.
       if(typeof updateRankUI==='function') updateRankUI();
+      if(typeof updateStudyDashboard==='function') updateStudyDashboard();
     }
   }
   function getTodaySeconds(){ ensureTodayStore(); return safeNum(localStorage.getItem(STORE.todaySeconds)); }
   function getTodaySessions(){ ensureTodayStore(); return safeNum(localStorage.getItem(STORE.sessions)); }
   function getDailyGoal(){ const n=safeNum(localStorage.getItem(STORE.goal),60); return n>0?n:60; }
   window.setDailyGoal=function(min){ const n=Math.max(5,Math.min(600,safeNum(min,60))); localStorage.setItem(STORE.goal,String(n)); updateStudyDashboard(); toast(`🎯 Mục tiêu hôm nay: ${n} phút`); };
+
+  // ------------------------------------------------------------------
+  // FIX QUAN TRỌNG: các hàm ensureTodayStore/updateStudyDashboard/syncStudyStats/
+  // getDailyGoal/toast ở trên chỉ tồn tại BÊN TRONG closure này. Bộ đếm Pomodoro
+  // đang thực sự chạy (định nghĩa ở cuối file, phần "window.togglePomodoro") gọi các
+  // hàm này qua kiểm tra `typeof ensureTodayStore === 'function'` ở phạm vi global —
+  // do KHÔNG được export nên các kiểm tra đó luôn là false và logic reset theo ngày
+  // KHÔNG BAO GIỜ chạy trong lúc học thật (đây chính là nguyên nhân gây lỗi cộng dồn
+  // thời gian học sang ngày mới). Export ra window để các module khác gọi đúng logic.
+  window.ensureTodayStore = ensureTodayStore;
+  window.getTodayStudySeconds = getTodaySeconds;
+  window.getTodaySessions = getTodaySessions;
+  window.updateStudyDashboard = updateStudyDashboard;
+  window.syncStudyStats = syncStudyStats;
+  window.getDailyGoal = getDailyGoal;
+  window.toast = toast;
 
   let dashboardLeaderboardRefs = {study:null, streak:null};
   function formatStudyTime(sec){
@@ -4328,6 +4576,19 @@ function toggleAIChat() {
     updateStudyDashboard();
     if(typeof auth!=='undefined' && auth) auth.onAuthStateChanged(u=>{ if(u) loadRole(u); });
     const input=document.getElementById('searchInput'); if(input) input.setAttribute('autocomplete','off');
+  });
+
+  // FIX: tự động phát hiện sang ngày mới KỂ CẢ KHI người dùng không thao tác gì
+  // (không bấm Pomodoro, không F5 lại trang) — ví dụ mở web từ tối hôm trước rồi để
+  // đó qua đêm. Không dựa vào "24h kể từ lúc mở web", mà so sánh ngày thực tế (YYYY-MM-DD)
+  // theo local time mỗi 20 giây một lần và mỗi khi tab được focus lại.
+  setInterval(()=>{ ensureTodayStore(); updateStudyDashboard(); }, 20000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible'){
+      ensureTodayStore();
+      updateStudyDashboard();
+      updateRankUI();
+    }
   });
 })();
 </script>
@@ -4973,26 +5234,6 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCalendar();});
 (function(){
   const src=()=>document.getElementById('web-time-counter'), dst=()=>document.getElementById('dashboard-web-time');
   setInterval(()=>{ const a=src(),b=dst(); if(a&&b) b.textContent=a.textContent; },500);
-
-  // Mirror "Mục tiêu hôm nay" (sec-study) lên khối tóm tắt của Dashboard — chỉ đọc, không đổi logic gốc.
-  function mirrorText(fromId,toId,transform){
-    const a=document.getElementById(fromId), b=document.getElementById(toId);
-    if(a&&b) b.textContent = transform ? transform(a.textContent) : a.textContent;
-  }
-  setInterval(()=>{
-    const nameEl=document.getElementById('user-display-name');
-    const greetEl=document.getElementById('dashboard-greeting');
-    if(nameEl && greetEl){
-      const name=nameEl.textContent||'';
-      greetEl.textContent = (name && name!=='Đang kết nối...') ? `Xin chào, ${name} 👋` : 'Xin chào 👋';
-    }
-    mirrorText('profile-streak','dashboard-streak');
-    mirrorText('today-goal-label','dashboard-goal-label');
-    mirrorText('today-goal-text','dashboard-goal-text');
-    mirrorText('today-session-count','dashboard-session-count');
-    const p=document.getElementById('today-goal-progress'), dp=document.getElementById('dashboard-goal-progress');
-    if(p&&dp) dp.style.width = p.style.width || '0%';
-  },500);
 })();
 </script>
 
@@ -5214,6 +5455,109 @@ window.uploadCustomAvatar = function(e) {
     reader.readAsDataURL(file);
     e.target.value = ''; // Reset khung chọn file
 };
+</script>
+
+
+<script id="htvvm-dashboard-motivation-breaks">
+(() => {
+  const BREAK_STORE = 'htvvm.studyBreak.v2';
+  const DEFAULT_BREAK_IMG = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#14233d"/><stop offset="1" stop-color="#281d4b"/></linearGradient></defs><rect width="1200" height="500" fill="url(#g)"/><circle cx="950" cy="120" r="180" fill="#22d3ee" opacity=".12"/><circle cx="240" cy="410" r="220" fill="#8b5cf6" opacity=".12"/><text x="70" y="245" fill="#f8fafc" font-family="Arial,sans-serif" font-size="46" font-weight="900">Nghỉ một chút • rồi chiến đấu tiếp</text><text x="72" y="300" fill="#93c5fd" font-family="Arial,sans-serif" font-size="24">Your brain needs recovery to learn well.</text></svg>`);
+  const quotes = [
+    {
+      text:'“Bạn phải tìm ra điều mình yêu thích — và cách duy nhất để làm nên công việc tuyệt vời là yêu điều bạn làm.”',
+      author:'Steve Jobs',
+      source:'Stanford University — Commencement Address, 2005',
+      url:'https://news.stanford.edu/stories/2005/06/youve-got-find-love-jobs-says'
+    },
+    {
+      text:'“Lạc quan là niềm tin dẫn tới thành tựu; không có hy vọng thì không thể làm được gì.”',
+      author:'Helen Keller',
+      source:'American Foundation for the Blind — Optimism (1903)',
+      url:'https://www.afb.org/about-afb/history/helen-keller/books-essays-speeches/optimism-1903'
+    },
+    {
+      text:'“Phần thưởng lớn nhất mà cuộc đời dành cho ta là cơ hội làm việc chăm chỉ với một công việc xứng đáng.”',
+      author:'Theodore Roosevelt',
+      source:'The American Presidency Project — Address, Sept. 7, 1903',
+      url:'https://www.presidency.ucsb.edu/documents/address-the-new-york-state-agricultural-association-syracuse-ny'
+    },
+    {
+      text:'“Hãy làm công việc tiếp theo chăm chỉ hơn bất kỳ ai khác; khi đó, bạn sẽ tìm thấy những cơ hội mà mình chưa từng biết đến.”',
+      author:'Michael Bloomberg',
+      source:'Stanford University — Remarks, 2013',
+      url:'https://news.stanford.edu/stories/2013/06/prepared-text-nyc-mayor-michael-bloombergs-remarks'
+    }
+  ];
+  function dayKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i)|0; return Math.abs(h); }
+  function renderDailyMotivation(){
+    const key=dayKey(), item=quotes[hash(key)%quotes.length];
+    const q=document.getElementById('daily-motivation-text');
+    const a=document.getElementById('daily-motivation-author');
+    const d=document.getElementById('daily-motivation-date');
+    const source=document.getElementById('daily-motivation-source');
+    if(q) q.textContent=item.text;
+    if(a) a.textContent='— '+item.author;
+    if(d) d.textContent='Hôm nay • '+key;
+    if(source){ source.textContent='↗ '+item.source; source.href=item.url; }
+  }
+  window.loadDashboardArenaRooms = async function(){
+    const box=document.getElementById('dashboard-arena-rooms'); if(!box || typeof db==='undefined') return;
+    try{
+      const snap=await db.ref('arenaRooms').once('value'); const rows=[];
+      if(snap.exists()) snap.forEach(x=>{ const r=x.val(); if(r && r.status!=='ended') rows.push({id:x.key,...r}); });
+      rows.sort((a,b)=>(Number(b.createdAt)||0)-(Number(a.createdAt)||0));
+      if(!rows.length){ box.innerHTML='<div class="dashboard-arena-room md:col-span-3 text-xs text-slate-500 py-6 text-center">Chưa có phòng nào. Tạo phòng đầu tiên để mọi người vào đấu.</div>'; return; }
+      box.innerHTML=rows.slice(0,3).map(r=>{
+        const n=Object.keys(r.players||{}).length, playing=r.phase==='playing';
+        return `<div class="dashboard-arena-room"><div class="flex items-center justify-between gap-2"><span class="text-[9px] font-black ${playing?'text-red-300':'text-emerald-300'}">● ${playing?'ĐANG ĐẤU':'ĐANG CHỜ'}</span><span class="text-[9px] text-slate-500">👥 ${n}/${typeof MAX_PLAYERS!=='undefined'?MAX_PLAYERS:8}</span></div><div class="room-code mt-2">${String(r.code||r.id).replace(/</g,'&lt;')}</div><div class="room-title">${String(r.title||'Hóa Arena').replace(/[<>&]/g,'')}</div><div class="mt-3 flex gap-2"><button class="px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 font-black text-[10px]" onclick="arenaJoinRoom('${String(r.code||r.id).replace(/'/g,'\\\'')}')">🚀 Vào</button><button class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 font-black text-[10px]" onclick="arenaShowRoomInfo('${String(r.code||r.id).replace(/'/g,'\\\'')}')">ℹ️</button></div></div>`;
+      }).join('');
+    }catch(e){ box.innerHTML='<div class="dashboard-arena-room md:col-span-3 text-xs text-red-300 py-6 text-center">Không tải được phòng đấu lúc này.</div>'; }
+  };
+  function getBreakState(){ try{return JSON.parse(localStorage.getItem(BREAK_STORE)||'{}')||{};}catch{return {};}}
+  function setBreakState(x){ localStorage.setItem(BREAK_STORE,JSON.stringify(x)); }
+  function getImage(){ return localStorage.getItem(BREAK_STORE+'.image') || DEFAULT_BREAK_IMG; }
+  function renderBreakImage(){ const img=document.getElementById('study-break-image'); if(img) img.src=getImage(); }
+  function openBreakPrompt(thresholdHours){
+    const backdrop=document.getElementById('study-break-backdrop'); if(!backdrop)return;
+    const five=thresholdHours>=5;
+    document.getElementById('study-break-kicker').textContent=five?'NHẮC NGHỈ • MỐC 5 GIỜ':'NHẮC NGHỈ • MỐC '+thresholdHours+' GIỜ';
+    document.getElementById('study-break-title').textContent=five?'Bạn đã chiến đấu 5 tiếng rồi.':'Bạn đã tập trung rất lâu rồi.';
+    document.getElementById('study-break-message').textContent=five?'Bạn yêu ơi, chắc bạn mệt lắm rồi ! Hãy nghĩ ngơi một chút rồi chiến đấu tiếp nhé !':'Bạn yêu ơi, bạn vừa hoàn thành '+thresholdHours+' tiếng học. Nghỉ mắt, uống nước và thả lỏng một chút nhé!';
+    renderBreakImage(); backdrop.classList.add('show'); backdrop.setAttribute('aria-hidden','false');
+    window.__studyBreakThreshold=thresholdHours;
+  }
+  function closeBreak(){ const b=document.getElementById('study-break-backdrop'); if(b){b.classList.remove('show');b.setAttribute('aria-hidden','true');} }
+  window.handleStudyBreakImage=function(e){
+    const file=e?.target?.files?.[0]; if(!file)return;
+    if(file.size>4*1024*1024){ alert('Ảnh hơi nặng. Hãy chọn ảnh dưới 4MB.'); e.target.value=''; return; }
+    const reader=new FileReader(); reader.onload=ev=>{
+      const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const max=1200; const scale=Math.min(1,max/Math.max(img.width,img.height)); canvas.width=Math.max(1,Math.round(img.width*scale)); canvas.height=Math.max(1,Math.round(img.height*scale)); const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,canvas.width,canvas.height); localStorage.setItem(BREAK_STORE+'.image',canvas.toDataURL('image/jpeg',.82)); renderBreakImage(); }; img.src=ev.target.result;
+    }; reader.readAsDataURL(file); e.target.value='';
+  };
+  window.continueAfterStudyBreak=function(){
+    const threshold=Number(window.__studyBreakThreshold)||1; const st=getBreakState(); st.lastDismissedThreshold=threshold; setBreakState(st); closeBreak();
+  };
+  window.stopAfterStudyBreak=function(){
+    try{ clearInterval(pomoInterval); }catch(_){ }
+    pomoInterval=null; isPomoRunning=false;
+    const btn=document.getElementById('btn-pomo-action'); if(btn){ btn.innerText='TIẾP TỤC'; btn.className='bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full'; }
+    try{enableInputs();recordSession();syncFocusOverlay();}catch(_){ }
+    const threshold=Number(window.__studyBreakThreshold)||1; const st=getBreakState(); st.lastDismissedThreshold=threshold; setBreakState(st); closeBreak();
+  };
+  window.__checkStudyBreakMilestone=function(){
+    if(!isPomoRunning) return;
+    const daily=Number(localStorage.getItem('htvvm.todayStudySeconds'))||0;
+    const hours=Math.floor(daily/3600);
+    if(hours<1)return;
+    const st=getBreakState(); const today=dayKey();
+    if(st.day!==today){st.day=today;st.alerted=0;st.lastDismissedThreshold=0;setBreakState(st);}
+    const alerted=Number(st.alerted)||0;
+    if(hours>alerted && hours<=24){ st.alerted=hours; setBreakState(st); openBreakPrompt(hours); }
+  };
+  window.__initDashboardUpgrade=function(){ renderDailyMotivation(); renderBreakImage(); };
+  document.addEventListener('DOMContentLoaded',()=>{window.__initDashboardUpgrade(); setInterval(()=>{renderDailyMotivation();},60000);});
+})();
 </script>
 
 <script id="htvvm-pomodoro-reliable-fix">
@@ -5456,5 +5800,390 @@ window.uploadCustomAvatar = function(e) {
   });
 })();
 </script>
+
+<script id="chem-arena-module-js">
+(() => {
+  const ARENA_PATH = "arenaRooms";
+  const BANK_PATH = "arenaQuestionBank";
+  const MAX_PLAYERS = 8;
+  const MAX_HP = 200;
+  const DAMAGE = 25;
+  const TURN_SECONDS = 15;
+  const AVATARS = ["🧪","⚗️","🧬","🔬","🧑‍🔬","🧙‍♂️","🧠","🦊"];
+  let arenaRoomCode = "";
+  let arenaRoomRef = null;
+  let arenaRoomCache = null;
+  let arenaUnsubs = [];
+  let arenaHostTick = null;
+
+  const BUILTIN = [
+    {q:"Chất nào sau đây là ester?",a:{A:"CH3COOH",B:"CH3COOCH3",C:"C2H5OH",D:"CH3CHO"},c:"B",d:"NB",topic:"Ester - Lipid",e:"Ester có nhóm chức $-COO-$, ví dụ CH3COOCH3."},
+    {q:"Trong phân tử glucose dạng mạch hở, có bao nhiêu nhóm hydroxyl (-OH)?",a:{A:"3",B:"4",C:"5",D:"6"},c:"C",d:"TH",topic:"Carbohydrate",e:"Glucose mạch hở có 5 nhóm -OH và 1 nhóm -CHO."},
+    {q:"Amino acid nào sau đây có tính lưỡng tính?",a:{A:"HCl",B:"CH3COOH",C:"H2NCH2COOH",D:"C2H5OH"},c:"C",d:"NB",topic:"Nitrogen",e:"Amino acid chứa đồng thời -NH2 có tính base và -COOH có tính acid."},
+    {q:"Polymer nào được điều chế bằng phản ứng trùng hợp?",a:{A:"Tinh bột",B:"Tơ nylon-6,6",C:"Polyethylene",D:"Protein"},c:"C",d:"TH",topic:"Polymer",e:"PE được điều chế từ ethylene bằng phản ứng trùng hợp."},
+    {q:"Trong pin điện hóa Zn-Cu hoạt động tự phát, điện cực Zn là:",a:{A:"Cathode",B:"Anode",C:"Cầu muối",D:"Điện cực trơ"},c:"B",d:"VD",topic:"Điện hóa",e:"Zn bị oxi hóa tại anode: Zn → Zn2+ + 2e."},
+    {q:"Dung dịch FeCl3 tác dụng với dung dịch nào tạo kết tủa màu nâu đỏ?",a:{A:"NaOH",B:"NaCl",C:"HCl",D:"KNO3"},c:"A",d:"NB",topic:"Vô cơ",e:"Fe3+ + 3OH− → Fe(OH)3↓ nâu đỏ."},
+    {q:"Chất nào làm mất màu dung dịch bromine ở điều kiện thường?",a:{A:"Ethane",B:"Ethene",C:"Benzene",D:"Methane"},c:"B",d:"NB",topic:"Hữu cơ",e:"Ethene có liên kết đôi C=C nên cộng Br2."},
+    {q:"pH của dung dịch HCl 0,01 M (coi HCl điện li hoàn toàn) bằng:",a:{A:"1",B:"2",C:"3",D:"12"},c:"B",d:"TH",topic:"Đại cương",e:"[H+] = 10^-2 M nên pH = 2."},
+    {q:"Phản ứng nào là phản ứng xà phòng hóa chất béo?",a:{A:"Hydrolysis ester trong môi trường kiềm",B:"Oxi hóa glucose",C:"Trùng hợp ethene",D:"Thế chlorine vào methane"},c:"A",d:"NB",topic:"Ester - Lipid",e:"Xà phòng hóa triglyceride bằng NaOH/KOH tạo glycerol và muối carboxylate."},
+    {q:"Trong phản ứng: $NH_3 + H_2O \\rightleftharpoons NH_4^+ + OH^-$, NH3 đóng vai trò:",a:{A:"Acid Brønsted",B:"Base Brønsted",C:"Chất oxi hóa",D:"Chất khử"},c:"B",d:"TH",topic:"Nitrogen",e:"NH3 nhận proton từ H2O nên là base Brønsted."},
+    {q:"Chất nào sau đây có thể tham gia phản ứng tráng bạc?",a:{A:"CH3COCH3",B:"CH3CHO",C:"CH3COOH",D:"C2H5OH"},c:"B",d:"TH",topic:"Hữu cơ",e:"Aldehyde bị oxi hóa bởi thuốc thử Tollens tạo bạc kim loại."},
+    {q:"Số oxi hóa của sulfur trong H2SO4 là:",a:{A:"+2",B:"+4",C:"+6",D:"-2"},c:"C",d:"NB",topic:"Vô cơ",e:"2(+1) + x + 4(-2)=0 ⇒ x=+6."}
+  ];
+
+  const A = id => document.getElementById(id);
+  const DB = () => window.db || (typeof db !== "undefined" ? db : null);
+  const AUTH = () => window.auth || (typeof auth !== "undefined" ? auth : null);
+  const me = () => {
+    const u=AUTH()?.currentUser;
+    return u ? {uid:u.uid,name:(u.displayName||u.email||"Người chơi").split("@")[0],email:u.email||""}:null;
+  };
+  const now=()=>Date.now();
+  const safe=(v,f)=>{try{return Number.isFinite(Number(v))?Number(v):f}catch(_){return f}};
+  const escA=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+  const toastA=(m)=> typeof toast==="function" ? toast(m) : alert(m);
+
+  async function ensureArenaAuth(){
+    if(!AUTH()?.currentUser){ alert("❌ Bạn cần đăng nhập để dùng Đấu trường Hóa."); return false; }
+    if(!DB()){ alert("❌ Firebase chưa sẵn sàng."); return false; }
+    return true;
+  }
+
+  function seedQuestionsIfEmpty(list){
+    if(list && list.length) return list;
+    return BUILTIN.map((x,i)=>({...x,id:"builtin_"+i,createdAt:0,ownerUid:"builtin",ownerName:"HTVVM"}));
+  }
+
+  function arenaNav(name){
+    const nav=A("nav-arena");
+    document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("bg-white","shadow-sm","text-blue-600","text-orange-600","text-purple-600","text-emerald-600","text-cyan-600"));
+    document.querySelectorAll(".nav-btn").forEach(b=>b.classList.add("text-slate-600"));
+    if(nav){nav.classList.remove("text-slate-600");nav.classList.add("bg-white","shadow-sm","text-cyan-600")}
+  }
+
+  const oldSwitchSection=window.switchSection;
+  window.switchSection=function(id){
+    if(id==="sec-arena"||id==="sec-arena-creator"||id==="sec-arena-live"){
+      document.querySelectorAll(".app-section").forEach(x=>{x.classList.remove("active");x.classList.add("hidden")});
+      const t=A(id); if(t){t.classList.remove("hidden");t.classList.add("active")}
+      if(id!=="sec-arena-live") window.scrollTo({top:0});
+      arenaNav();
+      return;
+    }
+    return oldSwitchSection ? oldSwitchSection(id) : null;
+  };
+
+  window.openChemArena=async function(){
+    if(!(await ensureArenaAuth())) return;
+    const u=me(); if(A("arena-user-name")) A("arena-user-name").textContent=u?.name||"Người chơi";
+    switchSection("sec-arena");
+    await arenaLoadRooms();
+  };
+
+  window.arenaOpenQuestionStudio=async function(){
+    if(!(await ensureArenaAuth())) return;
+    switchSection("sec-arena-creator");
+    await arenaLoadMyQuestions();
+  };
+
+  window.arenaResetEditor=function(){
+    ["arena-q-id","arena-q-text","arena-opt-A","arena-opt-B","arena-opt-C","arena-opt-D","arena-explain"].forEach(id=>{if(A(id))A(id).value=""});
+    if(A("arena-correct"))A("arena-correct").value="A";
+    if(A("arena-diff"))A("arena-diff").value="NB";
+    if(A("arena-topic"))A("arena-topic").value="Ester - Lipid";
+    if(A("arena-editor-status"))A("arena-editor-status").textContent="MỚI";
+  };
+
+  window.arenaSaveQuestion=async function(){
+    if(!(await ensureArenaAuth())) return;
+    const u=me(), id=A("arena-q-id")?.value.trim();
+    const q=A("arena-q-text")?.value.trim();
+    const opts={A:A("arena-opt-A")?.value.trim(),B:A("arena-opt-B")?.value.trim(),C:A("arena-opt-C")?.value.trim(),D:A("arena-opt-D")?.value.trim()};
+    const c=A("arena-correct")?.value;
+    if(!q||Object.values(opts).some(x=>!x)){return alert("❌ Nhập đầy đủ câu hỏi và 4 đáp án.");}
+    const obj={q,a:opts,c,d:A("arena-diff")?.value||"NB",topic:A("arena-topic")?.value||"Tự chọn",e:A("arena-explain")?.value.trim()||"",ownerUid:u.uid,ownerName:u.name,updatedAt:now(),createdAt:now()};
+    try{
+      const ref=id?DB().ref(`${BANK_PATH}/${u.uid}/${id}`):DB().ref(`${BANK_PATH}/${u.uid}`).push();
+      if(id){delete obj.createdAt}
+      await ref.update(obj);
+      // snapshot công khai để người khác thấy/có thể dùng
+      const publicId=ref.key;
+      await DB().ref(`${BANK_PATH}/public/${publicId}`).update({...obj,id:publicId});
+      toastA(id?"✅ Đã cập nhật câu hỏi.":"✅ Đã lưu và phát hành câu hỏi cho Đấu trường.");
+      window.arenaResetEditor(); await arenaLoadMyQuestions();
+    }catch(e){console.error(e);alert("❌ Không lưu được câu hỏi: "+(e?.message||e))}
+  };
+
+  window.arenaLoadMyQuestions=async function(){
+    if(!(await ensureArenaAuth())) return;
+    const u=me(); let arr=[];
+    try{
+      const snap=await DB().ref(`${BANK_PATH}/${u.uid}`).once("value");
+      if(snap.exists()) snap.forEach(s=>arr.push({id:s.key,...s.val()}));
+    }catch(e){console.warn(e)}
+    const fallback=seedQuestionsIfEmpty(arr);
+    if(A("arena-question-count")) A("arena-question-count").textContent=String(arr.length);
+    const box=A("arena-question-bank"); if(!box)return;
+    if(!arr.length){
+      box.innerHTML=`<div class="p-5 rounded-xl border border-dashed border-slate-700 text-center text-slate-500 text-xs leading-6">Chưa có câu nào.<br>Các câu mẫu Hóa học vẫn có thể dùng ngay khi tạo phòng.</div>`;
+      return;
+    }
+    box.innerHTML=arr.sort((a,b)=>safe(b.updatedAt,0)-safe(a.updatedAt,0)).map(x=>`
+      <div class="arena-q-item">
+        <div class="q-title">${escA(x.q)}</div>
+        <div class="q-meta"><span>${escA(x.topic||"Tự chọn")}</span><span>•</span><span>${escA(x.d||"NB")}</span><span>•</span><span>Đúng ${escA(x.c)}</span></div>
+        <div class="q-actions"><button onclick="arenaEditQuestion('${x.id}')">✏️ Sửa</button><button class="danger" onclick="arenaDeleteQuestion('${x.id}')">🗑 Xóa</button></div>
+      </div>`).join("");
+  };
+
+  window.arenaEditQuestion=async function(id){
+    const u=me(); if(!u)return; const s=await DB().ref(`${BANK_PATH}/${u.uid}/${id}`).once("value"); const x=s.val(); if(!x)return;
+    A("arena-q-id").value=id; A("arena-q-text").value=x.q||""; ["A","B","C","D"].forEach(k=>A("arena-opt-"+k).value=x.a?.[k]||""); A("arena-correct").value=x.c||"A"; A("arena-diff").value=x.d||"NB"; A("arena-topic").value=x.topic||"Tự chọn"; A("arena-explain").value=x.e||""; A("arena-editor-status").textContent="ĐANG SỬA"; window.scrollTo({top:0});
+  };
+  window.arenaDeleteQuestion=async function(id){
+    const u=me(); if(!u||!confirm("Xóa câu hỏi này khỏi kho của bạn?"))return;
+    try{await DB().ref(`${BANK_PATH}/${u.uid}/${id}`).remove();await DB().ref(`${BANK_PATH}/public/${id}`).remove();await arenaLoadMyQuestions();toastA("🗑 Đã xóa câu hỏi.");}catch(e){alert("❌ Không xóa được: "+(e?.message||e))}
+  };
+
+  async function getPublicQuestions(){
+    let arr=[];
+    try{const s=await DB().ref(`${BANK_PATH}/public`).once("value");if(s.exists())s.forEach(x=>arr.push({id:x.key,...x.val()}))}catch(e){console.warn("Arena bank",e)}
+    return arr.length?arr:seedQuestionsIfEmpty([]);
+  }
+
+  function roomCode(){
+    const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let o="";
+    if(window.crypto?.getRandomValues){const a=new Uint32Array(6);crypto.getRandomValues(a);for(let i=0;i<6;i++)o+=alphabet[a[i]%alphabet.length]}
+    else for(let i=0;i<6;i++)o+=alphabet[Math.floor(Math.random()*alphabet.length)];
+    return o;
+  }
+
+  async function uniqueArenaCode(){for(let i=0;i<10;i++){const c=roomCode(),s=await DB().ref(`${ARENA_PATH}/${c}`).once("value");if(!s.exists())return c}throw new Error("Không tạo được mã phòng.");}
+
+  window.arenaCreateRoom=async function(){
+    if(!(await ensureArenaAuth()))return;
+    const u=me(), qs=await getPublicQuestions();
+    const title=prompt("Tên phòng đấu:", "Hóa Arena — " + (u?.name||"HTVVM"))?.trim();
+    if(!title)return;
+    const nstr=prompt(`Số câu đấu (5-${Math.min(30,qs.length)}):`, String(Math.min(10,qs.length)));
+    const n=Math.max(5,Math.min(Number(nstr)||10,qs.length));
+    const picked=qs.sort(()=>Math.random()-0.5).slice(0,n);
+    const code=await uniqueArenaCode();
+    const players={}; players[u.uid]={uid:u.uid,name:u.name,hp:MAX_HP,score:0,correct:0,answers:0,online:true,joinedAt:now()};
+    const room={code,title,hostUid:u.uid,hostName:u.name,createdAt:now(),status:"open",phase:"lobby",turnSeconds:TURN_SECONDS,currentIndex:-1,deadline:0,questionIds:picked.map(x=>x.id),questions:picked.reduce((m,x)=>{m[x.id]=x;return m},{}),players,logs:{0:`⚔️ ${u.name} đã tạo phòng.`}};
+    await DB().ref(`${ARENA_PATH}/${code}`).set(room);
+    toastA("✅ Tạo phòng "+code);
+    await arenaJoinRoom(code);
+  };
+
+  window.arenaJoinPrompt=async function(){
+    if(!(await ensureArenaAuth()))return;
+    const c=prompt("Nhập mã phòng 6 ký tự:","")?.trim().toUpperCase(); if(c) arenaJoinRoom(c);
+  };
+
+  async function arenaRoomJoinPublic(code){
+    const u=me(); const ref=DB().ref(`${ARENA_PATH}/${code}`); const snap=await ref.once("value");
+    if(!snap.exists())throw new Error("Không tìm thấy phòng.");
+    const r=snap.val(); const count=Object.keys(r.players||{}).length;
+    if(r.status==="ended")throw new Error("Phòng đã kết thúc.");
+    if(r.phase!=="lobby" && !r.players?.[u.uid])throw new Error("Ván đã bắt đầu. Hãy chờ phòng mới.");
+    if(count>=MAX_PLAYERS && !r.players?.[u.uid])throw new Error("Phòng đã đủ 8 người.");
+    const upd={name:u.name,uid:u.uid,hp:safe(r.players?.[u.uid]?.hp,MAX_HP),score:safe(r.players?.[u.uid]?.score,0),correct:safe(r.players?.[u.uid]?.correct,0),answers:safe(r.players?.[u.uid]?.answers,0),online:true,joinedAt:r.players?.[u.uid]?.joinedAt||now()};
+    await ref.child(`players/${u.uid}`).set(upd); await ref.child(`logs/${Date.now()}`).set(`👤 ${u.name} đã vào phòng.`);
+    return r;
+  }
+
+  window.arenaJoinRoom=async function(code){
+    if(!(await ensureArenaAuth()))return;
+    try{await arenaRoomJoinPublic(code);arenaRoomCode=code;attachArenaRoom(code);switchSection("sec-arena-live");}catch(e){alert("❌ "+(e?.message||e))}
+  };
+
+  function detachArena(){
+    arenaUnsubs.forEach(fn=>{try{fn()}catch(_){}});arenaUnsubs=[];if(arenaHostTick){clearInterval(arenaHostTick);arenaHostTick=null}
+    arenaRoomRef=null;
+  }
+
+  function attachArenaRoom(code){
+    detachArena();
+    arenaRoomRef=DB().ref(`${ARENA_PATH}/${code}`);
+    const handler=snap=>{arenaRoomCache=snap.val()||null;renderArenaLive();maybeHostResolve();};
+    arenaRoomRef.on("value",handler);arenaUnsubs.push(()=>arenaRoomRef.off("value",handler));
+    const meRef=arenaRoomRef.child(`players/${me().uid}/online`);
+    meRef.onDisconnect().set(false).catch(()=>{});
+    arenaUnsubs.push(()=>meRef.off());
+    arenaHostTick=setInterval(()=>{maybeHostResolve();maybeMigrateHost()},900);
+  }
+
+  function alivePlayers(r){return Object.values(r?.players||{}).filter(p=>safe(p.hp,0)>0)}
+  function sortedPlayers(r){return alivePlayers(r).sort((a,b)=>String(a.joinedAt||a.uid).localeCompare(String(b.joinedAt||b.uid)))}
+  function targetFor(uid,r){
+    const arr=sortedPlayers(r);if(arr.length<=1)return null;const i=arr.findIndex(p=>p.uid===uid);return arr[(i+1+arr.length)%arr.length];
+  }
+
+  function renderPlayers(r){
+    const arr=Object.values(r.players||{}).sort((a,b)=>safe(b.score,0)-safe(a.score,0));
+    A("arena-player-count").textContent=`${arr.filter(p=>safe(p.hp,0)>0).length}/${MAX_PLAYERS}`;
+    A("arena-live-players").innerHTML=arr.map((p,i)=>{const pct=Math.max(0,Math.min(100,safe(p.hp,0)/MAX_HP*100));return `<div class="arena-live-player ${p.uid===me().uid?'is-me':''}"><div class="flex items-center gap-2"><b>${i<3?["👑","🥈","🥉"][i]:"•"}</b><span class="flex-1 font-black text-xs truncate">${escA(p.name)}${p.uid===me().uid?" <span style='color:#67e8f9'>YOU</span>":""}</span><span class="text-[9px] text-slate-400">${safe(p.score,0)} XP</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="flex justify-between mt-1 text-[8px] text-slate-500"><span>${safe(p.hp,0)} HP</span><span>${p.online?"● online":"○ offline"}</span></div></div>`}).join("");
+    A("arena-live-log").innerHTML=Object.entries(r.logs||{}).sort((a,b)=>safe(a[0],0)-safe(b[0],0)).slice(-25).map(([,x])=>`<div>${escA(x)}</div>`).join("");
+  }
+
+  function formatSecs(s){return Math.max(0,Math.ceil(s))+"s"}
+
+  function renderArenaLive(){
+    const r=arenaRoomCache;if(!r||!arenaRoomCode)return;
+    const u=me(); const meP=r.players?.[u.uid]||{};
+    A("arena-live-code").textContent=arenaRoomCode;
+    A("arena-live-title").textContent=r.title||"Phòng đấu";
+    A("arena-me-name").textContent=u.name;
+    A("arena-me-hp").style.width=Math.max(0,Math.min(100,safe(meP.hp,MAX_HP)/MAX_HP*100))+"%";
+    A("arena-me-hp-text").textContent=`${safe(meP.hp,0)} / ${MAX_HP} HP`;
+    renderPlayers(r);
+
+    const target=targetFor(u.uid,r)||Object.values(r.players||{}).find(p=>p.uid!==u.uid)||null;
+    A("arena-target-name").textContent=target?.name||"Đối thủ";
+    A("arena-target-hp").style.width=Math.max(0,Math.min(100,safe(target?.hp,MAX_HP)/MAX_HP*100))+"%";
+    A("arena-target-hp-text").textContent=`${safe(target?.hp,0)} / ${MAX_HP} HP`;
+
+    const phase=r.phase||"lobby";
+    A("arena-live-phase").textContent=phase==="lobby"?"PHÒNG CHỜ":phase==="playing"?"CÂU ĐẤU":"KẾT QUẢ";
+    const left=phase==="playing"?Math.max(0,(safe(r.deadline,0)-now())/1000):0;
+    A("arena-live-timer").textContent=phase==="playing"?formatSecs(left):"—";
+    A("arena-live-qmeta").textContent=phase==="playing"?`CÂU ${safe(r.currentIndex,0)+1}/${(r.questionIds||[]).length}`:"HÓA HỌC";
+
+    A("arena-lobby-view").classList.toggle("hidden",phase!=="lobby");
+    A("arena-playing-view").classList.toggle("hidden",phase!=="playing");
+    A("arena-ended-view").classList.toggle("hidden",phase!=="ended");
+
+    if(phase==="lobby"){
+      const host=u.uid===r.hostUid;
+      A("arena-host-actions").innerHTML=host
+        ? `<button onclick="arenaStartMatch()">⚔️ BẮT ĐẦU (${Object.keys(r.players||{}).length} người)</button><button onclick="arenaCopyLink()">🔗 COPY LINK</button><button onclick="arenaAddQuestionsToRoom()">🧪 ĐỔI BỘ CÂU</button>`
+        : `<span class="text-xs text-slate-500">Chủ phòng: <b class="text-slate-200">${escA(r.hostName||"Quản trò")}</b> • Chờ bắt đầu...</span>`;
+    } else if(phase==="playing"){
+      const qid=(r.questionIds||[])[safe(r.currentIndex,-1)], q=r.questions?.[qid];
+      if(q){
+        A("arena-question-diff").textContent=`${q.topic||"HÓA HỌC"} • ${q.d||"NB"}`;
+        A("arena-question-text").innerHTML=escA(q.q||"").replace(/\\ce\\{([^}]*)\\}/g,'<span>\\\\ce{$1}</span>');
+        A("arena-answers").innerHTML=Object.entries(q.a||{}).map(([k,v])=>`<button class="chem-answer" data-option="${k}" onclick="arenaAnswer('${k}')"><b>${k}</b><span>${escA(v)}</span></button>`).join("");
+        const answered=(r.responses?.[r.currentIndex]?.[u.uid]);
+        if(answered){document.querySelectorAll("#arena-answers .chem-answer").forEach(b=>{b.classList.add("locked");if(b.dataset.option===answered.option)b.classList.add(answered.correct?"correct":"wrong")});}
+        const qStart=safe(r.deadline,0)-safe(r.turnSeconds,TURN_SECONDS)*1000;
+        const elapsed=(now()-qStart)/(safe(r.turnSeconds,TURN_SECONDS)*1000);
+        A("arena-turn-label").textContent=answered?"ĐÃ TRẢ LỜI":(elapsed<.5?"BẮT ĐẦU":"TRẢ LỜI NGAY");
+        A("arena-explanation").classList.add("hidden");
+        if(window.MathJax?.typesetPromise) window.MathJax.typesetPromise([A("arena-question-text"),A("arena-answers")]).catch(()=>{});
+      }
+    } else if(phase==="ended"){
+      const arr=Object.values(r.players||{}).sort((a,b)=>safe(b.score,0)-safe(a.score,0));
+      const meIdx=arr.findIndex(p=>p.uid===u.uid);
+      A("arena-ended-title").textContent=meIdx===0?"🏆 CHIẾN THẮNG":"KẾT THÚC";
+      A("arena-ended-desc").textContent=meIdx===0?"Bạn đứng đầu đấu trường Hóa học.":`Hạng của bạn: #${meIdx+1}`;
+      A("arena-final-ranking").innerHTML=arr.map((p,i)=>`<div class="arena-rank-row"><b>${i<3?["👑","🥈","🥉"][i]:i+1}</b><span>${escA(p.name)}</span><strong>${safe(p.score,0)} XP</strong><em>${safe(p.correct,0)} đúng</em></div>`).join("");
+    }
+  }
+
+  window.arenaAnswer=async function(option){
+    const r=arenaRoomCache,u=me(); if(!r||r.phase!=="playing")return;
+    const qid=r.questionIds?.[safe(r.currentIndex,-1)],q=r.questions?.[qid];if(!q)return;
+    const path=`${ARENA_PATH}/${arenaRoomCode}/responses/${r.currentIndex}/${u.uid}`;
+    const existing=await DB().ref(path).once("value");if(existing.exists())return;
+    const correct=String(option)===String(q.c);
+    await DB().ref(path).set({option,correct,answeredAt:now()});
+    A("arena-turn-label").textContent="ĐÃ TRẢ LỜI";
+  };
+
+  async function maybeHostResolve(){
+    const r=arenaRoomCache;if(!r||r.phase!=="playing"||r.hostUid!==me()?.uid)return;
+    const idx=safe(r.currentIndex,-1), qid=r.questionIds?.[idx]; if(!qid)return;
+    const responses=r.responses?.[idx]||{}; const alive=alivePlayers(r);
+    const allAnswered=alive.length>0 && alive.every(p=>responses[p.uid]);
+    if(now() < safe(r.deadline,0) && !allAnswered)return;
+    const updates={};
+    const log=[];
+    const players=JSON.parse(JSON.stringify(r.players||{}));
+    let changed=false;
+    for(const p of alive){
+      const resp=responses[p.uid];
+      if(resp){players[p.uid].answers=safe(players[p.uid].answers,0)+1;if(resp.correct){players[p.uid].correct=safe(players[p.uid].correct,0)+1;players[p.uid].score=safe(players[p.uid].score,0)+100;const target=targetFor(p.uid,{players});if(target&&target.uid!==p.uid){players[target.uid].hp=Math.max(0,safe(players[target.uid].hp,MAX_HP)-DAMAGE);log.push(`⚡ ${p.name} trả lời đúng → -${DAMAGE} HP ${target.name}.`)}else log.push(`✅ ${p.name} trả lời đúng.`)}else{log.push(`❌ ${p.name} trả lời sai.`)}changed=true;}
+    }
+    if(!changed && now()<safe(r.deadline,0))return;
+    const remain=alivePlayers({players});
+    const nextIdx=idx+1;
+    const ended=remain.length<=1 || nextIdx>=(r.questionIds||[]).length;
+    const base = `${ARENA_PATH}/${arenaRoomCode}`;
+    updates[`${base}/players`]=players;
+    log.forEach((m,i)=>updates[`${base}/logs/${now()+i}`]=m);
+    if(ended){
+      updates[`${base}/phase`]="ended"; updates[`${base}/status`]="ended"; updates[`${base}/deadline`]=0; updates[`${base}/logs/${now()+100}`]=remain.length===1?`🏆 ${remain[0].name} là người sống sót cuối cùng!`:"🏁 Hết bộ câu — phân định theo XP.";
+    }else{
+      updates[`${base}/currentIndex`]=nextIdx; updates[`${base}/deadline`]=now()+safe(r.turnSeconds,TURN_SECONDS)*1000;
+    }
+    await DB().ref().update(updates);
+  }
+
+  async function maybeMigrateHost(){
+    const r=arenaRoomCache;if(!r)return;
+    const host=r.players?.[r.hostUid];
+    if(host?.online!==false)return;
+    const candidate=Object.values(r.players||{}).filter(p=>p.online!==false).sort((a,b)=>safe(a.joinedAt,0)-safe(b.joinedAt,0))[0];
+    if(candidate?.uid && candidate.uid===me()?.uid) await arenaRoomRef.update({hostUid:candidate.uid,hostName:candidate.name,logs:{[now()]:"🔄 Quản trò mới: "+candidate.name}});
+  }
+
+  window.arenaStartMatch=async function(){
+    const r=arenaRoomCache;if(!r||r.hostUid!==me()?.uid)return;
+    if(Object.keys(r.players||{}).length<2)return alert("❌ Cần ít nhất 2 người để bắt đầu.");
+    await arenaRoomRef.update({phase:"playing",status:"playing",currentIndex:0,deadline:now()+safe(r.turnSeconds,TURN_SECONDS)*1000,logs:{[now()]:`🔥 ${r.hostName} đã bắt đầu trận đấu!`}});
+  };
+
+  window.arenaAddQuestionsToRoom=async function(){
+    const qs=await getPublicQuestions();const nstr=prompt(`Số câu đấu (5-${Math.min(30,qs.length)}):`,String(Math.min(10,qs.length)));if(!nstr)return;
+    const n=Math.max(5,Math.min(Number(nstr)||10,qs.length));const picked=qs.sort(()=>Math.random()-0.5).slice(0,n);
+    const questions=picked.reduce((m,x)=>{m[x.id]=x;return m},{}); await arenaRoomRef.update({questionIds:picked.map(x=>x.id),questions});
+    toastA("✅ Đã thay bộ câu.");
+  };
+
+  window.arenaCopyCode=async()=>{if(!arenaRoomCode)return;navigator.clipboard?.writeText(arenaRoomCode);toastA("📋 Đã copy mã phòng: "+arenaRoomCode)};
+  window.arenaCopyLink=async()=>{const link=new URL(location.href);link.searchParams.set("arena",arenaRoomCode);try{await navigator.clipboard.writeText(link.toString());toastA("🔗 Đã copy link phòng.");}catch(_){prompt("Copy link:",link.toString())}};
+  window.arenaLeaveRoom=function(){detachArena();arenaRoomCode="";arenaRoomCache=null;history.replaceState(null,"",location.pathname);openChemArena()};
+
+  window.arenaLoadRooms=async function(){
+    if(!(await ensureArenaAuth()))return; switchSection("sec-arena");
+    const box=A("arena-room-list");if(!box)return;box.innerHTML=`<div class="col-span-full text-center text-slate-500 text-xs py-8">Đang tải phòng...</div>`;
+    try{
+      const s=await DB().ref(ARENA_PATH).once("value");let rooms=[];
+      if(s.exists())s.forEach(x=>{const r=x.val();if(r?.status!=="ended")rooms.push({id:x.key,...r})});
+      rooms.sort((a,b)=>safe(b.createdAt,0)-safe(a.createdAt,0));
+      if(!rooms.length){box.innerHTML=`<div class="col-span-full text-center text-slate-500 text-xs py-8">Chưa có phòng nào. Tạo phòng đầu tiên.</div>`;return;}
+      box.innerHTML=rooms.slice(0,18).map(r=>{const n=Object.keys(r.players||{}).length;return `<article class="chem-room-card"><div class="text-[9px] font-black text-cyan-300 tracking-[.14em]">● ${r.phase==="playing"?"ĐANG ĐẤU":"ĐANG CHỜ"}</div><h4>${escA(r.title||"Hóa Arena")}</h4><div class="chem-room-meta"><span class="chem-room-pill">Mã ${escA(r.code||r.id)}</span><span class="chem-room-pill">👥 ${n}/${MAX_PLAYERS}</span><span class="chem-room-pill">🧪 ${(r.questionIds||[]).length} câu</span></div><div class="chem-room-actions"><button class="primary" onclick="arenaJoinRoom('${escA(r.code||r.id)}')">🚀 VÀO PHÒNG</button><button onclick="arenaShowRoomInfo('${escA(r.code||r.id)}')">ℹ️</button></div></article>`}).join("");
+    }catch(e){box.innerHTML=`<div class="text-center text-red-400 text-xs py-8">Lỗi tải phòng: ${escA(e?.message||e)}</div>`}
+  };
+  window.arenaShowRoomInfo=async function(code){const s=await DB().ref(`${ARENA_PATH}/${code}`).once("value");const r=s.val();if(!r)return;alert(`⚔️ ${r.title}\nMã phòng: ${code}\nNgười chơi: ${Object.keys(r.players||{}).length}/${MAX_PLAYERS}\nSố câu: ${(r.questionIds||[]).length}\nChủ phòng: ${r.hostName||"—"}`)};
+
+  // Deep-link ?arena=ABC123
+  async function handleArenaRoute(){
+    const code=new URLSearchParams(location.search).get("arena")?.trim().toUpperCase();if(!code)return;
+    if(!(await ensureArenaAuth()))return;
+    arenaJoinRoom(code);
+  }
+
+  // Keep arena UI fresh even without Firebase changes during countdown.
+  setInterval(()=>{if(arenaRoomCache&&arenaRoomCache.phase==="playing")renderArenaLive()},500);
+
+  document.addEventListener("DOMContentLoaded",async()=>{
+    if(A("arena-user-name"))A("arena-user-name").textContent=me()?.name||"Người chơi";
+    if(A("arena-q-text") && !A("arena-q-text").value) arenaResetEditor();
+    if(AUTH()) AUTH().onAuthStateChanged?.(()=>{if(A("arena-user-name"))A("arena-user-name").textContent=me()?.name||"Người chơi"});
+    // Chỉ tự vào route khi user đã đăng nhập sẵn.
+    setTimeout(()=>handleArenaRoute(),700);
+  });
+})();
+</script>
+
+
+<script id="htvvm-dashboard-arena-refresh">
+window.addEventListener('firebase:user-ready',()=>{ try{ window.loadDashboardArenaRooms?.(); }catch(_){ } });
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ try{ window.loadDashboardArenaRooms?.(); }catch(_){ } } });
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"e3c1c9af36de41759418005494a48906","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
