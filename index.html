@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hành trình vượt vũ môn - HTVVM Studio</title>
 <link rel="icon" href="/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -30,7 +33,7 @@
     tailwind.config = {
         theme: {
             extend: {
-                fontFamily: { sans: ['Segoe UI', 'Tahoma', 'Arial', 'sans-serif'], display: ['Segoe UI', 'Tahoma', 'Arial', 'sans-serif'] },
+                fontFamily: { sans: ['Be Vietnam Pro', 'Plus Jakarta Sans', 'sans-serif'], display: ['Sora', 'sans-serif'] },
                 colors: { primary: { 50: '#083344', 100: '#0e4a5c', 500: '#22D3EE', 600: '#0891B2', 700: '#0E7490' } },
                 boxShadow: { 'soft': '0 8px 24px -8px rgba(0,0,0,.55)', 'glow': '0 0 0 1px rgba(34,211,238,.25), 0 0 24px -4px rgba(34,211,238,.45)' }
             }
@@ -38,7 +41,7 @@
     }
 </script>
 <style>
-body{font-family:'Segoe UI','Tahoma','Arial',sans-serif; background-color:#f8fafc;}
+body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif; background-color:#f8fafc;}
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -154,7 +157,7 @@ body{
   background-size:56px 56px;
   background-position:center top;
 }
-h1,h2,h3,h4,h5,h6,.font-display{font-family:'Segoe UI','Tahoma','Arial',sans-serif; letter-spacing:-0.015em;}
+h1,h2,h3,h4,h5,h6,.font-display{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif; letter-spacing:-0.015em;}
 
 /* ===== COMMUNITY — typography ổn định cho tiếng Việt trong Dark Mode ===== */
 #sec-community,
@@ -162,15 +165,15 @@ h1,h2,h3,h4,h5,h6,.font-display{font-family:'Segoe UI','Tahoma','Arial',sans-ser
 #sec-community select,
 #sec-community textarea,
 #sec-community button{
-  font-family:'Segoe UI','Tahoma','Arial',system-ui,sans-serif !important;
+  font-family:'Be Vietnam Pro','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif !important;
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
 }
 #sec-community h1,#sec-community h2,#sec-community h3,#sec-community .font-display{
-  font-family:'Segoe UI','Tahoma','Arial',system-ui,sans-serif !important;
+  font-family:'Be Vietnam Pro','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif !important;
   letter-spacing:-0.02em;
 }
-#sec-community .community-post-author,#sec-community .community-post-body{font-family:'Segoe UI','Tahoma','Arial',system-ui,sans-serif !important;}
+#sec-community .community-post-author,#sec-community .community-post-body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif !important;}
 
 
 /* Ambient glow blobs (site background) */
@@ -1108,7 +1111,7 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
         transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out;
     }
 </style>
-<style id="htvvm-dark-font-polish">html,body{font-family:'Segoe UI','Tahoma','Arial',sans-serif;}body{font-synthesis:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}body.htvvm-dark-mode button,body.htvvm-dark-mode input,body.htvvm-dark-mode select,body.htvvm-dark-mode textarea,body.htvvm-dark-mode option,body.htvvm-dark-mode h1,body.htvvm-dark-mode h2,body.htvvm-dark-mode h3,body.htvvm-dark-mode h4,body.htvvm-dark-mode h5,body.htvvm-dark-mode h6{font-family:'Segoe UI','Tahoma','Arial',sans-serif;}</style>
+<style id="htvvm-dark-font-polish">html,body{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}body{font-synthesis:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}body.htvvm-dark-mode button,body.htvvm-dark-mode input,body.htvvm-dark-mode select,body.htvvm-dark-mode textarea,body.htvvm-dark-mode option,body.htvvm-dark-mode h1,body.htvvm-dark-mode h2,body.htvvm-dark-mode h3,body.htvvm-dark-mode h4,body.htvvm-dark-mode h5,body.htvvm-dark-mode h6{font-family:'Be Vietnam Pro','Plus Jakarta Sans',Arial,sans-serif;}</style>
 
 <style id="htvvm-dashboard-upgrade-css">
 .dashboard-quote-card{position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(167,139,250,.20);background:radial-gradient(circle at 50% 0,rgba(139,92,246,.13),transparent 40%),linear-gradient(145deg,#11182a,#0b1220 64%,#12102a);box-shadow:0 24px 70px rgba(0,0,0,.30)}
@@ -1123,6 +1126,12 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
 .dashboard-quote-source:hover{color:#fff;border-color:rgba(255,255,255,.45)}
 .dashboard-mini-arena{background:linear-gradient(145deg,rgba(34,211,238,.10),rgba(139,92,246,.08));border-color:rgba(34,211,238,.25);box-shadow:inset 0 1px rgba(255,255,255,.04),0 10px 28px rgba(34,211,238,.05)}
 .dashboard-mini-arena:hover{border-color:rgba(34,211,238,.45);box-shadow:0 12px 30px rgba(34,211,238,.10)}
+.dashboard-online-card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(16,185,129,.10),rgba(34,211,238,.06));border:1px solid rgba(52,211,153,.20);box-shadow:inset 0 1px rgba(255,255,255,.04),0 10px 28px rgba(52,211,153,.05)}
+.dashboard-online-dot{width:10px;height:10px;border-radius:999px;background:#34d399;box-shadow:0 0 0 5px rgba(52,211,153,.10),0 0 18px rgba(52,211,153,.55);animation:onlinePulse 1.8s ease-in-out infinite}
+@keyframes onlinePulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.2);opacity:1}}
+.study-break-music-btn{position:absolute;top:24px;right:24px;z-index:5;padding:8px 11px;border-radius:11px;background:rgba(7,17,30,.72);border:1px solid rgba(255,255,255,.14);color:#e2e8f0;font-size:11px;font-weight:900;cursor:pointer;backdrop-filter:blur(8px)}
+.study-break-music-btn:hover{background:rgba(14,116,144,.9);border-color:rgba(34,211,238,.45)}
+@media(max-width:640px){.study-break-music-btn{top:20px;right:20px}}
 .dashboard-quote-accent{width:44px;height:4px;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#8b5cf6);box-shadow:0 0 18px rgba(34,211,238,.35)}
 .dashboard-arena-card{position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(34,211,238,.23);background:radial-gradient(circle at 50% 0,rgba(34,211,238,.16),transparent 40%),linear-gradient(145deg,#091a2e,#07111e 65%,#0c1b32);box-shadow:0 24px 70px rgba(0,0,0,.38)}
 .dashboard-arena-card:after{content:"";position:absolute;inset:auto -10% -80px;height:180px;transform:perspective(420px) rotateX(58deg);background-image:linear-gradient(rgba(73,193,245,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(73,193,245,.09) 1px,transparent 1px);background-size:42px 42px;pointer-events:none}
@@ -1133,10 +1142,11 @@ article.bg-white:hover, .rounded-\[2rem\].bg-white:hover{
 .study-break-backdrop.show{display:flex;animation:studyBreakFade .22s ease-out}
 @keyframes studyBreakFade{from{opacity:0}to{opacity:1}}
 .study-break-modal{width:min(720px,100%);position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(145deg,#111a2d,#091321);box-shadow:0 35px 100px rgba(0,0,0,.58)}
-.study-break-image-wrap{padding:14px 14px 0}.study-break-image{width:100%;height:220px;object-fit:cover;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(135deg,#16253e,#0a1220)}
+.study-break-image-wrap{padding:14px 14px 0;position:relative}.study-break-image{width:100%;height:220px;object-fit:cover;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(135deg,#16253e,#0a1220)}.study-break-image-badge{position:absolute;top:26px;left:26px;z-index:2;padding:7px 10px;border-radius:999px;background:rgba(7,17,30,.72);border:1px solid rgba(255,255,255,.14);color:#dbeafe;font-size:10px;font-weight:950;letter-spacing:.08em;backdrop-filter:blur(8px)}.study-break-image-upload-btn{position:absolute;right:26px;bottom:12px;z-index:2;padding:9px 12px;border-radius:11px;background:rgba(7,17,30,.82);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:11px;font-weight:900;cursor:pointer;backdrop-filter:blur(8px)}.study-break-image-upload-btn:hover{background:rgba(14,116,144,.92);border-color:rgba(34,211,238,.45)}
 .study-break-content{padding:22px}.study-break-kicker{font-size:10px;letter-spacing:2px;font-weight:950;color:#fbbf24;text-transform:uppercase}.study-break-content h2{margin:6px 0 8px;font-size:clamp(24px,4vw,36px);font-weight:950;line-height:1.1;color:#f8fafc}.study-break-content p{margin:0;color:#b4c2d4;font-size:14px;line-height:1.65}.study-break-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 22px 22px}.study-break-actions button{min-height:52px;border-radius:15px;font-weight:950}.study-break-continue{background:linear-gradient(100deg,#06b6d4,#0ea5e9);color:#fff;box-shadow:0 10px 24px rgba(14,165,233,.2)}.study-break-stop{background:#1a2538;border:1px solid #334155;color:#f8fafc}
 .study-break-upload{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;border:1px dashed rgba(148,163,184,.25);border-radius:13px;background:rgba(255,255,255,.03)}.study-break-upload span{font-size:11px;color:#94a3b8}.study-break-upload button{padding:8px 11px;border-radius:9px;background:#18253a;border:1px solid #334155;color:#dbeafe;font-weight:900;font-size:10px}
 @media(max-width:640px){.study-break-image{height:165px}.study-break-actions{grid-template-columns:1fr}.dashboard-quote-card,.dashboard-arena-card{border-radius:24px}.dashboard-quote-spacious{min-height:300px;padding:28px 18px}.dashboard-quote-text{font-size:28px}}
+.study-break-countdown{margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;color:#94a3b8;font-size:12px;font-weight:800}.study-break-countdown strong{color:#fbbf24;min-width:20px}.study-break-modal:before{content:'';position:absolute;inset:-35% -15% auto auto;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.16),transparent 68%);pointer-events:none}.study-break-modal:after{content:'';position:absolute;left:-90px;bottom:-120px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.12),transparent 70%);pointer-events:none}.study-break-content,.study-break-actions,.study-break-image-wrap{position:relative;z-index:1}.study-break-image{box-shadow:0 18px 45px rgba(0,0,0,.22)}
 </style>
 
 <style id="chem-arena-module-css">
@@ -1779,6 +1789,18 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
           <div class="flex items-center justify-between mb-5"><div><p class="text-[11px] text-slate-500 font-black uppercase tracking-widest">Phiên truy cập</p><h2 class="text-xl font-black text-white mt-1">🕒 Bạn đang ở web</h2></div><span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span></div>
           <div id="dashboard-web-time" class="text-4xl sm:text-5xl font-black text-cyan-300 tabular-nums tracking-tight">00:00:00</div>
           <p class="text-xs text-slate-500 mt-2">Độc lập với thời gian học tập.</p>
+        </div>
+
+        <div class="dashboard-online-card rounded-[2rem] p-6 shadow-xl">
+          <div class="flex items-center justify-between mb-5">
+            <div><p class="text-[11px] text-emerald-300/80 font-black uppercase tracking-widest">Trung tâm học tập</p><h2 class="text-xl font-black text-white mt-1">👥 Đang online</h2></div>
+            <span class="dashboard-online-dot" title="Đang kết nối realtime"></span>
+          </div>
+          <div class="flex items-end gap-3">
+            <div id="dashboard-online-count" class="text-4xl sm:text-5xl font-black text-emerald-300 tabular-nums">1</div>
+            <div class="pb-1 text-sm font-black text-slate-400">người</div>
+          </div>
+          <p id="dashboard-online-status" class="text-xs text-slate-500 mt-2">Bạn đang ở cùng những người học khác.</p>
         </div>
 
         <div class="rounded-[2rem] border border-amber-400/15 bg-slate-900/80 p-6 shadow-xl">
@@ -2662,6 +2684,42 @@ function checkAndUpdateStreak(user) {
         }
     });
 }
+// ===== REALTIME PRESENCE: SỐ NGƯỜI ĐANG ONLINE =====
+let __presenceRef = null;
+let __presenceConnectedRef = null;
+let __presenceAllRef = null;
+function initOnlinePresence(user){
+  try{
+    if(!window.__firebaseReady || !window.db || !user?.uid) return;
+    clearOnlinePresence();
+    const connectedRef = window.db.ref('.info/connected');
+    const ref = window.db.ref('presence/'+user.uid);
+    const allRef = window.db.ref('presence');
+    __presenceRef = ref; __presenceConnectedRef = connectedRef; __presenceAllRef = allRef;
+    const markOnline = snap => {
+      if(snap.val() !== true) return;
+      const payload = {uid:user.uid,name:user.displayName||user.email?.split('@')[0]||'Học viên',online:true,lastSeen:firebase.database.ServerValue.TIMESTAMP};
+      ref.onDisconnect().remove().then(()=>ref.set(payload)).catch(()=>ref.set(payload));
+    };
+    connectedRef.on('value',markOnline);
+    allRef.on('value',snap=>{
+      const count = snap.exists() ? Object.keys(snap.val()||{}).length : 0;
+      const el=document.getElementById('dashboard-online-count');
+      const st=document.getElementById('dashboard-online-status');
+      if(el) el.textContent=String(count);
+      if(st) st.textContent=count<=1?'Bạn đang học một mình lúc này.':`Có ${count} người đang học cùng trung tâm lúc này.`;
+    });
+  }catch(e){ console.warn('Realtime presence:',e); }
+}
+function clearOnlinePresence(){
+  try{
+    if(__presenceConnectedRef && typeof __presenceConnectedRef.off==='function') __presenceConnectedRef.off();
+    if(__presenceAllRef && typeof __presenceAllRef.off==='function') __presenceAllRef.off();
+    if(__presenceRef){ __presenceRef.onDisconnect().cancel().catch(()=>{}); __presenceRef.remove().catch(()=>{}); }
+  }catch(_){}
+  __presenceRef=null; __presenceConnectedRef=null; __presenceAllRef=null;
+}
+
 // KHỞI TẠO FIREBASE & LẮNG NGHE ĐĂNG NHẬP
 function initFirebase() {
     // Tránh khởi tạo lặp nếu script/DOM gọi lại hàm.
@@ -2693,6 +2751,7 @@ function initFirebase() {
         const userName = document.getElementById('user-display-name');
 
         if (user) {
+            initOnlinePresence(user);
             if (typeof initCalendarEventsForUser === 'function') initCalendarEventsForUser(user);
             // Đã có acc: Giấu Welcome, Login, Mở Thư viện
             if(welcome) welcome.classList.add('hidden');
@@ -2717,9 +2776,6 @@ function initFirebase() {
                 window.dispatchEvent(new CustomEvent('firebase:user-ready',{detail:{uid:user.uid,avatar:window.__communityAvatar}}));
             }); 
             
-            // Nạp số liệu thời gian học chung trước khi chạy các UI/danh hiệu.
-            initializeStudyFromFirebase(user);
-
             // AI tự động kiểm tra chuỗi ngày của học viên
             checkAndUpdateStreak(user);
             setTimeout(loadDashboardLeaderboards, 150);
@@ -2740,6 +2796,11 @@ function initFirebase() {
             }
             
         } else {
+            clearOnlinePresence();
+            const onlineCountEl = document.getElementById('dashboard-online-count');
+            const onlineStatusEl = document.getElementById('dashboard-online-status');
+            if (onlineCountEl) onlineCountEl.textContent = '0';
+            if (onlineStatusEl) onlineStatusEl.textContent = 'Hãy đăng nhập để tham gia trung tâm.';
             if (typeof initCalendarEventsForUser === 'function') initCalendarEventsForUser(null);
             // Chưa đăng nhập: đảm bảo dữ liệu chưa từng được tải/hiển thị
             window.__docsLoaded = false;
@@ -3754,98 +3815,6 @@ let totalStudySeconds = 0;
 let fiveHourAlerted = false;
 let continuousStudySeconds = 0;
 
-// Đồng bộ đa thiết bị: Firebase giữ số liệu chung, mỗi thiết bị chỉ giữ
-// phần thời gian CHƯA gửi (pending) để không ghi đè thời gian của thiết bị khác.
-let pendingStudySeconds = 0;
-let studySyncInFlight = false;
-let studySyncUid = '';
-const STUDY_PENDING_KEY = 'htvvm.studyPendingSeconds';
-const STUDY_UID_KEY = 'htvvm.studySyncUid';
-
-function loadPendingStudySeconds(){
-    try {
-        const savedUid = localStorage.getItem(STUDY_UID_KEY) || '';
-        const currentUid = (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : '';
-        if(savedUid && currentUid && savedUid !== currentUid){
-            localStorage.removeItem(STUDY_PENDING_KEY);
-            return 0;
-        }
-        return Math.max(0, Number(localStorage.getItem(STUDY_PENDING_KEY)) || 0);
-    } catch(_) { return 0; }
-}
-
-function savePendingStudySeconds(){
-    try {
-        localStorage.setItem(STUDY_PENDING_KEY, String(Math.max(0, Math.floor(pendingStudySeconds))));
-        if(studySyncUid) localStorage.setItem(STUDY_UID_KEY, studySyncUid);
-    } catch(_){}
-}
-
-// Nạp số liệu chung từ Firebase khi đăng nhập trên một thiết bị mới.
-let studyRealtimeRef = null;
-let studySyncInFlightDelta = 0;
-
-function studyDateKeyNow(){
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-async function initializeStudyFromFirebase(user){
-    if(!user || !window.db) return;
-    try{
-        if(studyRealtimeRef) studyRealtimeRef.off();
-
-        const ref = window.db.ref(`users/${user.uid}`);
-        const snap = await ref.once('value');
-        const data = snap.val() || {};
-        const today = studyDateKeyNow();
-        const savedUid = localStorage.getItem(STUDY_UID_KEY) || '';
-
-        studySyncUid = user.uid;
-        if(savedUid !== user.uid){
-            // Tài khoản mới trên thiết bị này: bắt đầu từ số liệu server.
-            pendingStudySeconds = 0;
-            localStorage.setItem(STUDY_UID_KEY, user.uid);
-            localStorage.setItem(STUDY_PENDING_KEY, '0');
-        }else{
-            pendingStudySeconds = loadPendingStudySeconds();
-        }
-
-        const remoteToday = Math.max(0, Number(data.dailyStudy?.[today]) || 0);
-        const remoteTotal = Math.max(0, Number(data.totalStudySeconds) || 0);
-        totalStudySeconds = remoteTotal;
-        // local = server + phần chưa đồng bộ của chính thiết bị này.
-        localStorage.setItem('htvvm.todayStudySeconds', String(remoteToday + pendingStudySeconds));
-        localStorage.setItem('htvvm.studyDay', today);
-
-        studyRealtimeRef = ref;
-        studyRealtimeRef.on('value', snapshot => {
-            if(studySyncInFlight) return;
-            const latest = snapshot.val() || {};
-            const day = studyDateKeyNow();
-            const remote = Math.max(0, Number(latest.dailyStudy?.[day]) || 0);
-            const pending = Math.max(0, Math.floor(pendingStudySeconds));
-            // Không cộng pending lần thứ hai: server chỉ chứa phần đã commit.
-            localStorage.setItem('htvvm.studyDay', day);
-            localStorage.setItem('htvvm.todayStudySeconds', String(remote + pending));
-            totalStudySeconds = Math.max(0, Number(latest.totalStudySeconds) || 0) + pending;
-            updateStudyDashboard();
-            updateRankUI();
-        });
-
-        updateStudyDashboard();
-        updateRankUI();
-    }catch(e){
-        console.warn('initializeStudyFromFirebase', e);
-    }
-}
-
-window.addEventListener('pagehide', () => {
-    // Cố gắng đẩy phần delta còn lại khi đóng tab/app. Không chặn thao tác của người dùng.
-    try { if(pendingStudySeconds > 0) syncStudyStats(); } catch(_){}
-});
-
-
 function setPomoMode(mode) {
     currentPomoMode = mode;
     clearInterval(pomoInterval);
@@ -4234,22 +4203,27 @@ function toggleAIChat() {
 <!-- STUDY BREAK / ANTI-AFK -->
 <div id="study-break-backdrop" class="study-break-backdrop" aria-hidden="true">
   <div class="study-break-modal">
+    <audio id="study-break-music" loop preload="auto" src="/study-break-music.wav"></audio>
+    <button type="button" id="study-break-music-toggle" class="study-break-music-btn" onclick="toggleStudyBreakMusic()">🔊 Nhạc thư giãn</button>
     <div class="study-break-image-wrap">
+      <div class="study-break-image-badge">🖼️ ẢNH NHẮC NGHỈ</div>
       <img id="study-break-image" class="study-break-image" alt="Lời nhắc nghỉ ngơi" />
+      <button type="button" class="study-break-image-upload-btn" onclick="document.getElementById('study-break-image-input').click()">
+        📷 Chọn / thay ảnh
+      </button>
     </div>
     <div class="study-break-content">
-      <div id="study-break-kicker" class="study-break-kicker">NHẮC NGHỈ • 1 GIỜ</div>
-      <h2 id="study-break-title">Bạn đã chiến đấu rất lâu rồi.</h2>
-      <p id="study-break-message">Bạn yêu ơi, học được một tiếng rồi đó. Nghỉ mắt và uống chút nước nhé!</p>
+      <div id="study-break-kicker" class="study-break-kicker">NHẮC NGHỈ • MỐC 5 GIỜ</div>
+      <h2 id="study-break-title">Cậu học 5 tiếng rồi đó ✨</h2>
+      <p id="study-break-message">Chắc cậu học cũng mệt rồi nhỉ ? Ra nghỉ tý chơi với tớ rồi mình học tiếp nha</p><div id="study-break-countdown" class="study-break-countdown">Tự động tạm dừng sau <strong>30</strong> giây</div>
       <div class="study-break-upload">
-        <span>🖼️ Ảnh nhắc nghỉ của bạn — lưu riêng trên thiết bị</span>
-        <button type="button" onclick="document.getElementById('study-break-image-input').click()">Chọn ảnh</button>
+        <span>Ảnh mặc định lấy từ <b>/study-break-5h.png</b>. Bạn có thể đặt file này trong <b>public/</b> của project Vercel.</span>
         <input id="study-break-image-input" type="file" accept="image/*" hidden onchange="handleStudyBreakImage(event)">
       </div>
     </div>
     <div class="study-break-actions">
-      <button id="study-break-continue" class="study-break-continue" onclick="continueAfterStudyBreak()">💙 Tiếp tục</button>
-      <button id="study-break-stop" class="study-break-stop" onclick="stopAfterStudyBreak()">💜 Oke bé yêu !</button>
+      <button id="study-break-continue" class="study-break-continue" onclick="continueAfterStudyBreak()">▶️ Tiếp tục học</button>
+      <button id="study-break-stop" class="study-break-stop" onclick="stopAfterStudyBreak()">😌 Vâng tớ nghỉ ạ</button>
     </div>
   </div>
 </div>
@@ -4413,55 +4387,17 @@ function toggleAIChat() {
 
   async function syncStudyStats(){
     if(!(typeof auth!=='undefined' && auth && auth.currentUser && typeof db!=='undefined' && db)) return;
-    if(studySyncInFlight) return;
-
-    const uid = auth.currentUser.uid;
-    const today = dateKey();
-    const delta = Math.max(0, Math.floor(pendingStudySeconds));
-    if(!delta) {
-      loadDashboardLeaderboards();
-      return;
-    }
-
-    studySyncInFlight = true;
-    studySyncInFlightDelta = delta;
-    // Tách delta đang gửi khỏi pending trước transaction. Nếu transaction thành công,
-    // phần này đã nằm trên server; nếu thất bại, khôi phục lại đúng delta đó.
-    pendingStudySeconds = Math.max(0, Math.floor(pendingStudySeconds - delta));
-    savePendingStudySeconds();
     try{
-      // Transaction nguyên node user để 2 thiết bị học cùng lúc vẫn cộng dồn đúng.
-      await db.ref(`users/${uid}`).transaction(current => {
-        const u = current || {};
-        const dailyStudy = {...(u.dailyStudy || {})};
-        dailyStudy[today] = Math.max(0, Number(dailyStudy[today]) || 0) + delta;
-        u.dailyStudy = dailyStudy;
-        u.totalStudySeconds = Math.max(0, Number(u.totalStudySeconds) || 0) + delta;
-        u.lastActiveAt = Date.now();
-        return u;
+      const uid=auth.currentUser.uid;
+      const today=dateKey();
+      await db.ref(`users/${uid}`).update({
+        totalStudySeconds:safeNum(totalStudySeconds),
+        lastActiveAt:Date.now(),
+        [`dailyStudy/${today}`]:getTodaySeconds(),
+        [`dailySessions/${today}`]:getTodaySessions()
       });
-
-      studySyncInFlightDelta = 0;
-      // Đọc lại server sau transaction để lấy luôn phần thời gian vừa cộng từ
-      // thiết bị khác trong trường hợp chúng chạy đồng thời.
-      const latestSnap = await db.ref(`users/${uid}`).once('value');
-      const latest = latestSnap.val() || {};
-      const latestToday = Math.max(0, Number(latest.dailyStudy?.[today]) || 0);
-      const latestTotal = Math.max(0, Number(latest.totalStudySeconds) || 0);
-      totalStudySeconds = latestTotal + Math.max(0, Math.floor(pendingStudySeconds));
-      localStorage.setItem('htvvm.todayStudySeconds', String(latestToday + Math.max(0, Math.floor(pendingStudySeconds))));
-      updateStudyDashboard();
-      updateRankUI();
       loadDashboardLeaderboards();
-    }catch(e){
-      // Transaction thất bại: trả delta về hàng đợi cục bộ để lần sync sau gửi lại.
-      pendingStudySeconds = Math.max(0, Math.floor(pendingStudySeconds)) + delta;
-      savePendingStudySeconds();
-      console.warn('syncStudyStats',e);
-    }finally{
-      studySyncInFlightDelta = 0;
-      studySyncInFlight = false;
-    }
+    }catch(e){ console.warn('syncStudyStats',e); }
   }
 
   function updateStudyDashboard(){
@@ -4479,19 +4415,15 @@ function toggleAIChat() {
   function recordStudySecond(){
     ensureTodayStore();
 
-    // Tăng cục bộ + ghi nhận delta chưa đồng bộ. Firebase sẽ cộng delta này
-    // vào số liệu chung thay vì ghi đè toàn bộ số giây của thiết bị hiện tại.
+    // Single source of truth for study XP/time.
     totalStudySeconds = safeNum(totalStudySeconds) + 1;
-    pendingStudySeconds = Math.max(0, Math.floor(pendingStudySeconds)) + 1;
-    savePendingStudySeconds();
-
     const n = getTodaySeconds() + 1;
     localStorage.setItem(STORE.todaySeconds, String(n));
 
+    // Keep the UI realtime and sync to Firebase every 30 seconds.
     updateStudyDashboard();
     updateRankUI();
-    // Đồng bộ thường xuyên hơn để điện thoại/PC gần như luôn thấy cùng số liệu.
-    if(n % 10 === 0) syncStudyStats();
+    if(n % 30 === 0) syncStudyStats();
     if(n / 60 === getDailyGoal()) toast('🎉 Hoàn thành mục tiêu học hôm nay!');
   }
 
@@ -5650,18 +5582,41 @@ window.uploadCustomAvatar = function(e) {
   };
   function getBreakState(){ try{return JSON.parse(localStorage.getItem(BREAK_STORE)||'{}')||{};}catch{return {};}}
   function setBreakState(x){ localStorage.setItem(BREAK_STORE,JSON.stringify(x)); }
-  function getImage(){ return localStorage.getItem(BREAK_STORE+'.image') || DEFAULT_BREAK_IMG; }
+  const VERCEL_BREAK_IMAGE = '/study-break-5h.png';
+  const BREAK_MUSIC_SRC = '/study-break-music.wav';
+  let breakMusicEnabled = true;
+  let breakAutoPauseTimer = null;
+  let breakCountdownTimer = null;
+  function getImage(){ return localStorage.getItem(BREAK_STORE+'.image') || VERCEL_BREAK_IMAGE; }
   function renderBreakImage(){ const img=document.getElementById('study-break-image'); if(img) img.src=getImage(); }
-  function openBreakPrompt(thresholdHours){
-    const backdrop=document.getElementById('study-break-backdrop'); if(!backdrop)return;
-    const five=thresholdHours>=5;
-    document.getElementById('study-break-kicker').textContent=five?'NHẮC NGHỈ • MỐC 5 GIỜ':'NHẮC NGHỈ • MỐC '+thresholdHours+' GIỜ';
-    document.getElementById('study-break-title').textContent=five?'Bạn đã chiến đấu 5 tiếng rồi.':'Bạn đã tập trung rất lâu rồi.';
-    document.getElementById('study-break-message').textContent=five?'Bạn yêu ơi, chắc bạn mệt lắm rồi ! Hãy nghĩ ngơi một chút rồi chiến đấu tiếp nhé !':'Bạn yêu ơi, bạn vừa hoàn thành '+thresholdHours+' tiếng học. Nghỉ mắt, uống nước và thả lỏng một chút nhé!';
-    renderBreakImage(); backdrop.classList.add('show'); backdrop.setAttribute('aria-hidden','false');
-    window.__studyBreakThreshold=thresholdHours;
+  function clearBreakTimers(){ if(breakAutoPauseTimer){clearTimeout(breakAutoPauseTimer);breakAutoPauseTimer=null;} if(breakCountdownTimer){clearInterval(breakCountdownTimer);breakCountdownTimer=null;} }
+  function updateBreakCountdown(value){ const el=document.getElementById('study-break-countdown'); if(el) el.innerHTML='Tự động tạm dừng sau <strong>'+Math.max(0,value)+'</strong> giây'; }
+  function updateMusicButton(){ const b=document.getElementById('study-break-music-toggle'); if(b) b.textContent=(breakMusicEnabled?'🔊 Nhạc thư giãn':'🔇 Bật nhạc'); }
+  async function startStudyBreakMusic(){
+    const a=document.getElementById('study-break-music'); if(!a) return;
+    a.src = BREAK_MUSIC_SRC; a.volume = .32;
+    if(!breakMusicEnabled) return;
+    try{ await a.play(); }catch(_){ breakMusicEnabled=false; updateMusicButton(); }
   }
-  function closeBreak(){ const b=document.getElementById('study-break-backdrop'); if(b){b.classList.remove('show');b.setAttribute('aria-hidden','true');} }
+  function stopStudyBreakMusic(){ const a=document.getElementById('study-break-music'); if(a){ a.pause(); a.currentTime=0; } }
+  window.toggleStudyBreakMusic=function(){
+    const a=document.getElementById('study-break-music'); if(!a) return;
+    breakMusicEnabled=!breakMusicEnabled;
+    if(breakMusicEnabled) startStudyBreakMusic(); else stopStudyBreakMusic();
+    updateMusicButton();
+  };
+  function openBreakPrompt(){
+    const backdrop=document.getElementById('study-break-backdrop'); if(!backdrop)return;
+    document.getElementById('study-break-kicker').textContent='NHẮC NGHỈ • MỐC 5 GIỜ';
+    document.getElementById('study-break-title').textContent='Cậu học 5 tiếng rồi đó ✨';
+    document.getElementById('study-break-message').textContent='Chắc cậu học cũng mệt rồi nhỉ ? Ra nghỉ tý chơi với tớ rồi mình học tiếp nha';
+    renderBreakImage(); clearBreakTimers(); updateBreakCountdown(30);
+    backdrop.classList.add('show'); backdrop.setAttribute('aria-hidden','false');
+    updateMusicButton(); startStudyBreakMusic();
+    let left=30; breakCountdownTimer=setInterval(()=>{ left--; updateBreakCountdown(left); if(left<=0){clearInterval(breakCountdownTimer);breakCountdownTimer=null;} },1000);
+    breakAutoPauseTimer=setTimeout(()=>stopAfterStudyBreak(),30000);
+  }
+  function closeBreak(){ const b=document.getElementById('study-break-backdrop'); if(b){b.classList.remove('show');b.setAttribute('aria-hidden','true');} clearBreakTimers(); stopStudyBreakMusic(); }
   window.handleStudyBreakImage=function(e){
     const file=e?.target?.files?.[0]; if(!file)return;
     if(file.size>4*1024*1024){ alert('Ảnh hơi nặng. Hãy chọn ảnh dưới 4MB.'); e.target.value=''; return; }
@@ -5669,28 +5624,35 @@ window.uploadCustomAvatar = function(e) {
       const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const max=1200; const scale=Math.min(1,max/Math.max(img.width,img.height)); canvas.width=Math.max(1,Math.round(img.width*scale)); canvas.height=Math.max(1,Math.round(img.height*scale)); const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,canvas.width,canvas.height); localStorage.setItem(BREAK_STORE+'.image',canvas.toDataURL('image/jpeg',.82)); renderBreakImage(); }; img.src=ev.target.result;
     }; reader.readAsDataURL(file); e.target.value='';
   };
-  window.continueAfterStudyBreak=function(){
-    const threshold=Number(window.__studyBreakThreshold)||1; const st=getBreakState(); st.lastDismissedThreshold=threshold; setBreakState(st); closeBreak();
-  };
+  window.continueAfterStudyBreak=function(){ const st=getBreakState(); st.fiveHourShown=true; setBreakState(st); closeBreak(); };
   window.stopAfterStudyBreak=function(){
-    try{ clearInterval(pomoInterval); }catch(_){ }
-    pomoInterval=null; isPomoRunning=false;
-    const btn=document.getElementById('btn-pomo-action'); if(btn){ btn.innerText='TIẾP TỤC'; btn.className='bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full'; }
-    try{enableInputs();recordSession();syncFocusOverlay();}catch(_){ }
-    const threshold=Number(window.__studyBreakThreshold)||1; const st=getBreakState(); st.lastDismissedThreshold=threshold; setBreakState(st); closeBreak();
+    try{ if(typeof window.togglePomodoro==='function' && window.isPomoRunning) window.togglePomodoro(); }catch(e){ console.warn('study break pause',e); }
+    const st=getBreakState(); st.fiveHourShown=true; setBreakState(st); closeBreak();
   };
   window.__checkStudyBreakMilestone=function(){
-    if(!isPomoRunning) return;
+    if(!window.isPomoRunning) return;
     const daily=Number(localStorage.getItem('htvvm.todayStudySeconds'))||0;
-    const hours=Math.floor(daily/3600);
-    if(hours<1)return;
+    if(daily < 5*60*60) return;
     const st=getBreakState(); const today=dayKey();
-    if(st.day!==today){st.day=today;st.alerted=0;st.lastDismissedThreshold=0;setBreakState(st);}
-    const alerted=Number(st.alerted)||0;
-    if(hours>alerted && hours<=24){ st.alerted=hours; setBreakState(st); openBreakPrompt(hours); }
+    if(st.day!==today){ st.day=today; st.fiveHourShown=false; setBreakState(st); }
+    if(!st.fiveHourShown){ st.fiveHourShown=true; setBreakState(st); openBreakPrompt(); }
   };
-  window.__initDashboardUpgrade=function(){ renderDailyMotivation(); renderBreakImage(); };
-  document.addEventListener('DOMContentLoaded',()=>{window.__initDashboardUpgrade(); setInterval(()=>{renderDailyMotivation();},60000);});
+  // Reset bộ đếm "hôm nay" đúng khi bước sang ngày mới, kể cả khi tab vẫn mở.
+  function scheduleDailyReset(){
+    const now=new Date();
+    const next=new Date(now);
+    next.setHours(24,0,0,0);
+    const delay=Math.max(1000,next.getTime()-now.getTime()+250);
+    setTimeout(()=>{
+      try{
+        if(typeof ensureTodayStore==='function') ensureTodayStore();
+        if(typeof updateRankUI==='function') updateRankUI();
+        if(typeof updateStudyDashboard==='function') updateStudyDashboard();
+      }finally{ scheduleDailyReset(); }
+    },delay);
+  }
+  window.__initDashboardUpgrade=function(){ renderDailyMotivation(); renderBreakImage(); scheduleDailyReset(); };
+  document.addEventListener('DOMContentLoaded',()=>{window.__initDashboardUpgrade(); setInterval(()=>{renderDailyMotivation(); ensureTodayStore();},60000);});
 })();
 </script>
 
@@ -5775,6 +5737,8 @@ window.uploadCustomAvatar = function(e) {
       void sessionsGoal;
       if(typeof updateStudyDashboard === 'function') updateStudyDashboard();
       if(typeof updateRankUI === 'function') updateRankUI();
+      // Kiểm tra đúng mốc 5 giờ ngay sau khi cộng thời gian học thực tế.
+      if(typeof window.__checkStudyBreakMilestone === 'function') window.__checkStudyBreakMilestone();
 
       // Đồng bộ tối đa mỗi 30 giây; không để lỗi Firebase làm hỏng timer.
       if(today % 30 < delta){
