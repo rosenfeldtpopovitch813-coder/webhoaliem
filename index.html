@@ -2266,7 +2266,9 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
         <div class="text-center mb-6"><div class="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">☕</div><h2 class="text-2xl font-extrabold text-slate-900 mb-1">Tiếp thêm động lực!</h2><p class="text-sm text-slate-500 font-medium px-2">Nếu web giúp bạn học Hóa nhàn hơn, hãy mời Dev một ly cafe để duy trì server nhé!</p></div>
         <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col items-center justify-center shadow-inner">
             <p class="text-[11px] font-extrabold text-rose-400 uppercase tracking-widest mb-3">Quét mã QR để ủng hộ</p>
-            <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 mb-3 hover:scale-105 transition-transform duration-300"><img src="https://scontent.fuih1-1.fna.fbcdn.net/v/t1.15752-9/597651140_1269043298362081_6177164337704164712_n.jpg?stp=dst-jpg_p480x480_tt6&_nc_cat=111&ccb=1-7&_nc_sid=0024fc&_nc_eui2=AeEFLawZ35I_mB5sCht32Af_2ciUpnur5XrZyJSme6vlev8v6iymInsdZPNocq90FTqrbNvxDYu7nQhY2z0l8uNa&_nc_ohc=lcmvE2URhA8Q7kNvwFWjvRo&_nc_oc=AdohBk0_cqNtGxb9kUEAyrHIC6a7VK29oFp53L2TpZwt5Um2x6C8D71HizW4fwRkk4c&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=scontent.fuih1-1.fna&_nc_ss=7a22e&oh=03_Q7cD6AHF0dShzeKsg5BKf0WB0_LhpRR6jMYVc3e-XwYJWR4DUQ&oe=6A978532" alt="QR Donate" class="w-48 h-48 object-cover rounded-lg"></div>
+            <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 mb-3 hover:scale-105 transition-transform duration-300">
+    <img src="/qr-donate.png" alt="QR Donate" class="w-48 h-48 object-cover rounded-lg">
+</div>
             <p class="font-extrabold text-slate-800 text-lg"></p>
             <p class="text-xs font-bold text-slate-500 mt-1"></p>
         </div>
@@ -2687,12 +2689,15 @@ function checkAndUpdateStreak(user) {
         // In ra Hồ sơ
         document.getElementById('profile-streak').innerText = streak;
         
-        // Phục hồi Tổng thời gian học Pomodoro từ những ngày trước.
-        // Biến này chỉ dùng cho số liệu tích lũy; danh hiệu được tính theo ngày trong updateRankUI().
+        // Khôi phục dữ liệu học từ Firebase mà không ghi đè phần local đang chờ sync.
         if(data.totalStudySeconds) {
-            totalStudySeconds = safeNum(data.totalStudySeconds);
-            updateRankUI();
+            totalStudySeconds = Math.max(safeNum(totalStudySeconds), safeNum(data.totalStudySeconds));
         }
+        const cloudTodayStudy = Number(data?.dailyStudy?.[todayStr]) || 0;
+        const localTodayStudy = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
+        if(cloudTodayStudy > localTodayStudy) localStorage.setItem('htvvm.todayStudySeconds', String(cloudTodayStudy));
+        if(typeof window.bindStudyRealtime === 'function') window.bindStudyRealtime(user);
+        if(typeof updateRankUI === 'function') updateRankUI();
     });
 }
 // ===== REALTIME PRESENCE: SỐ NGƯỜI ĐANG ONLINE =====
@@ -2957,6 +2962,9 @@ async function openStats() {
         loading.innerHTML = '❌ Lỗi tải thống kê: ' + (e?.message || e);
     }
 }
+
+window.addEventListener('pagehide',()=>{ try{ syncStudyStats(); }catch(e){} });
+window.addEventListener('beforeunload',()=>{ try{ syncStudyStats(); }catch(e){} });
 
 document.addEventListener("DOMContentLoaded", () => { 
     initFirebase(); 
@@ -3823,6 +3831,11 @@ let currentPomoMode = 'pomo';
 
 // Biến lưu thời gian cày cuốc (Tích lũy kinh nghiệm)
 let totalStudySeconds = 0;
+// Đồng bộ thời gian học giữa nhiều thiết bị mà không ghi đè lẫn nhau.
+let pendingStudyByDate = {};
+let pendingSessionsByDate = {};
+let studySyncPromise = null;
+let studyCloudRef = null;
 let fiveHourAlerted = false;
 let continuousStudySeconds = 0;
 
@@ -4313,6 +4326,7 @@ function toggleAIChat() {
   window.getTodaySessions = getTodaySessions;
   window.updateStudyDashboard = updateStudyDashboard;
   window.syncStudyStats = syncStudyStats;
+  window.bindStudyRealtime = bindStudyRealtime;
   window.getDailyGoal = getDailyGoal;
   window.toast = toast;
 
@@ -4398,17 +4412,67 @@ function toggleAIChat() {
 
   async function syncStudyStats(){
     if(!(typeof auth!=='undefined' && auth && auth.currentUser && typeof db!=='undefined' && db)) return;
-    try{
+    if(studySyncPromise) return studySyncPromise;
+
+    studySyncPromise = (async()=>{
       const uid=auth.currentUser.uid;
-      const today=dateKey();
-      await db.ref(`users/${uid}`).update({
-        totalStudySeconds:safeNum(totalStudySeconds),
-        lastActiveAt:Date.now(),
-        [`dailyStudy/${today}`]:getTodaySeconds(),
-        [`dailySessions/${today}`]:getTodaySessions()
-      });
-      loadDashboardLeaderboards();
-    }catch(e){ console.warn('syncStudyStats',e); }
+      const ref=db.ref(`users/${uid}`);
+      const studyDeltas={...pendingStudyByDate};
+      const sessionDeltas={...pendingSessionsByDate};
+      const totalDelta=Object.values(studyDeltas).reduce((a,b)=>a+safeNum(b),0);
+      const dates=[...new Set([...Object.keys(studyDeltas),...Object.keys(sessionDeltas)])];
+      if(!totalDelta && !dates.length) return;
+
+      try{
+        // Transaction = cộng thêm delta, không ghi đè số đã được thiết bị khác cập nhật.
+        if(totalDelta){
+          await ref.child('totalStudySeconds').transaction(v=>safeNum(v)+totalDelta);
+        }
+        for(const day of dates){
+          const ds=safeNum(studyDeltas[day]);
+          const ss=safeNum(sessionDeltas[day]);
+          if(ds) await ref.child(`dailyStudy/${day}`).transaction(v=>safeNum(v)+ds);
+          if(ss) await ref.child(`dailySessions/${day}`).transaction(v=>safeNum(v)+ss);
+        }
+        dates.forEach(day=>{
+          delete pendingStudyByDate[day];
+          delete pendingSessionsByDate[day];
+        });
+        loadDashboardLeaderboards();
+      }catch(e){
+        console.warn('syncStudyStats transaction:',e);
+        // Giữ delta chưa đồng bộ lại để lần sau gửi tiếp, tránh mất thời gian.
+      }
+    })().finally(()=>{ studySyncPromise=null; });
+    return studySyncPromise;
+  }
+
+  // Khi đăng nhập trên thiết bị mới, lấy dữ liệu học từ Firebase và lắng nghe thay đổi
+  // từ thiết bị khác. Dữ liệu local lớn hơn vẫn được giữ lại nếu còn delta chưa sync.
+  function bindStudyRealtime(user){
+    if(studyCloudRef){ try{ studyCloudRef.off(); }catch(e){} studyCloudRef=null; }
+    if(!user || typeof db==='undefined' || !db) return;
+    studyCloudRef=db.ref(`users/${user.uid}`);
+    studyCloudRef.on('value',snap=>{
+      try{
+        ensureTodayStore();
+        const data=snap.val()||{};
+        const today=dateKey();
+        const cloudTotal=safeNum(data.totalStudySeconds);
+        const cloudToday=safeNum(deepGet(data,`dailyStudy/${today}`));
+        const cloudSessions=safeNum(deepGet(data,`dailySessions/${today}`));
+        const localToday=getTodaySeconds();
+        const localSessions=getTodaySessions();
+
+        if(cloudTotal>safeNum(totalStudySeconds)) totalStudySeconds=cloudTotal;
+        if(cloudToday>localToday) localStorage.setItem(STORE.todaySeconds,String(cloudToday));
+        if(cloudSessions>localSessions) localStorage.setItem(STORE.sessions,String(cloudSessions));
+
+        updateStudyDashboard();
+        updateRankUI();
+        if(typeof window.__checkStudyBreakMilestone==='function') window.__checkStudyBreakMilestone();
+      }catch(e){ console.warn('study realtime sync:',e); }
+    });
   }
 
   function updateStudyDashboard(){
@@ -4425,13 +4489,12 @@ function toggleAIChat() {
 
   function recordStudySecond(){
     ensureTodayStore();
-
-    // Single source of truth for study XP/time.
+    const today=dateKey();
     totalStudySeconds = safeNum(totalStudySeconds) + 1;
     const n = getTodaySeconds() + 1;
     localStorage.setItem(STORE.todaySeconds, String(n));
+    pendingStudyByDate[today] = safeNum(pendingStudyByDate[today]) + 1;
 
-    // Keep the UI realtime and sync to Firebase every 30 seconds.
     updateStudyDashboard();
     updateRankUI();
     if(n % 30 === 0) syncStudyStats();
@@ -4440,7 +4503,9 @@ function toggleAIChat() {
 
   function recordSession(){
     ensureTodayStore();
+    const today=dateKey();
     localStorage.setItem(STORE.sessions,String(getTodaySessions()+1));
+    pendingSessionsByDate[today] = safeNum(pendingSessionsByDate[today]) + 1;
     updateStudyDashboard();
     syncStudyStats();
   }
@@ -4459,10 +4524,18 @@ function toggleAIChat() {
       const yesterday = yesterdayKey();
 
       // Phục hồi tổng giờ học cho thẻ rank
-      if(data.totalStudySeconds){ 
-          totalStudySeconds = safeNum(data.totalStudySeconds); 
-          if(typeof updateRankUI === 'function') updateRankUI(); 
+      // Phục hồi dữ liệu từ Firebase nhưng không ghi đè phần local chưa đồng bộ.
+      if(data.totalStudySeconds){
+          totalStudySeconds = Math.max(safeNum(totalStudySeconds), safeNum(data.totalStudySeconds));
       }
+      const cloudToday = safeNum(deepGet(data,`dailyStudy/${dateKey()}`));
+      const localToday = getTodaySeconds();
+      if(cloudToday > localToday) localStorage.setItem(STORE.todaySeconds,String(cloudToday));
+      const cloudSessions = safeNum(deepGet(data,`dailySessions/${dateKey()}`));
+      const localSessions = getTodaySessions();
+      if(cloudSessions > localSessions) localStorage.setItem(STORE.sessions,String(cloudSessions));
+      bindStudyRealtime(user);
+      if(typeof updateRankUI === 'function') updateRankUI();
 
       // THUẬT TOÁN STREAK: CHỈ CẦN LOGIN
       if (lastLogin !== today) {
