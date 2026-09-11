@@ -1,22 +1,4 @@
-window.MathJax = {
-    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], packages: {'[+]': ['mhchem']} },
-    loader: { load: ['[tex]/mhchem'] }
-  };
-
-
-
-    tailwind.config = {
-        theme: {
-            extend: {
-                fontFamily: { sans: ['Be Vietnam Pro', 'Plus Jakarta Sans', 'sans-serif'], display: ['Sora', 'sans-serif'] },
-                colors: { primary: { 50: '#083344', 100: '#0e4a5c', 500: '#22D3EE', 600: '#0891B2', 700: '#0E7490' } },
-                boxShadow: { 'soft': '0 8px 24px -8px rgba(0,0,0,.55)', 'glow': '0 0 0 1px rgba(34,211,238,.25), 0 0 24px -4px rgba(34,211,238,.45)' }
-            }
-        }
-    }
-
-
-
+/* ===== ORIGINAL INLINE SCRIPT 1 ===== */
 const SHEET_CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQSOqdBnxsmKXQRqhkygde1R3vJdez_hFxt_9WRI7MEvhjOHD5iL7CkGzNZLYHFLqForH5FcVuZ3SRJ/pub?output=csv';
 const firebaseConfig={apiKey:'AIzaSyBrhQE0x-yB4MG64cGNaGzvU7H-UZmYLf8',authDomain:'thikscl.firebaseapp.com',databaseURL:'https://thikscl-default-rtdb.firebaseio.com',projectId:'thikscl'};
 let db=null,authUser=null,docsData=[];
@@ -51,6 +33,28 @@ function setActiveNav(navId) {
     }
 }
 
+function switchSection(id) { 
+    document.querySelectorAll('.app-section').forEach(x => x.classList.remove('active')); 
+    document.getElementById(id)?.classList.add('active'); 
+    window.scrollTo({top: 0}); 
+    
+    // Bản đồ định vị đang ở tab nào để bật đèn tab đó
+    const navMap = {
+        'sec-dashboard': 'nav-home',
+        'sec-library': 'nav-library',
+        'sec-teacher-config': 'nav-teacher',
+        'sec-teacher-key': 'nav-teacher',
+        'sec-chemmaker': 'nav-chemmaker',
+        'sec-exam-list': 'nav-exam',
+        'sec-student-join': 'nav-exam',
+        'sec-taking-exam': 'nav-exam',
+        'sec-leaderboard': 'nav-exam',
+        'sec-community': 'nav-community',
+        'sec-toolkit': 'nav-toolkit',
+        'sec-stats': 'nav-stats'
+    };
+    setActiveNav(navMap[id]);
+}
 function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function norm(v){return String(v??'').trim().toLowerCase().replace(/,/g,'.').replace(/\s+/g,' ');}
 function getOriginalUrl(u) {
@@ -159,6 +163,9 @@ function openProfile() {
     document.getElementById('profile-study-time').innerText = totalHours + 'h';
 
     // Tính danh hiệu
+    // FIX: đảm bảo đã kiểm tra/reset đúng ngày (lastStudyDate) trước khi đọc số giây học hôm nay,
+    // tránh hiển thị nhầm dữ liệu của ngày hôm trước khi mở hồ sơ sau nửa đêm.
+    if (typeof window.ensureTodayStore === 'function') window.ensureTodayStore();
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     const dailyHours = Math.floor(dailySeconds / 3600);
     document.getElementById('profile-rank-icon').innerText = '💧';
@@ -212,14 +219,53 @@ function checkAndUpdateStreak(user) {
         // In ra Hồ sơ
         document.getElementById('profile-streak').innerText = streak;
         
-        // Phục hồi Tổng thời gian học Pomodoro từ những ngày trước.
-        // Biến này chỉ dùng cho số liệu tích lũy; danh hiệu được tính theo ngày trong updateRankUI().
+        // Khôi phục dữ liệu học từ Firebase mà không ghi đè phần local đang chờ sync.
         if(data.totalStudySeconds) {
-            totalStudySeconds = safeNum(data.totalStudySeconds);
-            updateRankUI();
+            totalStudySeconds = Math.max(safeNum(totalStudySeconds), safeNum(data.totalStudySeconds));
         }
+        const cloudTodayStudy = Number(data?.dailyStudy?.[todayStr]) || 0;
+        const localTodayStudy = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
+        if(cloudTodayStudy > localTodayStudy) localStorage.setItem('htvvm.todayStudySeconds', String(cloudTodayStudy));
+        if(typeof window.bindStudyRealtime === 'function') window.bindStudyRealtime(user);
+        if(typeof updateRankUI === 'function') updateRankUI();
     });
 }
+// ===== REALTIME PRESENCE: SỐ NGƯỜI ĐANG ONLINE =====
+let __presenceRef = null;
+let __presenceConnectedRef = null;
+let __presenceAllRef = null;
+function initOnlinePresence(user){
+  try{
+    if(!window.__firebaseReady || !window.db || !user?.uid) return;
+    clearOnlinePresence();
+    const connectedRef = window.db.ref('.info/connected');
+    const ref = window.db.ref('presence/'+user.uid);
+    const allRef = window.db.ref('presence');
+    __presenceRef = ref; __presenceConnectedRef = connectedRef; __presenceAllRef = allRef;
+    const markOnline = snap => {
+      if(snap.val() !== true) return;
+      const payload = {uid:user.uid,name:user.displayName||user.email?.split('@')[0]||'Học viên',online:true,lastSeen:firebase.database.ServerValue.TIMESTAMP};
+      ref.onDisconnect().remove().then(()=>ref.set(payload)).catch(()=>ref.set(payload));
+    };
+    connectedRef.on('value',markOnline);
+    allRef.on('value',snap=>{
+      const count = snap.exists() ? Object.keys(snap.val()||{}).length : 0;
+      const el=document.getElementById('dashboard-online-count');
+      const st=document.getElementById('dashboard-online-status');
+      if(el) el.textContent=String(count);
+      if(st) st.textContent=count<=1?'Bạn đang học một mình lúc này.':`Có ${count} người đang học cùng trung tâm lúc này.`;
+    });
+  }catch(e){ console.warn('Realtime presence:',e); }
+}
+function clearOnlinePresence(){
+  try{
+    if(__presenceConnectedRef && typeof __presenceConnectedRef.off==='function') __presenceConnectedRef.off();
+    if(__presenceAllRef && typeof __presenceAllRef.off==='function') __presenceAllRef.off();
+    if(__presenceRef){ __presenceRef.onDisconnect().cancel().catch(()=>{}); __presenceRef.remove().catch(()=>{}); }
+  }catch(_){}
+  __presenceRef=null; __presenceConnectedRef=null; __presenceAllRef=null;
+}
+
 // KHỞI TẠO FIREBASE & LẮNG NGHE ĐĂNG NHẬP
 function initFirebase() {
     // Tránh khởi tạo lặp nếu script/DOM gọi lại hàm.
@@ -251,6 +297,7 @@ function initFirebase() {
         const userName = document.getElementById('user-display-name');
 
         if (user) {
+            initOnlinePresence(user);
             if (typeof initCalendarEventsForUser === 'function') initCalendarEventsForUser(user);
             // Đã có acc: Giấu Welcome, Login, Mở Thư viện
             if(welcome) welcome.classList.add('hidden');
@@ -295,6 +342,11 @@ function initFirebase() {
             }
             
         } else {
+            clearOnlinePresence();
+            const onlineCountEl = document.getElementById('dashboard-online-count');
+            const onlineStatusEl = document.getElementById('dashboard-online-status');
+            if (onlineCountEl) onlineCountEl.textContent = '0';
+            if (onlineStatusEl) onlineStatusEl.textContent = 'Hãy đăng nhập để tham gia trung tâm.';
             if (typeof initCalendarEventsForUser === 'function') initCalendarEventsForUser(null);
             // Chưa đăng nhập: đảm bảo dữ liệu chưa từng được tải/hiển thị
             window.__docsLoaded = false;
@@ -441,6 +493,9 @@ async function openStats() {
     }
 }
 
+window.addEventListener('pagehide',()=>{ try{ syncStudyStats(); }catch(e){} });
+window.addEventListener('beforeunload',()=>{ try{ syncStudyStats(); }catch(e){} });
+
 document.addEventListener("DOMContentLoaded", () => { 
     initFirebase(); 
     // loadDocuments() KHÔNG còn được gọi ở đây nữa.
@@ -450,7 +505,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 function loadDocuments(){Papa.parse(SHEET_CSV_URL,{download:true,header:true,complete:r=>{docsData=r.data; renderDocs(docsData);}});}
 
-// --- Document search and filtering ---
+// --- THUẬT TOÁN TÌM KIẾM & LỌC TÀI LIỆU VIP ---
 let currentFilter = 'all';
 // HÀM CHUYỂN ĐỔI QUA LẠI GIỮA CÁC TAB (TRANG CHỦ, THƯ VIỆN, GÓC HỌC TẬP...)
 function showSection(sectionId) {
@@ -468,15 +523,61 @@ function showSection(sectionId) {
     }
 }
 // Hàm xử lý khi bấm nút Lọc
+function filterDocs(category) {
+    currentFilter = category;
+    
+    // Đổi màu nút được chọn
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.innerText.trim() === category || (category === 'all' && btn.innerText.trim() === 'Tất cả')) {
+            btn.classList.remove('bg-slate-100', 'text-slate-600');
+            btn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
+        } else {
+            btn.classList.add('bg-slate-100', 'text-slate-600');
+            btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+        }
+    });
+    
+    applyFilters();
+}
 
 // Hàm kết hợp bộ lọc và thanh tìm kiếm (Đã nâng cấp chống sai hoa/thường)
 // Hàm kết hợp bộ lọc (Đã nâng cấp AI Tìm Kiếm Mờ)
-
+function applyFilters() {
+    const k = document.getElementById('searchInput').value.toLowerCase();
+    
+    const filtered = docsData.filter(d => {
+        // Lọc theo tên tìm kiếm
+        const matchSearch = String(d.title || '').toLowerCase().includes(k);
+        
+        // Nhận diện mọi tên cột
+        const rawCategory = d.chapter || d.mon || d.Mon || d['Môn'] || d.category || d.chude || '';
+        let docCategory = String(rawCategory).trim().toLowerCase();
+        let filterCategory = currentFilter.trim().toLowerCase();
+        
+        // Xử lý thông minh: Đồng bộ lỗi gõ tiếng Việt (Hoá vs Hóa)
+        docCategory = docCategory.replace(/hoá/g, 'hóa');
+        filterCategory = filterCategory.replace(/hoá/g, 'hóa');
+        
+        // Xử lý thông minh: Gom chung Anh và IELTS
+        if (filterCategory === 'anh' && (docCategory.includes('ielts') || docCategory.includes('anh'))) {
+            docCategory = 'anh';
+        }
+        
+        // THUẬT TOÁN TÌM MỜ (Fuzzy Search): 
+        // VD: File sheet ghi "SINH HỌC(tổng hợp)" thì vẫn nhận diện được vì chứa chữ "sinh học"
+        // Hoặc file sheet ghi "Tài Liệu môn Văn" thì vẫn lọt vào tag "Văn"
+        const matchCategory = currentFilter === 'all' || docCategory.includes(filterCategory) || filterCategory.includes(docCategory);
+        
+        return matchSearch && matchCategory;
+    });
+    
+    renderDocs(filtered);
+}
 // Hàm render vẽ Card chuẩn Design
-// --- Document search and filtering (CHỐNG LỖI TÊN CỘT) ---
+// --- THUẬT TOÁN TÌM KIẾM & LỌC TÀI LIỆU VIP (CHỐNG LỖI TÊN CỘT) ---
 
 
-// --- Document filtering ---
+// --- BỘ LỌC TÀI LIỆU BẤT BẠI (CHỐNG MỌI LỖI EXCEL & CODE) ---
 
 
 function filterDocs(category) {
@@ -570,7 +671,7 @@ function buildTeacherSheet(){
     switchSection('sec-teacher-key');
 }
 
-// Answer sheet
+// Giao diện Form đáp án VIP
 function sheetHTML(c, isTeacher) {
     let h = '', n = 1;
     if (c.abcd) {
@@ -646,7 +747,7 @@ async function createRoomToFirebase(){
     }
 }
 
-// Exam room list
+// Giao diện Danh sách phòng VIP
 async function loadExamList() {
     switchSection('sec-exam-list'); 
     const c = document.getElementById('live-exams-container'); 
@@ -729,7 +830,7 @@ async function submitExam(){
     }
 }
 
-// Top 10 leaderboard
+// Bảng Vinh Danh VIP TOP 10 an toàn tuyệt đối
 async function viewLeaderboard(id) {
     switchSection('sec-leaderboard'); 
     const c = document.getElementById('lb-container');
@@ -1260,6 +1361,11 @@ let currentPomoMode = 'pomo';
 
 // Biến lưu thời gian cày cuốc (Tích lũy kinh nghiệm)
 let totalStudySeconds = 0;
+// Đồng bộ thời gian học giữa nhiều thiết bị mà không ghi đè lẫn nhau.
+let pendingStudyByDate = {};
+let pendingSessionsByDate = {};
+let studySyncPromise = null;
+let studyCloudRef = null;
 let fiveHourAlerted = false;
 let continuousStudySeconds = 0;
 
@@ -1328,6 +1434,10 @@ function enableInputs() {
 // totalStudySeconds vẫn giữ nguyên để phục vụ Tổng thời gian học ở hồ sơ/thống kê.
 // Hàm cập nhật Giao diện Thăng cấp (Bản hoàn chỉnh không bị reset)
 function updateRankUI() {
+    // FIX: kiểm tra/reset theo ngày (lastStudyDate) TRƯỚC khi đọc số giây học hôm nay.
+    // Trước đây hàm này đọc thẳng localStorage nên khi tab bị treo qua nửa đêm mà
+    // không có hành động nào khác, danh hiệu/thanh tiến trình vẫn hiển thị số liệu cũ.
+    if (typeof window.ensureTodayStore === 'function') window.ensureTodayStore();
     // Lấy trực tiếp từ bộ nhớ cục bộ
     const dailySeconds = Number(localStorage.getItem('htvvm.todayStudySeconds')) || 0;
     let h = Math.floor(dailySeconds / 3600);
@@ -1382,103 +1492,6 @@ function updateRankUI() {
     if(progress) progress.style.width = percent + '%';
 }
 
-function togglePomodoro() {
-    const btn = document.getElementById('btn-pomo-action');
-    if (!btn) return;
-
-    if (isPomoRunning) {
-        clearInterval(pomoInterval);
-        pomoInterval = null;
-        isPomoRunning = false;
-        recordSession();
-        btn.innerText = 'TIẾP TỤC';
-        btn.className = 'bg-amber-500 hover:bg-amber-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md w-full';
-        enableInputs();
-        syncFocusOverlay();
-        return;
-    }
-
-    // The selected preset or edited input already controls pomoSeconds.
-    // Do not call userCustomTime() here because it would convert every preset
-    // (25/5/15 minutes) into the custom mode on start/resume.
-    if (!Number.isFinite(pomoSeconds) || pomoSeconds <= 0) {
-        return alert('Ní phải nhập thời gian lớn hơn 0 nghen!');
-    }
-
-    ensureTodayStore();
-    isPomoRunning = true;
-    continuousStudySeconds = 0;
-    fiveHourAlerted = false;
-    disableInputs();
-
-    btn.innerText = 'DỪNG LẠI';
-    btn.className = 'bg-red-500 hover:bg-red-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-inner w-full';
-    syncFocusOverlay();
-
-    clearInterval(pomoInterval);
-    pomoInterval = setInterval(() => {
-        if (!isPomoRunning) return;
-
-        if (pomoSeconds > 0) {
-            pomoSeconds--;
-
-            // One timer tick = exactly one study second.
-            if (currentPomoMode === 'pomo' || currentPomoMode === 'custom') {
-                recordStudySecond();
-                continuousStudySeconds = safeNum(continuousStudySeconds) + 1;
-            }
-
-            updatePomoUI();
-            updateRankUI();
-            syncFocusOverlay();
-
-        } else {
-            clearInterval(pomoInterval);
-            pomoInterval = null;
-            isPomoRunning = false;
-            enableInputs();
-            recordSession();
-            syncFocusOverlay();
-
-            btn.innerText = 'BẮT ĐẦU';
-            btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
-            alert('⏰ Reng reng reng! Hết giờ rồi thằng em ơi!');
-        }
-    }, 1000);
-}
-
-function resetPomodoro() {
-    const wasRunning = isPomoRunning;
-    clearInterval(pomoInterval);
-    pomoInterval = null;
-    isPomoRunning = false;
-    continuousStudySeconds = 0;
-    enableInputs();
-
-    if (currentPomoMode === 'pomo') {
-        pomoSeconds = 25 * 60;
-    } else if (currentPomoMode === 'short') {
-        pomoSeconds = 5 * 60;
-    } else if (currentPomoMode === 'long') {
-        pomoSeconds = 15 * 60;
-    } else {
-        // Custom mode resets to the standard Pomodoro length, matching the old UI.
-        pomoSeconds = 25 * 60;
-    }
-
-    updatePomoUI();
-    updateRankUI();
-    syncFocusOverlay();
-
-    const btn = document.getElementById('btn-pomo-action');
-    if (btn) {
-        btn.innerText = 'BẮT ĐẦU';
-        btn.className = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full';
-    }
-
-    // Resetting after a running session ends that session, without adding time.
-    if (wasRunning) recordSession();
-}
 // ==========================================
 // TÍNH NĂNG VẼ ĐỒ THỊ HÀM SỐ
 // ==========================================
@@ -1587,12 +1600,9 @@ function toggleAIChat() {
     }
 }
 
-
-
-
-
+/* ===== ORIGINAL INLINE SCRIPT 2 ===== */
 /* ==========================================
-   HTVVM application services
+   HTVVM OPTIMIZATION LAYER v2
    - Focus mode / anti-distraction
    - Daily study goal + sessions
    - Autosave exam drafts
@@ -1627,50 +1637,43 @@ function toggleAIChat() {
   function storeSet(key, value){ try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) { console.warn('localStorage unavailable',e); } }
   function toast(msg, ms=2200){ const el=document.getElementById('study-toast'); if(!el) return; el.textContent=msg; el.classList.remove('hidden'); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.add('hidden'),ms); }
 
-  let lastKnownStudyDay = localStorage.getItem(STORE.day) || dateKey();
-
+  // lastStudyDate tương đương với STORE.day ('htvvm.studyDay'): ngày cuối cùng đã cập nhật
+  // bộ đếm giờ học. So sánh với ngày hiện tại (local time) mỗi lần ensureTodayStore() chạy.
   function ensureTodayStore(){
     const today=dateKey();
-    const storedDay=localStorage.getItem(STORE.day);
-    if(storedDay!==today){
-      const previousSeconds=safeNum(localStorage.getItem(STORE.todaySeconds));
-      const previousSessions=safeNum(localStorage.getItem(STORE.sessions));
-
-      // Chuyển sang ngày mới: thời gian/ngày + số phiên của NGÀY HÔM NAY
-      // luôn bắt đầu từ 0, kể cả khi người dùng không reload trang lúc 0:00.
+    if(localStorage.getItem(STORE.day)!==today){
+      // Sang ngày mới (kể cả trường hợp không mở web nhiều ngày liền, vd lần cuối là 28/08,
+      // mở lại vào 30/08): CHỈ reset bộ đếm của "hôm nay" về 0, không đụng tới lịch sử
+      // các ngày trước (lịch sử được lưu riêng theo key dailyStudy/{ngày} trên Firebase).
       localStorage.setItem(STORE.day,today);
       localStorage.setItem(STORE.todaySeconds,'0');
       localStorage.setItem(STORE.sessions,'0');
-      lastKnownStudyDay=today;
-
-      // Lưu snapshot ngày cũ nếu người dùng đang đăng nhập.
-      const u = window.auth?.currentUser || (typeof auth!=='undefined' ? auth?.currentUser : null);
-      const database = window.db || (typeof db!=='undefined' ? db : null);
-      if(u && database && storedDay){
-        database.ref('users/'+u.uid).update({
-          [`dailyStudy/${storedDay}`]: previousSeconds,
-          [`dailySessions/${storedDay}`]: previousSessions
-        }).catch(err=>console.warn('daily rollover sync:',err));
-      }
-
+      // Sang ngày mới: XP/danh hiệu + toàn bộ UI liên quan phải quay về 0 ngay lập tức.
       if(typeof updateRankUI==='function') updateRankUI();
       if(typeof updateStudyDashboard==='function') updateStudyDashboard();
-      if(typeof loadDashboardLeaderboards==='function') loadDashboardLeaderboards();
-      return {changed:true, previousDay:storedDay, today};
     }
-    lastKnownStudyDay=today;
-    return {changed:false, today};
   }
-
-  // Đồng hồ kiểm tra ngày độc lập với Pomodoro. Vì vậy để web mở qua 0:00
-  // là đủ; không cần reload trang để XP/danh hiệu trong ngày về 0.
-  let dailyRolloverHeartbeat = setInterval(()=>{
-    try{ ensureTodayStore(); }catch(err){ console.warn('daily rollover:',err); }
-  },1000);
   function getTodaySeconds(){ ensureTodayStore(); return safeNum(localStorage.getItem(STORE.todaySeconds)); }
   function getTodaySessions(){ ensureTodayStore(); return safeNum(localStorage.getItem(STORE.sessions)); }
   function getDailyGoal(){ const n=safeNum(localStorage.getItem(STORE.goal),60); return n>0?n:60; }
   window.setDailyGoal=function(min){ const n=Math.max(5,Math.min(600,safeNum(min,60))); localStorage.setItem(STORE.goal,String(n)); updateStudyDashboard(); toast(`🎯 Mục tiêu hôm nay: ${n} phút`); };
+
+  // ------------------------------------------------------------------
+  // FIX QUAN TRỌNG: các hàm ensureTodayStore/updateStudyDashboard/syncStudyStats/
+  // getDailyGoal/toast ở trên chỉ tồn tại BÊN TRONG closure này. Bộ đếm Pomodoro
+  // đang thực sự chạy (định nghĩa ở cuối file, phần "window.togglePomodoro") gọi các
+  // hàm này qua kiểm tra `typeof ensureTodayStore === 'function'` ở phạm vi global —
+  // do KHÔNG được export nên các kiểm tra đó luôn là false và logic reset theo ngày
+  // KHÔNG BAO GIỜ chạy trong lúc học thật (đây chính là nguyên nhân gây lỗi cộng dồn
+  // thời gian học sang ngày mới). Export ra window để các module khác gọi đúng logic.
+  window.ensureTodayStore = ensureTodayStore;
+  window.getTodayStudySeconds = getTodaySeconds;
+  window.getTodaySessions = getTodaySessions;
+  window.updateStudyDashboard = updateStudyDashboard;
+  window.syncStudyStats = syncStudyStats;
+  window.bindStudyRealtime = bindStudyRealtime;
+  window.getDailyGoal = getDailyGoal;
+  window.toast = toast;
 
   let dashboardLeaderboardRefs = {study:null, streak:null};
   function formatStudyTime(sec){
@@ -1754,17 +1757,67 @@ function toggleAIChat() {
 
   async function syncStudyStats(){
     if(!(typeof auth!=='undefined' && auth && auth.currentUser && typeof db!=='undefined' && db)) return;
-    try{
+    if(studySyncPromise) return studySyncPromise;
+
+    studySyncPromise = (async()=>{
       const uid=auth.currentUser.uid;
-      const today=dateKey();
-      await db.ref(`users/${uid}`).update({
-        totalStudySeconds:safeNum(totalStudySeconds),
-        lastActiveAt:Date.now(),
-        [`dailyStudy/${today}`]:getTodaySeconds(),
-        [`dailySessions/${today}`]:getTodaySessions()
-      });
-      loadDashboardLeaderboards();
-    }catch(e){ console.warn('syncStudyStats',e); }
+      const ref=db.ref(`users/${uid}`);
+      const studyDeltas={...pendingStudyByDate};
+      const sessionDeltas={...pendingSessionsByDate};
+      const totalDelta=Object.values(studyDeltas).reduce((a,b)=>a+safeNum(b),0);
+      const dates=[...new Set([...Object.keys(studyDeltas),...Object.keys(sessionDeltas)])];
+      if(!totalDelta && !dates.length) return;
+
+      try{
+        // Transaction = cộng thêm delta, không ghi đè số đã được thiết bị khác cập nhật.
+        if(totalDelta){
+          await ref.child('totalStudySeconds').transaction(v=>safeNum(v)+totalDelta);
+        }
+        for(const day of dates){
+          const ds=safeNum(studyDeltas[day]);
+          const ss=safeNum(sessionDeltas[day]);
+          if(ds) await ref.child(`dailyStudy/${day}`).transaction(v=>safeNum(v)+ds);
+          if(ss) await ref.child(`dailySessions/${day}`).transaction(v=>safeNum(v)+ss);
+        }
+        dates.forEach(day=>{
+          delete pendingStudyByDate[day];
+          delete pendingSessionsByDate[day];
+        });
+        loadDashboardLeaderboards();
+      }catch(e){
+        console.warn('syncStudyStats transaction:',e);
+        // Giữ delta chưa đồng bộ lại để lần sau gửi tiếp, tránh mất thời gian.
+      }
+    })().finally(()=>{ studySyncPromise=null; });
+    return studySyncPromise;
+  }
+
+  // Khi đăng nhập trên thiết bị mới, lấy dữ liệu học từ Firebase và lắng nghe thay đổi
+  // từ thiết bị khác. Dữ liệu local lớn hơn vẫn được giữ lại nếu còn delta chưa sync.
+  function bindStudyRealtime(user){
+    if(studyCloudRef){ try{ studyCloudRef.off(); }catch(e){} studyCloudRef=null; }
+    if(!user || typeof db==='undefined' || !db) return;
+    studyCloudRef=db.ref(`users/${user.uid}`);
+    studyCloudRef.on('value',snap=>{
+      try{
+        ensureTodayStore();
+        const data=snap.val()||{};
+        const today=dateKey();
+        const cloudTotal=safeNum(data.totalStudySeconds);
+        const cloudToday=safeNum(deepGet(data,`dailyStudy/${today}`));
+        const cloudSessions=safeNum(deepGet(data,`dailySessions/${today}`));
+        const localToday=getTodaySeconds();
+        const localSessions=getTodaySessions();
+
+        if(cloudTotal>safeNum(totalStudySeconds)) totalStudySeconds=cloudTotal;
+        if(cloudToday>localToday) localStorage.setItem(STORE.todaySeconds,String(cloudToday));
+        if(cloudSessions>localSessions) localStorage.setItem(STORE.sessions,String(cloudSessions));
+
+        updateStudyDashboard();
+        updateRankUI();
+        if(typeof window.__checkStudyBreakMilestone==='function') window.__checkStudyBreakMilestone();
+      }catch(e){ console.warn('study realtime sync:',e); }
+    });
   }
 
   function updateStudyDashboard(){
@@ -1779,24 +1832,11 @@ function toggleAIChat() {
     syncFocusOverlay();
   }
 
-  function recordStudySecond(){
-    ensureTodayStore();
-
-    // Single source of truth for study XP/time.
-    totalStudySeconds = safeNum(totalStudySeconds) + 1;
-    const n = getTodaySeconds() + 1;
-    localStorage.setItem(STORE.todaySeconds, String(n));
-
-    // Keep the UI realtime and sync to Firebase every 30 seconds.
-    updateStudyDashboard();
-    updateRankUI();
-    if(n % 30 === 0) syncStudyStats();
-    if(n / 60 === getDailyGoal()) toast('🎉 Hoàn thành mục tiêu học hôm nay!');
-  }
-
   function recordSession(){
     ensureTodayStore();
+    const today=dateKey();
     localStorage.setItem(STORE.sessions,String(getTodaySessions()+1));
+    pendingSessionsByDate[today] = safeNum(pendingSessionsByDate[today]) + 1;
     updateStudyDashboard();
     syncStudyStats();
   }
@@ -1815,10 +1855,18 @@ function toggleAIChat() {
       const yesterday = yesterdayKey();
 
       // Phục hồi tổng giờ học cho thẻ rank
-      if(data.totalStudySeconds){ 
-          totalStudySeconds = safeNum(data.totalStudySeconds); 
-          if(typeof updateRankUI === 'function') updateRankUI(); 
+      // Phục hồi dữ liệu từ Firebase nhưng không ghi đè phần local chưa đồng bộ.
+      if(data.totalStudySeconds){
+          totalStudySeconds = Math.max(safeNum(totalStudySeconds), safeNum(data.totalStudySeconds));
       }
+      const cloudToday = safeNum(deepGet(data,`dailyStudy/${dateKey()}`));
+      const localToday = getTodaySeconds();
+      if(cloudToday > localToday) localStorage.setItem(STORE.todaySeconds,String(cloudToday));
+      const cloudSessions = safeNum(deepGet(data,`dailySessions/${dateKey()}`));
+      const localSessions = getTodaySessions();
+      if(cloudSessions > localSessions) localStorage.setItem(STORE.sessions,String(cloudSessions));
+      bindStudyRealtime(user);
+      if(typeof updateRankUI === 'function') updateRankUI();
 
       // THUẬT TOÁN STREAK: CHỈ CẦN LOGIN
       if (lastLogin !== today) {
@@ -1905,6 +1953,11 @@ function toggleAIChat() {
       else document.querySelector(`input[name="${CSS.escape(q)}"][value="${CSS.escape(v)}"]`)?.click();
     });
   };
+  const originalCreateRoom=window.createRoomToFirebase;
+  window.createRoomToFirebase=async function(){
+    return originalCreateRoom();
+  };
+
   const originalStartExam=window.startExam;
   window.startExam=async function(){ await originalStartExam(); setTimeout(restoreDraft,150); window._examStartedAt=Date.now(); };
   const originalSaveAns=window.saveAns;
@@ -1933,7 +1986,10 @@ function toggleAIChat() {
   window.toggleFocusMode=function(){
     focusMode=!focusMode; document.body.classList.toggle('focus-lock',focusMode); const ov=document.getElementById('focus-overlay'); if(ov) ov.classList.toggle('hidden',!focusMode); if(focusMode) syncFocusOverlay();
   };
-
+  window.syncFocusOverlay=function(){
+    const c=document.getElementById('focus-clock'); if(c) c.textContent=`${pad(Math.floor((typeof pomoSeconds!=='undefined'?pomoSeconds:0)/60))}:${pad((typeof pomoSeconds!=='undefined'?pomoSeconds:0)%60)}`;
+    const st=document.getElementById('focus-status'); if(st) st.textContent=(typeof isPomoRunning!=='undefined'&&isPomoRunning)?'Đang tập trung — không mở tab linh tinh nhé.':'Đang tạm dừng — bấm ▶ để tiếp tục.';
+  };
   document.addEventListener('keydown',e=>{ if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='f'){e.preventDefault();toggleFocusMode();} if(e.key==='Escape'&&focusMode) toggleFocusMode(); });
 
   // Chống xao nhãng: nếu đổi tab khi timer đang chạy, tự pause và ghi nhận sự kiện.
@@ -2002,12 +2058,24 @@ function toggleAIChat() {
     if(typeof auth!=='undefined' && auth) auth.onAuthStateChanged(u=>{ if(u) loadRole(u); });
     const input=document.getElementById('searchInput'); if(input) input.setAttribute('autocomplete','off');
   });
+
+  // FIX: tự động phát hiện sang ngày mới KỂ CẢ KHI người dùng không thao tác gì
+  // (không bấm Pomodoro, không F5 lại trang) — ví dụ mở web từ tối hôm trước rồi để
+  // đó qua đêm. Không dựa vào "24h kể từ lúc mở web", mà so sánh ngày thực tế (YYYY-MM-DD)
+  // theo local time mỗi 20 giây một lần và mỗi khi tab được focus lại.
+  setInterval(()=>{ ensureTodayStore(); updateStudyDashboard(); }, 20000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible'){
+      ensureTodayStore();
+      updateStudyDashboard();
+      updateRankUI();
+    }
+  });
 })();
 
-
-
+/* ===== ORIGINAL INLINE SCRIPT 3 ===== */
 /* ============================================================
-   Exam room services
+   HTVVM ROOM SYSTEM v2
    - Ai đăng nhập cũng được tạo phòng
    - Tên đề KHÔNG dùng làm định danh
    - Mã phòng 6 ký tự là định danh duy nhất
@@ -2262,8 +2330,7 @@ function toggleAIChat() {
   if(window.auth) window.auth.onAuthStateChanged(()=>setTimeout(handleRoomRoute,400));
 })();
 
-
-
+/* ===== ORIGINAL INLINE SCRIPT 4 ===== */
 (function(){
   const ids=['numABCD','numTF','numShort'];
   function updateTotal(){
@@ -2276,25 +2343,47 @@ function toggleAIChat() {
 // ==========================================
 // 💡 HỆ THỐNG CÔNG TẮC SÁNG / TỐI (DARK MODE TOGGLE)
 // ==========================================
-
-function applyTheme(theme) {
-  const dark = theme !== 'light';
-  document.documentElement.classList.toggle('htvvm-dark-mode', dark);
-  document.body.classList.toggle('htvvm-dark-mode', dark);
-  const button = document.getElementById('theme-toggle-btn');
-  if (button) button.innerText = dark ? '☀️' : '🌙';
-  localStorage.setItem('htvvm_theme', dark ? 'dark' : 'light');
-}
-
 function toggleTheme() {
-  const current = localStorage.getItem('htvvm_theme') || 'dark';
-  applyTheme(current === 'dark' ? 'light' : 'dark');
+    const darkStyle = document.getElementById('htvvm-dark-theme');
+    const btn = document.getElementById('theme-toggle-btn');
+    
+    // Nếu CSS Dark Mode đang bị TẮT (Nghĩa là web đang Sáng) -> Bật nó lên
+    if (darkStyle.disabled) {
+        darkStyle.disabled = false;
+        document.body.classList.add('htvvm-dark-mode');
+        btn.innerText = '☀️';
+        localStorage.setItem('htvvm_theme', 'dark');
+    } else {
+        darkStyle.disabled = true;
+        document.body.classList.remove('htvvm-dark-mode');
+        btn.innerText = '🌙';
+        localStorage.setItem('htvvm_theme', 'light');
+    }
 }
 
+// 🧠 Tự động đọc trí nhớ xem lần trước người dùng đang xài Sáng hay Tối
 document.addEventListener('DOMContentLoaded', () => {
-  applyTheme(localStorage.getItem('htvvm_theme') || 'dark');
+    const darkStyle = document.getElementById('htvvm-dark-theme');
+    const btn = document.getElementById('theme-toggle-btn');
+    const savedTheme = localStorage.getItem('htvvm_theme');
+    
+    // Thêm vòng bảo vệ: Nếu tìm thấy thẻ style thì mới chạy
+    if (darkStyle) {
+        if (savedTheme === 'light') {
+            // Web sáng
+            darkStyle.disabled = true;
+            document.body.classList.remove('htvvm-dark-mode');
+            if (btn) btn.innerText = '🌙';
+        } else {
+            // Web tối (Mặc định nếu chưa chọn)
+            darkStyle.disabled = false;
+            document.body.classList.add('htvvm-dark-mode');
+            if (btn) btn.innerText = '☀️';
+        }
+    } else {
+        console.warn("⚠️ Không tìm thấy thẻ <style id='htvvm-dark-theme'> trên đầu file!");
+    }
 });
-
 // ==========================================
 // 📹 HỆ THỐNG PHÒNG HỌC ẢO (JITSI MEET INTEGRATION)
 // ==========================================
@@ -2362,8 +2451,7 @@ function joinStudyRoom() {
     });
 }
 
-
-
+/* ===== ORIGINAL INLINE SCRIPT 5 ===== */
 /* ==========================================================================
    LỚP CHỐNG "XEM TRỘM" (DETERRENT) — không phải bảo mật tuyệt đối!
    Trình duyệt LUÔN LUÔN phải tải HTML/CSS/JS xuống máy người dùng để chạy
@@ -2391,8 +2479,7 @@ function joinStudyRoom() {
   });
 })();
 
-
-
+/* ===== ORIGINAL INLINE SCRIPT 6 ===== */
 let calendarCursor = new Date();
 let calendarEvents = {};
 let calendarEventsRef = null;
@@ -2619,35 +2706,13 @@ document.addEventListener('DOMContentLoaded',()=>{
 window.addEventListener('beforeunload',()=>{try{calendarEventsRef?.off();}catch{}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCalendar();});
 
-
-
+/* ===== ORIGINAL INLINE SCRIPT 7 ===== */
 (function(){
   const src=()=>document.getElementById('web-time-counter'), dst=()=>document.getElementById('dashboard-web-time');
   setInterval(()=>{ const a=src(),b=dst(); if(a&&b) b.textContent=a.textContent; },500);
-
-  // Mirror "Mục tiêu hôm nay" (sec-study) lên khối tóm tắt của Dashboard — chỉ đọc, không đổi logic gốc.
-  function mirrorText(fromId,toId,transform){
-    const a=document.getElementById(fromId), b=document.getElementById(toId);
-    if(a&&b) b.textContent = transform ? transform(a.textContent) : a.textContent;
-  }
-  setInterval(()=>{
-    const nameEl=document.getElementById('user-display-name');
-    const greetEl=document.getElementById('dashboard-greeting');
-    if(nameEl && greetEl){
-      const name=nameEl.textContent||'';
-      greetEl.textContent = (name && name!=='Đang kết nối...') ? `Xin chào, ${name} 👋` : 'Xin chào 👋';
-    }
-    mirrorText('profile-streak','dashboard-streak');
-    mirrorText('today-goal-label','dashboard-goal-label');
-    mirrorText('today-goal-text','dashboard-goal-text');
-    mirrorText('today-session-count','dashboard-session-count');
-    const p=document.getElementById('today-goal-progress'), dp=document.getElementById('dashboard-goal-progress');
-    if(p&&dp) dp.style.width = p.style.width || '0%';
-  },500);
 })();
 
-
-
+/* ===== ORIGINAL INLINE SCRIPT 8 ===== */
 (function(){
   let communityFeedRef=null;
   let communityBound=false;
@@ -2866,9 +2931,139 @@ window.uploadCustomAvatar = function(e) {
     e.target.value = ''; // Reset khung chọn file
 };
 
+/* ===== ORIGINAL INLINE SCRIPT 9 ===== */
+(() => {
+  const BREAK_STORE = 'htvvm.studyBreak.v2';
+  const DEFAULT_BREAK_IMG = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#14233d"/><stop offset="1" stop-color="#281d4b"/></linearGradient></defs><rect width="1200" height="500" fill="url(#g)"/><circle cx="950" cy="120" r="180" fill="#22d3ee" opacity=".12"/><circle cx="240" cy="410" r="220" fill="#8b5cf6" opacity=".12"/><text x="70" y="245" fill="#f8fafc" font-family="Arial,sans-serif" font-size="46" font-weight="900">Nghỉ một chút • rồi chiến đấu tiếp</text><text x="72" y="300" fill="#93c5fd" font-family="Arial,sans-serif" font-size="24">Your brain needs recovery to learn well.</text></svg>`);
+  const quotes = [
+    {
+      text:'“Bạn phải tìm ra điều mình yêu thích — và cách duy nhất để làm nên công việc tuyệt vời là yêu điều bạn làm.”',
+      author:'Steve Jobs',
+      source:'Stanford University — Commencement Address, 2005',
+      url:'https://news.stanford.edu/stories/2005/06/youve-got-find-love-jobs-says'
+    },
+    {
+      text:'“Lạc quan là niềm tin dẫn tới thành tựu; không có hy vọng thì không thể làm được gì.”',
+      author:'Helen Keller',
+      source:'American Foundation for the Blind — Optimism (1903)',
+      url:'https://www.afb.org/about-afb/history/helen-keller/books-essays-speeches/optimism-1903'
+    },
+    {
+      text:'“Phần thưởng lớn nhất mà cuộc đời dành cho ta là cơ hội làm việc chăm chỉ với một công việc xứng đáng.”',
+      author:'Theodore Roosevelt',
+      source:'The American Presidency Project — Address, Sept. 7, 1903',
+      url:'https://www.presidency.ucsb.edu/documents/address-the-new-york-state-agricultural-association-syracuse-ny'
+    },
+    {
+      text:'“Hãy làm công việc tiếp theo chăm chỉ hơn bất kỳ ai khác; khi đó, bạn sẽ tìm thấy những cơ hội mà mình chưa từng biết đến.”',
+      author:'Michael Bloomberg',
+      source:'Stanford University — Remarks, 2013',
+      url:'https://news.stanford.edu/stories/2013/06/prepared-text-nyc-mayor-michael-bloombergs-remarks'
+    }
+  ];
+  function dayKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i)|0; return Math.abs(h); }
+  function renderDailyMotivation(){
+    const key=dayKey(), item=quotes[hash(key)%quotes.length];
+    const q=document.getElementById('daily-motivation-text');
+    const a=document.getElementById('daily-motivation-author');
+    const d=document.getElementById('daily-motivation-date');
+    const source=document.getElementById('daily-motivation-source');
+    if(q) q.textContent=item.text;
+    if(a) a.textContent='— '+item.author;
+    if(d) d.textContent='Hôm nay • '+key;
+    if(source){ source.textContent='↗ '+item.source; source.href=item.url; }
+  }
+  window.loadDashboardArenaRooms = async function(){
+    const box=document.getElementById('dashboard-arena-rooms'); if(!box || typeof db==='undefined') return;
+    try{
+      const snap=await db.ref('arenaRooms').once('value'); const rows=[];
+      if(snap.exists()) snap.forEach(x=>{ const r=x.val(); if(r && r.status!=='ended') rows.push({id:x.key,...r}); });
+      rows.sort((a,b)=>(Number(b.createdAt)||0)-(Number(a.createdAt)||0));
+      if(!rows.length){ box.innerHTML='<div class="dashboard-arena-room md:col-span-3 text-xs text-slate-500 py-6 text-center">Chưa có phòng nào. Tạo phòng đầu tiên để mọi người vào đấu.</div>'; return; }
+      box.innerHTML=rows.slice(0,3).map(r=>{
+        const n=Object.keys(r.players||{}).length, playing=r.phase==='playing';
+        return `<div class="dashboard-arena-room"><div class="flex items-center justify-between gap-2"><span class="text-[9px] font-black ${playing?'text-red-300':'text-emerald-300'}">● ${playing?'ĐANG ĐẤU':'ĐANG CHỜ'}</span><span class="text-[9px] text-slate-500">👥 ${n}/${typeof MAX_PLAYERS!=='undefined'?MAX_PLAYERS:8}</span></div><div class="room-code mt-2">${String(r.code||r.id).replace(/</g,'&lt;')}</div><div class="room-title">${String(r.title||'Hóa Arena').replace(/[<>&]/g,'')}</div><div class="mt-3 flex gap-2"><button class="px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 font-black text-[10px]" onclick="arenaJoinRoom('${String(r.code||r.id).replace(/'/g,'\\\'')}')">🚀 Vào</button><button class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 font-black text-[10px]" onclick="arenaShowRoomInfo('${String(r.code||r.id).replace(/'/g,'\\\'')}')">ℹ️</button></div></div>`;
+      }).join('');
+    }catch(e){ box.innerHTML='<div class="dashboard-arena-room md:col-span-3 text-xs text-red-300 py-6 text-center">Không tải được phòng đấu lúc này.</div>'; }
+  };
+  function getBreakState(){ try{return JSON.parse(localStorage.getItem(BREAK_STORE)||'{}')||{};}catch{return {};}}
+  function setBreakState(x){ localStorage.setItem(BREAK_STORE,JSON.stringify(x)); }
+  const VERCEL_BREAK_IMAGE = '/study-break-5h.png';
+  const BREAK_MUSIC_SRC = '/study-break-music.wav';
+  let breakMusicEnabled = true;
+  let breakAutoPauseTimer = null;
+  let breakCountdownTimer = null;
+  function getImage(){ return localStorage.getItem(BREAK_STORE+'.image') || VERCEL_BREAK_IMAGE; }
+  function renderBreakImage(){ const img=document.getElementById('study-break-image'); if(img) img.src=getImage(); }
+  function clearBreakTimers(){ if(breakAutoPauseTimer){clearTimeout(breakAutoPauseTimer);breakAutoPauseTimer=null;} if(breakCountdownTimer){clearInterval(breakCountdownTimer);breakCountdownTimer=null;} }
+  function updateBreakCountdown(value){ const el=document.getElementById('study-break-countdown'); if(el) el.innerHTML='Tự động tạm dừng sau <strong>'+Math.max(0,value)+'</strong> giây'; }
+  function updateMusicButton(){ const b=document.getElementById('study-break-music-toggle'); if(b) b.textContent=(breakMusicEnabled?'🔊 Nhạc thư giãn':'🔇 Bật nhạc'); }
+  async function startStudyBreakMusic(){
+    const a=document.getElementById('study-break-music'); if(!a) return;
+    a.src = BREAK_MUSIC_SRC; a.volume = .32;
+    if(!breakMusicEnabled) return;
+    try{ await a.play(); }catch(_){ breakMusicEnabled=false; updateMusicButton(); }
+  }
+  function stopStudyBreakMusic(){ const a=document.getElementById('study-break-music'); if(a){ a.pause(); a.currentTime=0; } }
+  window.toggleStudyBreakMusic=function(){
+    const a=document.getElementById('study-break-music'); if(!a) return;
+    breakMusicEnabled=!breakMusicEnabled;
+    if(breakMusicEnabled) startStudyBreakMusic(); else stopStudyBreakMusic();
+    updateMusicButton();
+  };
+  function openBreakPrompt(){
+    const backdrop=document.getElementById('study-break-backdrop'); if(!backdrop)return;
+    document.getElementById('study-break-kicker').textContent='NHẮC NGHỈ • MỐC 5 GIỜ';
+    document.getElementById('study-break-title').textContent='Cậu học 5 tiếng rồi đó ✨';
+    document.getElementById('study-break-message').textContent='Chắc cậu học cũng mệt rồi nhỉ ? Ra nghỉ tý chơi với tớ rồi mình học tiếp nha';
+    renderBreakImage(); clearBreakTimers(); updateBreakCountdown(30);
+    backdrop.classList.add('show'); backdrop.setAttribute('aria-hidden','false');
+    updateMusicButton(); startStudyBreakMusic();
+    let left=30; breakCountdownTimer=setInterval(()=>{ left--; updateBreakCountdown(left); if(left<=0){clearInterval(breakCountdownTimer);breakCountdownTimer=null;} },1000);
+    breakAutoPauseTimer=setTimeout(()=>stopAfterStudyBreak(),30000);
+  }
+  function closeBreak(){ const b=document.getElementById('study-break-backdrop'); if(b){b.classList.remove('show');b.setAttribute('aria-hidden','true');} clearBreakTimers(); stopStudyBreakMusic(); }
+  window.handleStudyBreakImage=function(e){
+    const file=e?.target?.files?.[0]; if(!file)return;
+    if(file.size>4*1024*1024){ alert('Ảnh hơi nặng. Hãy chọn ảnh dưới 4MB.'); e.target.value=''; return; }
+    const reader=new FileReader(); reader.onload=ev=>{
+      const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const max=1200; const scale=Math.min(1,max/Math.max(img.width,img.height)); canvas.width=Math.max(1,Math.round(img.width*scale)); canvas.height=Math.max(1,Math.round(img.height*scale)); const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,canvas.width,canvas.height); localStorage.setItem(BREAK_STORE+'.image',canvas.toDataURL('image/jpeg',.82)); renderBreakImage(); }; img.src=ev.target.result;
+    }; reader.readAsDataURL(file); e.target.value='';
+  };
+  window.continueAfterStudyBreak=function(){ const st=getBreakState(); st.fiveHourShown=true; setBreakState(st); closeBreak(); };
+  window.stopAfterStudyBreak=function(){
+    try{ if(typeof window.togglePomodoro==='function' && window.isPomoRunning) window.togglePomodoro(); }catch(e){ console.warn('study break pause',e); }
+    const st=getBreakState(); st.fiveHourShown=true; setBreakState(st); closeBreak();
+  };
+  window.__checkStudyBreakMilestone=function(){
+    if(!window.isPomoRunning) return;
+    const daily=Number(localStorage.getItem('htvvm.todayStudySeconds'))||0;
+    if(daily < 5*60*60) return;
+    const st=getBreakState(); const today=dayKey();
+    if(st.day!==today){ st.day=today; st.fiveHourShown=false; setBreakState(st); }
+    if(!st.fiveHourShown){ st.fiveHourShown=true; setBreakState(st); openBreakPrompt(); }
+  };
+  // Reset bộ đếm "hôm nay" đúng khi bước sang ngày mới, kể cả khi tab vẫn mở.
+  function scheduleDailyReset(){
+    const now=new Date();
+    const next=new Date(now);
+    next.setHours(24,0,0,0);
+    const delay=Math.max(1000,next.getTime()-now.getTime()+250);
+    setTimeout(()=>{
+      try{
+        if(typeof ensureTodayStore==='function') ensureTodayStore();
+        if(typeof updateRankUI==='function') updateRankUI();
+        if(typeof updateStudyDashboard==='function') updateStudyDashboard();
+      }finally{ scheduleDailyReset(); }
+    },delay);
+  }
+  window.__initDashboardUpgrade=function(){ renderDailyMotivation(); renderBreakImage(); scheduleDailyReset(); };
+  document.addEventListener('DOMContentLoaded',()=>{window.__initDashboardUpgrade(); setInterval(()=>{renderDailyMotivation(); ensureTodayStore();},60000);});
+})();
 
-
-/* Pomodoro engine
+/* ===== ORIGINAL INLINE SCRIPT 10 ===== */
+/* HTVVM — Pomodoro engine v3
    - Uses Date.now() as source of truth, not decrement-only intervals.
    - Exactly one study-time accounting path.
    - Safe even when browser throttles setInterval.
@@ -2881,6 +3076,8 @@ window.uploadCustomAvatar = function(e) {
 
   const $ = id => document.getElementById(id);
   const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+
+  // FIX: Hàm UI cũ đọc biến `pomoSeconds` ở scope khác.
   // Engine mới dùng window.pomoSeconds làm nguồn hiển thị duy nhất.
   window.updatePomoUI = function(){
     const total = Math.max(0, Math.floor(num(window.pomoSeconds)));
@@ -2925,84 +3122,46 @@ window.uploadCustomAvatar = function(e) {
     return remaining;
   }
 
-  function awardStudySeconds(delta, day=dateKeyNow()){
+  function dateKeyNow(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  function awardStudySeconds(delta){
     delta = Math.max(0, Math.floor(delta));
     if(!delta) return;
     try{
-      const todayKey=dateKeyNow();
-      // Không bao giờ cộng thời gian của ngày cũ vào bộ đếm của ngày mới.
-      if(localStorage.getItem('htvvm.studyDay')!==day){
-        localStorage.setItem('htvvm.studyDay',day);
-        localStorage.setItem('htvvm.todayStudySeconds','0');
-        localStorage.setItem('htvvm.todaySessions','0');
-      }
-
+      if(typeof ensureTodayStore === 'function') ensureTodayStore();
+      const today = dateKeyNow();
       const key = 'htvvm.todayStudySeconds';
-      let today = num(localStorage.getItem(key));
-      today += delta;
-      localStorage.setItem(key, String(today));
-      if(typeof window.totalStudySeconds !== 'undefined') window.totalStudySeconds = num(window.totalStudySeconds) + delta;
-      else if(typeof totalStudySeconds !== 'undefined') totalStudySeconds += delta;
+      const current = Math.max(0, num(localStorage.getItem(key)));
+      const maxDaily = 24 * 60 * 60;
+      const acceptedLocal = Math.min(delta, Math.max(0, maxDaily - current));
+      if(!acceptedLocal) return;
+
+      const next = current + acceptedLocal;
+      localStorage.setItem(key, String(next));
+      pendingStudyByDate[today] = num(pendingStudyByDate[today]) + acceptedLocal;
+      // Optimistic UI only. This is NOT persisted directly to Firebase.
+      totalStudySeconds = num(totalStudySeconds) + acceptedLocal;
 
       if(typeof updateStudyDashboard === 'function') updateStudyDashboard();
       if(typeof updateRankUI === 'function') updateRankUI();
+      if(typeof window.__checkStudyBreakMilestone === 'function') window.__checkStudyBreakMilestone();
 
-      // Đồng bộ tối đa mỗi 30 giây; ngày nào ghi đúng ngày đó.
-      if(today % 30 < delta){
-        const u = window.auth?.currentUser || (typeof auth !== 'undefined' ? auth?.currentUser : null);
-        const database = window.db || (typeof db !== 'undefined' ? db : null);
-        if(u && database){
-          database.ref('users/'+u.uid).update({
-            totalStudySeconds: (typeof window.totalStudySeconds !== 'undefined' ? num(window.totalStudySeconds) : num(totalStudySeconds)),
-            [`dailyStudy/${day}`]: today,
-            lastActiveAt: Date.now()
-          }).catch(err=>console.warn('Pomodoro Firebase sync:',err));
-        }
-      }
+      if(num(pendingStudyByDate[today]) >= 30) syncStudyStats();
     }catch(err){
       console.warn('awardStudySeconds:', err);
     }
   }
 
-  function addAwardedSecondsAcrossMidnight(startMs,endMs){
-    let cursor=startMs;
-    const end=endMs;
-    while(cursor < end){
-      const d=new Date(cursor);
-      const day=dateKeyNow(d);
-      const nextMidnight=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,0,0,0,0).getTime();
-      const segmentEnd=Math.min(end,nextMidnight);
-      const seconds=Math.floor((segmentEnd-cursor)/1000);
-
-      if(seconds>0){
-        awardStudySeconds(seconds,day);
-        cursor += seconds*1000;
-      }
-
-      // Nếu đã chạm mốc 0:00 thì chuyển hẳn sang ngày mới.
-      // Phần lẻ dưới 1 giây được giữ lại khi chưa tới mốc ngày mới.
-      if(cursor>=segmentEnd){
-        cursor=segmentEnd;
-      }else if(segmentEnd===nextMidnight){
-        cursor=segmentEnd;
-      }else{
-        break;
-      }
-
-      if(segmentEnd===end) break;
-    }
-    return cursor;
-  }
-
-  function dateKeyNow(d=new Date()){
-    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  }
-
   function flushAwardUntil(now){
-    if(!pomoLastAwardAt){ pomoLastAwardAt=now; return; }
-    if(now <= pomoLastAwardAt) return;
-    pomoLastAwardAt = addAwardedSecondsAcrossMidnight(pomoLastAwardAt,now);
-    ensureTodayStore();
+    if(!pomoLastAwardAt) pomoLastAwardAt = now;
+    const elapsed = Math.floor((now - pomoLastAwardAt)/1000);
+    if(elapsed > 0){
+      awardStudySeconds(elapsed);
+      pomoLastAwardAt += elapsed*1000;
+    }
   }
 
   function stopTick(){
@@ -3136,3 +3295,384 @@ window.uploadCustomAvatar = function(e) {
     }catch(err){ console.warn('Pomodoro init:',err); }
   });
 })();
+
+/* ===== ORIGINAL INLINE SCRIPT 11 ===== */
+(() => {
+  const ARENA_PATH = "arenaRooms";
+  const BANK_PATH = "arenaQuestionBank";
+  const MAX_PLAYERS = 8;
+  const MAX_HP = 200;
+  const DAMAGE = 25;
+  const TURN_SECONDS = 15;
+  const AVATARS = ["🧪","⚗️","🧬","🔬","🧑‍🔬","🧙‍♂️","🧠","🦊"];
+  let arenaRoomCode = "";
+  let arenaRoomRef = null;
+  let arenaRoomCache = null;
+  let arenaUnsubs = [];
+  let arenaHostTick = null;
+
+  const BUILTIN = [
+    {q:"Chất nào sau đây là ester?",a:{A:"CH3COOH",B:"CH3COOCH3",C:"C2H5OH",D:"CH3CHO"},c:"B",d:"NB",topic:"Ester - Lipid",e:"Ester có nhóm chức $-COO-$, ví dụ CH3COOCH3."},
+    {q:"Trong phân tử glucose dạng mạch hở, có bao nhiêu nhóm hydroxyl (-OH)?",a:{A:"3",B:"4",C:"5",D:"6"},c:"C",d:"TH",topic:"Carbohydrate",e:"Glucose mạch hở có 5 nhóm -OH và 1 nhóm -CHO."},
+    {q:"Amino acid nào sau đây có tính lưỡng tính?",a:{A:"HCl",B:"CH3COOH",C:"H2NCH2COOH",D:"C2H5OH"},c:"C",d:"NB",topic:"Nitrogen",e:"Amino acid chứa đồng thời -NH2 có tính base và -COOH có tính acid."},
+    {q:"Polymer nào được điều chế bằng phản ứng trùng hợp?",a:{A:"Tinh bột",B:"Tơ nylon-6,6",C:"Polyethylene",D:"Protein"},c:"C",d:"TH",topic:"Polymer",e:"PE được điều chế từ ethylene bằng phản ứng trùng hợp."},
+    {q:"Trong pin điện hóa Zn-Cu hoạt động tự phát, điện cực Zn là:",a:{A:"Cathode",B:"Anode",C:"Cầu muối",D:"Điện cực trơ"},c:"B",d:"VD",topic:"Điện hóa",e:"Zn bị oxi hóa tại anode: Zn → Zn2+ + 2e."},
+    {q:"Dung dịch FeCl3 tác dụng với dung dịch nào tạo kết tủa màu nâu đỏ?",a:{A:"NaOH",B:"NaCl",C:"HCl",D:"KNO3"},c:"A",d:"NB",topic:"Vô cơ",e:"Fe3+ + 3OH− → Fe(OH)3↓ nâu đỏ."},
+    {q:"Chất nào làm mất màu dung dịch bromine ở điều kiện thường?",a:{A:"Ethane",B:"Ethene",C:"Benzene",D:"Methane"},c:"B",d:"NB",topic:"Hữu cơ",e:"Ethene có liên kết đôi C=C nên cộng Br2."},
+    {q:"pH của dung dịch HCl 0,01 M (coi HCl điện li hoàn toàn) bằng:",a:{A:"1",B:"2",C:"3",D:"12"},c:"B",d:"TH",topic:"Đại cương",e:"[H+] = 10^-2 M nên pH = 2."},
+    {q:"Phản ứng nào là phản ứng xà phòng hóa chất béo?",a:{A:"Hydrolysis ester trong môi trường kiềm",B:"Oxi hóa glucose",C:"Trùng hợp ethene",D:"Thế chlorine vào methane"},c:"A",d:"NB",topic:"Ester - Lipid",e:"Xà phòng hóa triglyceride bằng NaOH/KOH tạo glycerol và muối carboxylate."},
+    {q:"Trong phản ứng: $NH_3 + H_2O \\rightleftharpoons NH_4^+ + OH^-$, NH3 đóng vai trò:",a:{A:"Acid Brønsted",B:"Base Brønsted",C:"Chất oxi hóa",D:"Chất khử"},c:"B",d:"TH",topic:"Nitrogen",e:"NH3 nhận proton từ H2O nên là base Brønsted."},
+    {q:"Chất nào sau đây có thể tham gia phản ứng tráng bạc?",a:{A:"CH3COCH3",B:"CH3CHO",C:"CH3COOH",D:"C2H5OH"},c:"B",d:"TH",topic:"Hữu cơ",e:"Aldehyde bị oxi hóa bởi thuốc thử Tollens tạo bạc kim loại."},
+    {q:"Số oxi hóa của sulfur trong H2SO4 là:",a:{A:"+2",B:"+4",C:"+6",D:"-2"},c:"C",d:"NB",topic:"Vô cơ",e:"2(+1) + x + 4(-2)=0 ⇒ x=+6."}
+  ];
+
+  const A = id => document.getElementById(id);
+  const DB = () => window.db || (typeof db !== "undefined" ? db : null);
+  const AUTH = () => window.auth || (typeof auth !== "undefined" ? auth : null);
+  const me = () => {
+    const u=AUTH()?.currentUser;
+    return u ? {uid:u.uid,name:(u.displayName||u.email||"Người chơi").split("@")[0],email:u.email||""}:null;
+  };
+  const now=()=>Date.now();
+  const safe=(v,f)=>{try{return Number.isFinite(Number(v))?Number(v):f}catch(_){return f}};
+  const escA=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+  const toastA=(m)=> typeof toast==="function" ? toast(m) : alert(m);
+
+  async function ensureArenaAuth(){
+    if(!AUTH()?.currentUser){ alert("❌ Bạn cần đăng nhập để dùng Đấu trường Hóa."); return false; }
+    if(!DB()){ alert("❌ Firebase chưa sẵn sàng."); return false; }
+    return true;
+  }
+
+  function seedQuestionsIfEmpty(list){
+    if(list && list.length) return list;
+    return BUILTIN.map((x,i)=>({...x,id:"builtin_"+i,createdAt:0,ownerUid:"builtin",ownerName:"HTVVM"}));
+  }
+
+  function arenaNav(name){
+    const nav=A("nav-arena");
+    document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("bg-white","shadow-sm","text-blue-600","text-orange-600","text-purple-600","text-emerald-600","text-cyan-600"));
+    document.querySelectorAll(".nav-btn").forEach(b=>b.classList.add("text-slate-600"));
+    if(nav){nav.classList.remove("text-slate-600");nav.classList.add("bg-white","shadow-sm","text-cyan-600")}
+  }
+
+  const oldSwitchSection=window.switchSection;
+  window.switchSection=function(id){
+    if(id==="sec-arena"||id==="sec-arena-creator"||id==="sec-arena-live"){
+      document.querySelectorAll(".app-section").forEach(x=>{x.classList.remove("active");x.classList.add("hidden")});
+      const t=A(id); if(t){t.classList.remove("hidden");t.classList.add("active")}
+      if(id!=="sec-arena-live") window.scrollTo({top:0});
+      arenaNav();
+      return;
+    }
+    return oldSwitchSection ? oldSwitchSection(id) : null;
+  };
+
+  window.openChemArena=async function(){
+    if(!(await ensureArenaAuth())) return;
+    const u=me(); if(A("arena-user-name")) A("arena-user-name").textContent=u?.name||"Người chơi";
+    switchSection("sec-arena");
+    await arenaLoadRooms();
+  };
+
+  window.arenaOpenQuestionStudio=async function(){
+    if(!(await ensureArenaAuth())) return;
+    switchSection("sec-arena-creator");
+    await arenaLoadMyQuestions();
+  };
+
+  window.arenaResetEditor=function(){
+    ["arena-q-id","arena-q-text","arena-opt-A","arena-opt-B","arena-opt-C","arena-opt-D","arena-explain"].forEach(id=>{if(A(id))A(id).value=""});
+    if(A("arena-correct"))A("arena-correct").value="A";
+    if(A("arena-diff"))A("arena-diff").value="NB";
+    if(A("arena-topic"))A("arena-topic").value="Ester - Lipid";
+    if(A("arena-editor-status"))A("arena-editor-status").textContent="MỚI";
+  };
+
+  window.arenaSaveQuestion=async function(){
+    if(!(await ensureArenaAuth())) return;
+    const u=me(), id=A("arena-q-id")?.value.trim();
+    const q=A("arena-q-text")?.value.trim();
+    const opts={A:A("arena-opt-A")?.value.trim(),B:A("arena-opt-B")?.value.trim(),C:A("arena-opt-C")?.value.trim(),D:A("arena-opt-D")?.value.trim()};
+    const c=A("arena-correct")?.value;
+    if(!q||Object.values(opts).some(x=>!x)){return alert("❌ Nhập đầy đủ câu hỏi và 4 đáp án.");}
+    const obj={q,a:opts,c,d:A("arena-diff")?.value||"NB",topic:A("arena-topic")?.value||"Tự chọn",e:A("arena-explain")?.value.trim()||"",ownerUid:u.uid,ownerName:u.name,updatedAt:now(),createdAt:now()};
+    try{
+      const ref=id?DB().ref(`${BANK_PATH}/${u.uid}/${id}`):DB().ref(`${BANK_PATH}/${u.uid}`).push();
+      if(id){delete obj.createdAt}
+      await ref.update(obj);
+      // snapshot công khai để người khác thấy/có thể dùng
+      const publicId=ref.key;
+      await DB().ref(`${BANK_PATH}/public/${publicId}`).update({...obj,id:publicId});
+      toastA(id?"✅ Đã cập nhật câu hỏi.":"✅ Đã lưu và phát hành câu hỏi cho Đấu trường.");
+      window.arenaResetEditor(); await arenaLoadMyQuestions();
+    }catch(e){console.error(e);alert("❌ Không lưu được câu hỏi: "+(e?.message||e))}
+  };
+
+  window.arenaLoadMyQuestions=async function(){
+    if(!(await ensureArenaAuth())) return;
+    const u=me(); let arr=[];
+    try{
+      const snap=await DB().ref(`${BANK_PATH}/${u.uid}`).once("value");
+      if(snap.exists()) snap.forEach(s=>arr.push({id:s.key,...s.val()}));
+    }catch(e){console.warn(e)}
+    const fallback=seedQuestionsIfEmpty(arr);
+    if(A("arena-question-count")) A("arena-question-count").textContent=String(arr.length);
+    const box=A("arena-question-bank"); if(!box)return;
+    if(!arr.length){
+      box.innerHTML=`<div class="p-5 rounded-xl border border-dashed border-slate-700 text-center text-slate-500 text-xs leading-6">Chưa có câu nào.<br>Các câu mẫu Hóa học vẫn có thể dùng ngay khi tạo phòng.</div>`;
+      return;
+    }
+    box.innerHTML=arr.sort((a,b)=>safe(b.updatedAt,0)-safe(a.updatedAt,0)).map(x=>`
+      <div class="arena-q-item">
+        <div class="q-title">${escA(x.q)}</div>
+        <div class="q-meta"><span>${escA(x.topic||"Tự chọn")}</span><span>•</span><span>${escA(x.d||"NB")}</span><span>•</span><span>Đúng ${escA(x.c)}</span></div>
+        <div class="q-actions"><button onclick="arenaEditQuestion('${x.id}')">✏️ Sửa</button><button class="danger" onclick="arenaDeleteQuestion('${x.id}')">🗑 Xóa</button></div>
+      </div>`).join("");
+  };
+
+  window.arenaEditQuestion=async function(id){
+    const u=me(); if(!u)return; const s=await DB().ref(`${BANK_PATH}/${u.uid}/${id}`).once("value"); const x=s.val(); if(!x)return;
+    A("arena-q-id").value=id; A("arena-q-text").value=x.q||""; ["A","B","C","D"].forEach(k=>A("arena-opt-"+k).value=x.a?.[k]||""); A("arena-correct").value=x.c||"A"; A("arena-diff").value=x.d||"NB"; A("arena-topic").value=x.topic||"Tự chọn"; A("arena-explain").value=x.e||""; A("arena-editor-status").textContent="ĐANG SỬA"; window.scrollTo({top:0});
+  };
+  window.arenaDeleteQuestion=async function(id){
+    const u=me(); if(!u||!confirm("Xóa câu hỏi này khỏi kho của bạn?"))return;
+    try{await DB().ref(`${BANK_PATH}/${u.uid}/${id}`).remove();await DB().ref(`${BANK_PATH}/public/${id}`).remove();await arenaLoadMyQuestions();toastA("🗑 Đã xóa câu hỏi.");}catch(e){alert("❌ Không xóa được: "+(e?.message||e))}
+  };
+
+  async function getPublicQuestions(){
+    let arr=[];
+    try{const s=await DB().ref(`${BANK_PATH}/public`).once("value");if(s.exists())s.forEach(x=>arr.push({id:x.key,...x.val()}))}catch(e){console.warn("Arena bank",e)}
+    return arr.length?arr:seedQuestionsIfEmpty([]);
+  }
+
+  function roomCode(){
+    const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let o="";
+    if(window.crypto?.getRandomValues){const a=new Uint32Array(6);crypto.getRandomValues(a);for(let i=0;i<6;i++)o+=alphabet[a[i]%alphabet.length]}
+    else for(let i=0;i<6;i++)o+=alphabet[Math.floor(Math.random()*alphabet.length)];
+    return o;
+  }
+
+  async function uniqueArenaCode(){for(let i=0;i<10;i++){const c=roomCode(),s=await DB().ref(`${ARENA_PATH}/${c}`).once("value");if(!s.exists())return c}throw new Error("Không tạo được mã phòng.");}
+
+  window.arenaCreateRoom=async function(){
+    if(!(await ensureArenaAuth()))return;
+    const u=me(), qs=await getPublicQuestions();
+    const title=prompt("Tên phòng đấu:", "Hóa Arena — " + (u?.name||"HTVVM"))?.trim();
+    if(!title)return;
+    const nstr=prompt(`Số câu đấu (5-${Math.min(30,qs.length)}):`, String(Math.min(10,qs.length)));
+    const n=Math.max(5,Math.min(Number(nstr)||10,qs.length));
+    const picked=qs.sort(()=>Math.random()-0.5).slice(0,n);
+    const code=await uniqueArenaCode();
+    const players={}; players[u.uid]={uid:u.uid,name:u.name,hp:MAX_HP,score:0,correct:0,answers:0,online:true,joinedAt:now()};
+    const room={code,title,hostUid:u.uid,hostName:u.name,createdAt:now(),status:"open",phase:"lobby",turnSeconds:TURN_SECONDS,currentIndex:-1,deadline:0,questionIds:picked.map(x=>x.id),questions:picked.reduce((m,x)=>{m[x.id]=x;return m},{}),players,logs:{0:`⚔️ ${u.name} đã tạo phòng.`}};
+    await DB().ref(`${ARENA_PATH}/${code}`).set(room);
+    toastA("✅ Tạo phòng "+code);
+    await arenaJoinRoom(code);
+  };
+
+  window.arenaJoinPrompt=async function(){
+    if(!(await ensureArenaAuth()))return;
+    const c=prompt("Nhập mã phòng 6 ký tự:","")?.trim().toUpperCase(); if(c) arenaJoinRoom(c);
+  };
+
+  async function arenaRoomJoinPublic(code){
+    const u=me(); const ref=DB().ref(`${ARENA_PATH}/${code}`); const snap=await ref.once("value");
+    if(!snap.exists())throw new Error("Không tìm thấy phòng.");
+    const r=snap.val(); const count=Object.keys(r.players||{}).length;
+    if(r.status==="ended")throw new Error("Phòng đã kết thúc.");
+    if(r.phase!=="lobby" && !r.players?.[u.uid])throw new Error("Ván đã bắt đầu. Hãy chờ phòng mới.");
+    if(count>=MAX_PLAYERS && !r.players?.[u.uid])throw new Error("Phòng đã đủ 8 người.");
+    const upd={name:u.name,uid:u.uid,hp:safe(r.players?.[u.uid]?.hp,MAX_HP),score:safe(r.players?.[u.uid]?.score,0),correct:safe(r.players?.[u.uid]?.correct,0),answers:safe(r.players?.[u.uid]?.answers,0),online:true,joinedAt:r.players?.[u.uid]?.joinedAt||now()};
+    await ref.child(`players/${u.uid}`).set(upd); await ref.child(`logs/${Date.now()}`).set(`👤 ${u.name} đã vào phòng.`);
+    return r;
+  }
+
+  window.arenaJoinRoom=async function(code){
+    if(!(await ensureArenaAuth()))return;
+    try{await arenaRoomJoinPublic(code);arenaRoomCode=code;attachArenaRoom(code);switchSection("sec-arena-live");}catch(e){alert("❌ "+(e?.message||e))}
+  };
+
+  function detachArena(){
+    arenaUnsubs.forEach(fn=>{try{fn()}catch(_){}});arenaUnsubs=[];if(arenaHostTick){clearInterval(arenaHostTick);arenaHostTick=null}
+    arenaRoomRef=null;
+  }
+
+  function attachArenaRoom(code){
+    detachArena();
+    arenaRoomRef=DB().ref(`${ARENA_PATH}/${code}`);
+    const handler=snap=>{arenaRoomCache=snap.val()||null;renderArenaLive();maybeHostResolve();};
+    arenaRoomRef.on("value",handler);arenaUnsubs.push(()=>arenaRoomRef.off("value",handler));
+    const meRef=arenaRoomRef.child(`players/${me().uid}/online`);
+    meRef.onDisconnect().set(false).catch(()=>{});
+    arenaUnsubs.push(()=>meRef.off());
+    arenaHostTick=setInterval(()=>{maybeHostResolve();maybeMigrateHost()},900);
+  }
+
+  function alivePlayers(r){return Object.values(r?.players||{}).filter(p=>safe(p.hp,0)>0)}
+  function sortedPlayers(r){return alivePlayers(r).sort((a,b)=>String(a.joinedAt||a.uid).localeCompare(String(b.joinedAt||b.uid)))}
+  function targetFor(uid,r){
+    const arr=sortedPlayers(r);if(arr.length<=1)return null;const i=arr.findIndex(p=>p.uid===uid);return arr[(i+1+arr.length)%arr.length];
+  }
+
+  function renderPlayers(r){
+    const arr=Object.values(r.players||{}).sort((a,b)=>safe(b.score,0)-safe(a.score,0));
+    A("arena-player-count").textContent=`${arr.filter(p=>safe(p.hp,0)>0).length}/${MAX_PLAYERS}`;
+    A("arena-live-players").innerHTML=arr.map((p,i)=>{const pct=Math.max(0,Math.min(100,safe(p.hp,0)/MAX_HP*100));return `<div class="arena-live-player ${p.uid===me().uid?'is-me':''}"><div class="flex items-center gap-2"><b>${i<3?["👑","🥈","🥉"][i]:"•"}</b><span class="flex-1 font-black text-xs truncate">${escA(p.name)}${p.uid===me().uid?" <span style='color:#67e8f9'>YOU</span>":""}</span><span class="text-[9px] text-slate-400">${safe(p.score,0)} XP</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="flex justify-between mt-1 text-[8px] text-slate-500"><span>${safe(p.hp,0)} HP</span><span>${p.online?"● online":"○ offline"}</span></div></div>`}).join("");
+    A("arena-live-log").innerHTML=Object.entries(r.logs||{}).sort((a,b)=>safe(a[0],0)-safe(b[0],0)).slice(-25).map(([,x])=>`<div>${escA(x)}</div>`).join("");
+  }
+
+  function formatSecs(s){return Math.max(0,Math.ceil(s))+"s"}
+
+  function renderArenaLive(){
+    const r=arenaRoomCache;if(!r||!arenaRoomCode)return;
+    const u=me(); const meP=r.players?.[u.uid]||{};
+    A("arena-live-code").textContent=arenaRoomCode;
+    A("arena-live-title").textContent=r.title||"Phòng đấu";
+    A("arena-me-name").textContent=u.name;
+    A("arena-me-hp").style.width=Math.max(0,Math.min(100,safe(meP.hp,MAX_HP)/MAX_HP*100))+"%";
+    A("arena-me-hp-text").textContent=`${safe(meP.hp,0)} / ${MAX_HP} HP`;
+    renderPlayers(r);
+
+    const target=targetFor(u.uid,r)||Object.values(r.players||{}).find(p=>p.uid!==u.uid)||null;
+    A("arena-target-name").textContent=target?.name||"Đối thủ";
+    A("arena-target-hp").style.width=Math.max(0,Math.min(100,safe(target?.hp,MAX_HP)/MAX_HP*100))+"%";
+    A("arena-target-hp-text").textContent=`${safe(target?.hp,0)} / ${MAX_HP} HP`;
+
+    const phase=r.phase||"lobby";
+    A("arena-live-phase").textContent=phase==="lobby"?"PHÒNG CHỜ":phase==="playing"?"CÂU ĐẤU":"KẾT QUẢ";
+    const left=phase==="playing"?Math.max(0,(safe(r.deadline,0)-now())/1000):0;
+    A("arena-live-timer").textContent=phase==="playing"?formatSecs(left):"—";
+    A("arena-live-qmeta").textContent=phase==="playing"?`CÂU ${safe(r.currentIndex,0)+1}/${(r.questionIds||[]).length}`:"HÓA HỌC";
+
+    A("arena-lobby-view").classList.toggle("hidden",phase!=="lobby");
+    A("arena-playing-view").classList.toggle("hidden",phase!=="playing");
+    A("arena-ended-view").classList.toggle("hidden",phase!=="ended");
+
+    if(phase==="lobby"){
+      const host=u.uid===r.hostUid;
+      A("arena-host-actions").innerHTML=host
+        ? `<button onclick="arenaStartMatch()">⚔️ BẮT ĐẦU (${Object.keys(r.players||{}).length} người)</button><button onclick="arenaCopyLink()">🔗 COPY LINK</button><button onclick="arenaAddQuestionsToRoom()">🧪 ĐỔI BỘ CÂU</button>`
+        : `<span class="text-xs text-slate-500">Chủ phòng: <b class="text-slate-200">${escA(r.hostName||"Quản trò")}</b> • Chờ bắt đầu...</span>`;
+    } else if(phase==="playing"){
+      const qid=(r.questionIds||[])[safe(r.currentIndex,-1)], q=r.questions?.[qid];
+      if(q){
+        A("arena-question-diff").textContent=`${q.topic||"HÓA HỌC"} • ${q.d||"NB"}`;
+        A("arena-question-text").innerHTML=escA(q.q||"").replace(/\\ce\\{([^}]*)\\}/g,'<span>\\\\ce{$1}</span>');
+        A("arena-answers").innerHTML=Object.entries(q.a||{}).map(([k,v])=>`<button class="chem-answer" data-option="${k}" onclick="arenaAnswer('${k}')"><b>${k}</b><span>${escA(v)}</span></button>`).join("");
+        const answered=(r.responses?.[r.currentIndex]?.[u.uid]);
+        if(answered){document.querySelectorAll("#arena-answers .chem-answer").forEach(b=>{b.classList.add("locked");if(b.dataset.option===answered.option)b.classList.add(answered.correct?"correct":"wrong")});}
+        const qStart=safe(r.deadline,0)-safe(r.turnSeconds,TURN_SECONDS)*1000;
+        const elapsed=(now()-qStart)/(safe(r.turnSeconds,TURN_SECONDS)*1000);
+        A("arena-turn-label").textContent=answered?"ĐÃ TRẢ LỜI":(elapsed<.5?"BẮT ĐẦU":"TRẢ LỜI NGAY");
+        A("arena-explanation").classList.add("hidden");
+        if(window.MathJax?.typesetPromise) window.MathJax.typesetPromise([A("arena-question-text"),A("arena-answers")]).catch(()=>{});
+      }
+    } else if(phase==="ended"){
+      const arr=Object.values(r.players||{}).sort((a,b)=>safe(b.score,0)-safe(a.score,0));
+      const meIdx=arr.findIndex(p=>p.uid===u.uid);
+      A("arena-ended-title").textContent=meIdx===0?"🏆 CHIẾN THẮNG":"KẾT THÚC";
+      A("arena-ended-desc").textContent=meIdx===0?"Bạn đứng đầu đấu trường Hóa học.":`Hạng của bạn: #${meIdx+1}`;
+      A("arena-final-ranking").innerHTML=arr.map((p,i)=>`<div class="arena-rank-row"><b>${i<3?["👑","🥈","🥉"][i]:i+1}</b><span>${escA(p.name)}</span><strong>${safe(p.score,0)} XP</strong><em>${safe(p.correct,0)} đúng</em></div>`).join("");
+    }
+  }
+
+  window.arenaAnswer=async function(option){
+    const r=arenaRoomCache,u=me(); if(!r||r.phase!=="playing")return;
+    const qid=r.questionIds?.[safe(r.currentIndex,-1)],q=r.questions?.[qid];if(!q)return;
+    const path=`${ARENA_PATH}/${arenaRoomCode}/responses/${r.currentIndex}/${u.uid}`;
+    const existing=await DB().ref(path).once("value");if(existing.exists())return;
+    const correct=String(option)===String(q.c);
+    await DB().ref(path).set({option,correct,answeredAt:now()});
+    A("arena-turn-label").textContent="ĐÃ TRẢ LỜI";
+  };
+
+  async function maybeHostResolve(){
+    const r=arenaRoomCache;if(!r||r.phase!=="playing"||r.hostUid!==me()?.uid)return;
+    const idx=safe(r.currentIndex,-1), qid=r.questionIds?.[idx]; if(!qid)return;
+    const responses=r.responses?.[idx]||{}; const alive=alivePlayers(r);
+    const allAnswered=alive.length>0 && alive.every(p=>responses[p.uid]);
+    if(now() < safe(r.deadline,0) && !allAnswered)return;
+    const updates={};
+    const log=[];
+    const players=JSON.parse(JSON.stringify(r.players||{}));
+    let changed=false;
+    for(const p of alive){
+      const resp=responses[p.uid];
+      if(resp){players[p.uid].answers=safe(players[p.uid].answers,0)+1;if(resp.correct){players[p.uid].correct=safe(players[p.uid].correct,0)+1;players[p.uid].score=safe(players[p.uid].score,0)+100;const target=targetFor(p.uid,{players});if(target&&target.uid!==p.uid){players[target.uid].hp=Math.max(0,safe(players[target.uid].hp,MAX_HP)-DAMAGE);log.push(`⚡ ${p.name} trả lời đúng → -${DAMAGE} HP ${target.name}.`)}else log.push(`✅ ${p.name} trả lời đúng.`)}else{log.push(`❌ ${p.name} trả lời sai.`)}changed=true;}
+    }
+    if(!changed && now()<safe(r.deadline,0))return;
+    const remain=alivePlayers({players});
+    const nextIdx=idx+1;
+    const ended=remain.length<=1 || nextIdx>=(r.questionIds||[]).length;
+    const base = `${ARENA_PATH}/${arenaRoomCode}`;
+    updates[`${base}/players`]=players;
+    log.forEach((m,i)=>updates[`${base}/logs/${now()+i}`]=m);
+    if(ended){
+      updates[`${base}/phase`]="ended"; updates[`${base}/status`]="ended"; updates[`${base}/deadline`]=0; updates[`${base}/logs/${now()+100}`]=remain.length===1?`🏆 ${remain[0].name} là người sống sót cuối cùng!`:"🏁 Hết bộ câu — phân định theo XP.";
+    }else{
+      updates[`${base}/currentIndex`]=nextIdx; updates[`${base}/deadline`]=now()+safe(r.turnSeconds,TURN_SECONDS)*1000;
+    }
+    await DB().ref().update(updates);
+  }
+
+  async function maybeMigrateHost(){
+    const r=arenaRoomCache;if(!r)return;
+    const host=r.players?.[r.hostUid];
+    if(host?.online!==false)return;
+    const candidate=Object.values(r.players||{}).filter(p=>p.online!==false).sort((a,b)=>safe(a.joinedAt,0)-safe(b.joinedAt,0))[0];
+    if(candidate?.uid && candidate.uid===me()?.uid) await arenaRoomRef.update({hostUid:candidate.uid,hostName:candidate.name,logs:{[now()]:"🔄 Quản trò mới: "+candidate.name}});
+  }
+
+  window.arenaStartMatch=async function(){
+    const r=arenaRoomCache;if(!r||r.hostUid!==me()?.uid)return;
+    if(Object.keys(r.players||{}).length<2)return alert("❌ Cần ít nhất 2 người để bắt đầu.");
+    await arenaRoomRef.update({phase:"playing",status:"playing",currentIndex:0,deadline:now()+safe(r.turnSeconds,TURN_SECONDS)*1000,logs:{[now()]:`🔥 ${r.hostName} đã bắt đầu trận đấu!`}});
+  };
+
+  window.arenaAddQuestionsToRoom=async function(){
+    const qs=await getPublicQuestions();const nstr=prompt(`Số câu đấu (5-${Math.min(30,qs.length)}):`,String(Math.min(10,qs.length)));if(!nstr)return;
+    const n=Math.max(5,Math.min(Number(nstr)||10,qs.length));const picked=qs.sort(()=>Math.random()-0.5).slice(0,n);
+    const questions=picked.reduce((m,x)=>{m[x.id]=x;return m},{}); await arenaRoomRef.update({questionIds:picked.map(x=>x.id),questions});
+    toastA("✅ Đã thay bộ câu.");
+  };
+
+  window.arenaCopyCode=async()=>{if(!arenaRoomCode)return;navigator.clipboard?.writeText(arenaRoomCode);toastA("📋 Đã copy mã phòng: "+arenaRoomCode)};
+  window.arenaCopyLink=async()=>{const link=new URL(location.href);link.searchParams.set("arena",arenaRoomCode);try{await navigator.clipboard.writeText(link.toString());toastA("🔗 Đã copy link phòng.");}catch(_){prompt("Copy link:",link.toString())}};
+  window.arenaLeaveRoom=function(){detachArena();arenaRoomCode="";arenaRoomCache=null;history.replaceState(null,"",location.pathname);openChemArena()};
+
+  window.arenaLoadRooms=async function(){
+    if(!(await ensureArenaAuth()))return; switchSection("sec-arena");
+    const box=A("arena-room-list");if(!box)return;box.innerHTML=`<div class="col-span-full text-center text-slate-500 text-xs py-8">Đang tải phòng...</div>`;
+    try{
+      const s=await DB().ref(ARENA_PATH).once("value");let rooms=[];
+      if(s.exists())s.forEach(x=>{const r=x.val();if(r?.status!=="ended")rooms.push({id:x.key,...r})});
+      rooms.sort((a,b)=>safe(b.createdAt,0)-safe(a.createdAt,0));
+      if(!rooms.length){box.innerHTML=`<div class="col-span-full text-center text-slate-500 text-xs py-8">Chưa có phòng nào. Tạo phòng đầu tiên.</div>`;return;}
+      box.innerHTML=rooms.slice(0,18).map(r=>{const n=Object.keys(r.players||{}).length;return `<article class="chem-room-card"><div class="text-[9px] font-black text-cyan-300 tracking-[.14em]">● ${r.phase==="playing"?"ĐANG ĐẤU":"ĐANG CHỜ"}</div><h4>${escA(r.title||"Hóa Arena")}</h4><div class="chem-room-meta"><span class="chem-room-pill">Mã ${escA(r.code||r.id)}</span><span class="chem-room-pill">👥 ${n}/${MAX_PLAYERS}</span><span class="chem-room-pill">🧪 ${(r.questionIds||[]).length} câu</span></div><div class="chem-room-actions"><button class="primary" onclick="arenaJoinRoom('${escA(r.code||r.id)}')">🚀 VÀO PHÒNG</button><button onclick="arenaShowRoomInfo('${escA(r.code||r.id)}')">ℹ️</button></div></article>`}).join("");
+    }catch(e){box.innerHTML=`<div class="text-center text-red-400 text-xs py-8">Lỗi tải phòng: ${escA(e?.message||e)}</div>`}
+  };
+  window.arenaShowRoomInfo=async function(code){const s=await DB().ref(`${ARENA_PATH}/${code}`).once("value");const r=s.val();if(!r)return;alert(`⚔️ ${r.title}\nMã phòng: ${code}\nNgười chơi: ${Object.keys(r.players||{}).length}/${MAX_PLAYERS}\nSố câu: ${(r.questionIds||[]).length}\nChủ phòng: ${r.hostName||"—"}`)};
+
+  // Deep-link ?arena=ABC123
+  async function handleArenaRoute(){
+    const code=new URLSearchParams(location.search).get("arena")?.trim().toUpperCase();if(!code)return;
+    if(!(await ensureArenaAuth()))return;
+    arenaJoinRoom(code);
+  }
+
+  // Keep arena UI fresh even without Firebase changes during countdown.
+  setInterval(()=>{if(arenaRoomCache&&arenaRoomCache.phase==="playing")renderArenaLive()},500);
+
+  document.addEventListener("DOMContentLoaded",async()=>{
+    if(A("arena-user-name"))A("arena-user-name").textContent=me()?.name||"Người chơi";
+    if(A("arena-q-text") && !A("arena-q-text").value) arenaResetEditor();
+    if(AUTH()) AUTH().onAuthStateChanged?.(()=>{if(A("arena-user-name"))A("arena-user-name").textContent=me()?.name||"Người chơi"});
+    // Chỉ tự vào route khi user đã đăng nhập sẵn.
+    setTimeout(()=>handleArenaRoute(),700);
+  });
+})();
+
+/* ===== ORIGINAL INLINE SCRIPT 12 ===== */
+window.addEventListener('firebase:user-ready',()=>{ try{ window.loadDashboardArenaRooms?.(); }catch(_){ } });
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ try{ window.loadDashboardArenaRooms?.(); }catch(_){ } } });
