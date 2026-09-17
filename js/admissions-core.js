@@ -1,0 +1,9 @@
+/* Pure ranking rules for the 15-choice admissions planner. */
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.HLAdmissionsCore=factory();})(this,function(){
+ function normalize(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+ function tokens(s){return normalize(s).split(/[^a-z0-9]+/).filter(Boolean);}
+ const comboSubjects={a00:['toan','ly','hoa'],a01:['toan','ly','anh'],b00:['toan','hoa','sinh'],d01:['toan','van','anh'],d07:['toan','hoa','anh'],c00:['van','su','dia'],d14:['van','su','anh'],d15:['van','dia','anh'],d96:['toan','anh'],x26:['toan','anh','tin']};
+ function compatible(item,subjects){const chosen=new Set(subjects.map(normalize));if(!chosen.size)return true;return item.combinations.some(c=>{const key=normalize(c),needed=comboSubjects[key];return needed?needed.every(x=>chosen.has(x)):subjects.some(s=>key.includes(normalize(s)));});}
+ function rank(data,input){const score=Number(input.score)||0,subjects=input.subjects||[],likes=(input.interests||[]).map(normalize);let rows=data.filter(x=>compatible(x,subjects)).map(x=>{const gap=x.cutoff-score,interest=likes.some(k=>k&&normalize(x.tags+' '+x.major+' '+x.school).includes(k))?2:0;const fit=Math.max(-3,Math.min(3,-gap));return {...x,gap,fit:fit+interest,compatible:true};});if(rows.length<15)rows=data.map(x=>{const gap=x.cutoff-score;return {...x,gap,fit:Math.max(-3,Math.min(3,-gap)),compatible:false};});rows.sort((a,b)=>b.fit-a.fit||b.cutoff-a.cutoff);const picked=[],seen=new Set();for(const x of rows)if(!seen.has(x.id)){seen.add(x.id);picked.push(x);if(picked.length===15)break;}const dreamCount=Math.min(4,picked.length),matchCount=Math.min(7,Math.max(0,picked.length-dreamCount));return picked.map((x,i)=>({...x,position:i+1,group:i<dreamCount?'dream':i<dreamCount+matchCount?'match':'safe',groupLabel:i<dreamCount?'Mơ ước':i<dreamCount+matchCount?'Phù hợp':'An toàn'}));}
+ return {rank};
+});
