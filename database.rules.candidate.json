@@ -1,0 +1,47 @@
+{
+ "rules":{
+  ".read":false,".write":false,
+  "users":{".indexOn":["studyStreak"],"$uid":{
+   ".read":"auth != null && auth.uid === $uid",
+   "name":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isString() && newData.val().length <= 200"},
+   "displayName":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isString() && newData.val().length <= 200"},
+   "email":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isString() && newData.val().length <= 320"},
+   "photoURL":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isString() && newData.val().length <= 2048"},
+   "customAvatar":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isString() && newData.val().length <= 300000"},
+   "streak":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isNumber() && newData.val() >= 0"},
+   "lastLogin":{".write":"auth != null && auth.uid === $uid"},
+   "lastLoginDate":{".write":"auth != null && auth.uid === $uid"},
+   "calendarEvents":{"$event":{".write":"auth != null && auth.uid === $uid",".validate":"$event.matches(/^[A-Za-z0-9_-]+$/) && newData.hasChildren(['title','date']) && newData.child('title').isString() && newData.child('title').val().length <= 200 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"}}
+  }},
+  "rooms":{"$room":{
+   ".read":"auth != null && data.child('creatorUid').val() === auth.uid",
+   ".write":"auth != null && ((!data.exists() && newData.child('creatorUid').val() === auth.uid) || (!newData.exists() && data.child('creatorUid').val() === auth.uid))",
+   ".validate":"$room.matches(/^[A-Za-z0-9_-]+$/) && newData.hasChildren(['title','creatorUid','config']) && newData.child('title').isString() && newData.child('title').val().length <= 200 && newData.child('config/timeLimit').isNumber() && newData.child('config/timeLimit').val() > 0 && newData.child('config/timeLimit').val() <= 600",
+   "title":{".write":"auth != null && data.parent().child('creatorUid').val() === auth.uid"},
+   "status":{".write":"auth != null && data.parent().child('creatorUid').val() === auth.uid",".validate":"newData.val() === 'open' || newData.val() === 'closed' || newData.val() === 'draft'"},
+   "config":{".write":"auth != null && data.parent().child('creatorUid').val() === auth.uid"},
+   "answers":{".write":"auth != null && data.parent().child('creatorUid').val() === auth.uid"},
+   "results":{".read":"auth != null","$result":{".validate":false}}
+  }},
+  "presence":{".read":"auth != null","$uid":{".write":"auth != null && auth.uid === $uid"}},
+  "community":{"posts":{".read":"auth != null",".indexOn":["updatedAt"],"$post":{
+   ".write":"auth != null && ((!data.exists() && newData.child('authorUid').val() === auth.uid) || data.child('authorUid').val() === auth.uid)",
+   ".validate":"$post.matches(/^[A-Za-z0-9_-]+$/) && newData.hasChildren(['authorUid','title','body']) && newData.child('title').val().length <= 200 && newData.child('body').val().length <= 20000",
+   "updatedAt":{".write":"auth != null",".validate":"newData.isNumber() && newData.val() <= now + 10000"},
+   "likes":{"$uid":{".write":"auth != null && auth.uid === $uid",".validate":"newData.val() === true"}},
+   "comments":{"$comment":{".write":"auth != null && ((!data.exists() && newData.child('authorUid').val() === auth.uid) || data.child('authorUid').val() === auth.uid)",".validate":"$comment.matches(/^[A-Za-z0-9_-]+$/) && newData.hasChildren(['authorUid','body']) && newData.child('body').isString() && newData.child('body').val().length <= 1000"}}
+  }}},
+  "arenaQuestionBank":{".read":"auth != null","$owner":{"$question":{".write":"auth != null && (($owner === auth.uid) || ($owner === 'public' && ((!data.exists() && newData.child('ownerUid').val() === auth.uid) || data.child('ownerUid').val() === auth.uid)))",".validate":"$question.matches(/^[A-Za-z0-9_-]+$/)"}}},
+  "arenaRooms":{".read":"auth != null","$room":{
+   ".write":"auth != null && ((!data.exists() && newData.child('hostUid').val() === auth.uid) || data.child('hostUid').val() === auth.uid)",
+   ".validate":"$room.matches(/^[A-Z0-9]{6}$/)",
+   "players":{"$uid":{
+    ".write":"auth != null && auth.uid === $uid && !data.exists() && data.parent().parent().child('phase').val() === 'lobby' && data.parent().numChildren() < 8",
+    ".validate":"newData.child('uid').val() === $uid && newData.child('hp').isNumber() && newData.child('score').isNumber()",
+    "online":{".write":"auth != null && auth.uid === $uid",".validate":"newData.isBoolean()"}
+   }},
+   "logs":{"$log":{".write":"auth != null && !data.exists() && data.parent().parent().child('players').child(auth.uid).exists()",".validate":"newData.isString() && newData.val().length <= 500"}},
+   "responses":{"$turn":{"$uid":{".write":"auth != null && auth.uid === $uid && !data.exists() && data.parent().parent().parent().child('phase').val() === 'playing' && data.parent().parent().parent().child('deadline').val() >= now && data.parent().parent().parent().child('players').child(auth.uid).exists()"}}}
+  }}
+ }
+}

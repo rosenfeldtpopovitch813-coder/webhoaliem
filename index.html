@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hành trình vượt vũ môn - HTVVM Studio</title>
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/js/vendor/papaparse.min.js"></script>
+<script src="/js/vendor/firebase-app.js"></script>
+<script src="/js/vendor/firebase-database.js"></script>
+<script src="/js/vendor/firebase-auth.js"></script>
+<script src="https://meet.jit.si/external_api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.4/3Dmol-min.js"></script>
+<!-- THƯ VIỆN VẼ ĐỒ THỊ (CHART.JS & MATH.JS) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+<!-- THƯ VIỆN CHO CHEMMAKER -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], packages: {'[+]': ['mhchem']} },
+    loader: { load: ['[tex]/mhchem'] }
+  };
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script type="text/javascript" src="https://jsme-editor.github.io/dist/jsme/jsme.nocache.js"></script>
+
+<script>
+    if(window.tailwind) tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Be Vietnam Pro', 'Plus Jakarta Sans', 'sans-serif'], display: ['Sora', 'sans-serif'] },
+                colors: { primary: { 50: '#083344', 100: '#0e4a5c', 500: '#22D3EE', 600: '#0891B2', 700: '#0E7490' } },
+                boxShadow: { 'soft': '0 8px 24px -8px rgba(0,0,0,.55)', 'glow': '0 0 0 1px rgba(34,211,238,.25), 0 0 24px -4px rgba(34,211,238,.45)' }
+            }
+        }
+    }
+</script>
+
+
+
+
+
+
+
+<!-- ========================================== -->
+<!-- 🚀 BỘ TĂNG ÁP UI/UX PREMIUM CHO HTVVM STUDIO -->
+<!-- ========================================== -->
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/css/education.css">
+</head>
+<body class="relative">
+<a href="#sec-dashboard" class="skip-link">Đến nội dung chính</a>
+
+<div class="fixed inset-0 overflow-hidden pointer-events-none z-[-1]">
+    <div class="blob w-96 h-96 bg-blue-200 rounded-full top-[-10%] left-[-10%]"></div>
+    <div class="blob w-96 h-96 bg-cyan-200 rounded-full bottom-[-10%] right-[-10%]" style="animation-delay: -5s;"></div>
+</div>
+
+<!-- THÔNG BÁO LỖI FIREBASE -->
+<div id="firebase-error" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-xl p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 shadow-xl flex items-start gap-3">
+    <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+    <div id="firebase-error-text"></div>
+</div>
+
+
+<!-- THANH ĐIỀU HƯỚNG (NAVBAR) -->
+<nav id="main-nav" class=" sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200/80 shadow-sm">
+ <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <div class="flex flex-col lg:flex-row justify-between items-center py-4 gap-4">
+  
+<button onclick="openProfile()" title="Xem hồ sơ cá nhân" class="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-colors group cursor-pointer shadow-sm">
+    <!-- Khung chứa Avatar + Chấm xanh Online -->
+    <div class="relative shrink-0">
+        <img id="nav-avatar" src="https://ui-avatars.com/api/?name=U&background=cbd5e1&color=fff" class="w-8 h-8 rounded-full object-cover border border-slate-200 group-hover:border-blue-300 transition-colors" alt="Avatar">
+        <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"></div>
+    </div>
+    <span id="user-display-name" class="text-sm font-extrabold text-slate-700 group-hover:text-blue-600 transition-colors">Đang kết nối...</span>
+</button>
+   <!-- 1. Logo -->
+   <div class="flex items-center gap-2 cursor-pointer shrink-0" onclick="switchSection('sec-dashboard')">
+    <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl shadow-glow">🧪</div>
+    <span class="font-extrabold text-xl tracking-tight text-slate-900">HTVVM <span class="text-blue-600">X HOÁ LIEMS</span></span>
+   </div>
+   
+   <!-- 2. Menu gọn: các chức năng chính đưa vào Dashboard -->
+   <div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner overflow-x-auto w-full lg:w-auto">
+    <button id="nav-home" onclick="switchSection('sec-dashboard')" class="nav-btn bg-white shadow-sm text-blue-600 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all">🏠 Trang chủ</button>
+    <button id="nav-library" onclick="switchSection('sec-library')" class="nav-btn text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all hover:bg-white">📚 Thư viện</button>
+    <button id="nav-exam" onclick="loadExamList()" class="nav-btn text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all hover:bg-white">📝 Thi Online</button>
+    <button id="nav-study" onclick="switchSection('sec-study')" class="nav-btn text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all hover:bg-white">🚀 Học tập</button>
+    <button id="nav-community" onclick="openCommunity()" class="nav-btn text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all hover:bg-white">💬 Cộng đồng</button>
+   </div>
+   
+   <!-- 3. Khu vực Nút Ủng hộ + Status (Luôn hiện rõ ràng) -->
+   <div class="flex items-center gap-3 shrink-0">
+       <button onclick="openDonateModal()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white font-extrabold text-sm whitespace-nowrap shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+           💖 Ủng hộ
+       </button>
+       <!-- 💡 NÚT CÔNG TẮC SÁNG/TỐI Ở ĐÂY NÈ -->
+       <button onclick="toggleTheme()" id="theme-toggle-btn" class="w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-sm text-xl z-50">
+           ☀️
+       </button>
+       <div class="hidden lg:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200">
+           <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+           <span id="firebase-status" class="text-xs font-bold text-slate-600">Đang kết nối...</span>
+       </div>
+       <!-- Đồng hồ thời gian ở trên web: độc lập hoàn toàn với Pomodoro -->
+       <div class="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-50/70 border border-cyan-200/50" title="Thời gian bạn đang ở trên web trong phiên hiện tại">
+           <span class="text-base">🕒</span>
+           <div class="leading-tight">
+               <div id="web-time-counter" class="text-sm font-black text-cyan-600 tabular-nums">00:00:00</div>
+               <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Trên web</div>
+           </div>
+       </div>
+   </div>
+
+  </div>
+ </div>
+</nav>
+
+<!-- CALENDAR + EVENTS -->
+<div id="calendar-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center p-4 calendar-modal-backdrop bg-slate-950/75">
+  <div class="calendar-box rounded-[2rem] border border-slate-700/60 bg-slate-900/95 shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
+    <div class="flex items-center justify-between gap-3 mb-5">
+      <div>
+        <div class="text-xs font-black uppercase tracking-[.18em] text-cyan-400">📅 Lịch học tập</div>
+        <div id="calendar-month-title" class="text-2xl font-black mt-1 text-white">Lịch</div>
+      </div>
+      <button onclick="closeCalendar()" class="w-10 h-10 rounded-xl bg-white/5 border border-slate-700 hover:bg-white/10 text-slate-300 font-black">✕</button>
+    </div>
+
+    <div class="flex items-center justify-between mb-4">
+      <button onclick="changeCalendarMonth(-1)" class="calendar-nav-btn text-slate-200">‹</button>
+      <button onclick="goCalendarToday()" class="px-4 py-2 rounded-xl bg-cyan-500/15 border border-cyan-400/20 text-cyan-300 text-xs font-black">HÔM NAY</button>
+      <button onclick="changeCalendarMonth(1)" class="calendar-nav-btn text-slate-200">›</button>
+    </div>
+
+    <div class="grid grid-cols-7 gap-1 mb-1">
+      <div class="calendar-weekday">T2</div><div class="calendar-weekday">T3</div><div class="calendar-weekday">T4</div><div class="calendar-weekday">T5</div><div class="calendar-weekday">T6</div><div class="calendar-weekday">T7</div><div class="calendar-weekday">CN</div>
+    </div>
+    <div id="calendar-days" class="calendar-grid"></div>
+
+    <div class="calendar-event-panel mt-6 pt-5 border-t border-slate-800">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <div class="text-sm font-black text-white">➕ Thêm sự kiện</div>
+          <div class="text-xs text-slate-500 mt-1">Đặt lịch kiểm tra, deadline, kỳ thi hoặc mục tiêu học tập.</div>
+        </div>
+      </div>
+      <form id="calendar-event-form" class="space-y-3" onsubmit="saveCalendarEvent(event)">
+        <input id="calendar-event-id" type="hidden">
+        <input id="calendar-event-title" maxlength="120" required class="tw-input" placeholder="Tên sự kiện, ví dụ: Thi Hóa giữa kỳ">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input id="calendar-event-date" type="date" required class="tw-input">
+          <input id="calendar-event-time" type="time" class="tw-input">
+        </div>
+        <input id="calendar-event-note" maxlength="300" class="tw-input" placeholder="Ghi chú (không bắt buộc)">
+        <div class="grid grid-cols-2 gap-2">
+          <button type="submit" id="calendar-event-save-btn" class="py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black">LƯU SỰ KIỆN</button>
+          <button type="button" onclick="resetCalendarEventForm()" class="py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-black">XÓA FORM</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="mt-6">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div class="text-sm font-black text-white">📌 Sự kiện sắp tới</div>
+        <div id="calendar-event-count" class="text-xs font-bold text-slate-500">0 sự kiện</div>
+      </div>
+      <div id="calendar-event-list" class="space-y-2"></div>
+    </div>
+
+    <div class="flex flex-wrap gap-4 mt-5 pt-4 border-t border-slate-800 text-xs font-bold text-slate-400">
+      <span><i class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-2"></i>Đã học</span>
+      <span><i class="inline-block w-2 h-2 rounded-full bg-amber-400 mr-2"></i>Hôm nay + đã học</span>
+      <span><i class="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-2"></i>Có sự kiện</span>
+    </div>
+  </div>
+</div>
+<!-- BỨC TƯỜNG 1: MÀN HÌNH CHÀO MỪNG -->
+<section id="sec-welcome" class="fixed inset-0 z-[9999] bg-slate-900 flex flex-col items-center justify-center p-4 transition-opacity duration-500">
+    <!-- Nền trang trí ảo diệu -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute top-[-20%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-50 animate-pulse"></div>
+        <div class="absolute bottom-[-20%] right-[-10%] w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-50 animate-pulse" style="animation-delay: 2s;"></div>
+    </div>
+    
+    <div class="text-center relative z-10 transform transition-all hover:scale-105 duration-500">
+        <div class="w-28 h-28 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white text-6xl mx-auto mb-8 shadow-[0_0_40px_rgba(37,99,235,0.5)]">🧪</div>
+        <h1 class="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter">HTVVM <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">STUDIO</span></h1>
+        <p class="text-slate-400 font-bold mb-12 text-lg max-w-lg mx-auto">Hệ thống nền tảng Giáo dục & Luyện thi Hóa Học trực tuyến độc quyền.</p>
+        <button onclick="goToLogin()" class="px-12 py-5 bg-white text-slate-900 font-black rounded-full text-xl shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.6)] transition-all hover:-translate-y-1">KHÁM PHÁ NGAY</button>
+    </div>
+</section>
+<!-- MÀN HÌNH ĐĂNG NHẬP (KHÓA TOÀN BỘ TRANG WEB) -->
+<section id="sec-login" class="fixed inset-0 z-[9998] bg-slate-100 flex items-center justify-center p-4 hidden transition-opacity duration-500 opacity-0">
+    <div class="bg-white p-10 md:p-12 rounded-[2.5rem] shadow-2xl w-full max-w-md text-center border border-slate-200 relative overflow-hidden">
+        <!-- Background trang trí mờ ảo -->
+        <div class="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+            <div class="absolute top-[-20%] left-[-10%] w-64 h-64 bg-blue-600 rounded-full mix-blend-multiply filter blur-[80px]"></div>
+            <div class="absolute bottom-[-20%] right-[-10%] w-64 h-64 bg-emerald-500 rounded-full mix-blend-multiply filter blur-[80px]"></div>
+        </div>
+
+        <div class="relative z-10">
+            <div class="w-20 h-20 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center text-4xl mx-auto mb-6 shadow-inner">🔐</div>
+            <h2 class="text-3xl font-extrabold text-slate-900 mb-2">Hệ Thống Nội Bộ</h2>
+            <p class="text-sm font-bold text-slate-500 mb-8">Vui lòng đăng nhập để bắt đầu học tập.</p>
+            
+            <button onclick="loginWithGoogle()" class="w-full py-4 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-black rounded-2xl transition-all shadow-sm text-lg flex items-center justify-center gap-3 mb-3">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-6 h-6" alt="Google">
+                Đăng nhập với Google
+            </button>
+            <p class="text-[11px] font-semibold text-slate-400">Email của bạn sẽ được lưu lại để chấm điểm và xếp hạng.</p>
+            <p id="login-error" class="text-rose-500 font-bold mt-5 text-sm hidden"></p>
+        </div>
+    </div>
+</section>
+<!-- SECTION: CHEMMAKER (SOẠN ĐỀ HÓA PDF) -->
+<section id="sec-chemmaker" class="app-section max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="bg-white rounded-[2rem] shadow-soft border border-slate-200 p-6 relative overflow-hidden">
+        <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+            <!-- THANH TIÊU ĐỀ & NÚT BẤM (Đã được bôi keo dính chặt lên trần) -->
+        <div class="sticky top-0 z-50 bg-white pt-4 flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+            <div>
+                 <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2"><span class="text-purple-500">✍️</span> HTVVM ChemMaker</h1>
+                <p class="text-slate-500 text-sm mt-1 font-medium">Soạn thảo, vẽ cấu trúc, chèn ảnh và xuất PDF chuẩn Hóa học.</p>
+            </div>
+            
+            <button onclick="exportChemPDF(event)" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-700 hover:to-indigo-600 text-white font-extrabold rounded-xl shadow-md transition-all flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Xuất file PDF
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[650px]">
+            <div class="flex flex-col h-full">
+                <div class="flex justify-between items-end mb-3">
+                    <h3 class="font-extrabold text-slate-700">⌨️ Khung Soạn Thảo</h3>
+                    <div class="flex gap-2">
+                        <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="insertImage(event)">
+                        <button onclick="document.getElementById('image-upload').click()" class="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 font-extrabold text-sm rounded-lg flex items-center gap-2">🖼️ Chèn ẢNh</button>
+                        <button onclick="openDrawModal()" class="px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-extrabold text-sm rounded-lg flex items-center gap-2">🎨 Vẽ Phân Tử</button>
+                    </div>
+                </div>
+                <textarea id="chem-editor" class="flex-1 p-5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white resize-none font-mono text-sm leading-relaxed shadow-inner" oninput="updateChemPreview()">
+Bài 1: Hoàn thành các phương trình phản ứng sau:
+1) $\ce{Fe + 2HCl -> FeCl2 + H2 ^}$
+2) $\ce{Cu + 2H2SO4(đặc) ->[t^o] CuSO4 + SO2 ^ + 2H2O}$
+
+Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ tác dụng với $\ce{H2SO4}$.
+                </textarea>
+            </div>
+            <div class="flex flex-col h-full">
+                <h3 class="font-extrabold text-slate-700 mb-3">📄 Bản in Xem trước</h3>
+                <div class="flex-1 bg-slate-200 p-4 rounded-xl overflow-y-auto shadow-inner border border-slate-300">
+                    <div id="chem-pdf-content" class="bg-white min-h-full p-8 shadow-sm text-lg leading-loose text-slate-800" style="font-family: 'Times New Roman', Times, serif;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- SECTION: THỐNG KÊ TIẾN ĐỘ HỌC TẬP CÁ NHÂN -->
+<section id="sec-stats" class="app-section hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="text-center max-w-3xl mx-auto mb-10">
+        <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight mb-4">Thống kê <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-cyan-400">tiến độ học tập</span></h1>
+        <p class="text-lg text-slate-500 font-medium">Theo dõi thời gian học và điểm số của riêng bạn theo thời gian.</p>
+    </div>
+
+    <div id="stats-loading" class="text-center font-bold text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 p-12">Đang tải dữ liệu thống kê...</div>
+    <div id="stats-guest" class="hidden text-center font-bold text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 p-12">🔒 Bạn cần đăng nhập để xem thống kê cá nhân.</div>
+
+    <div id="stats-content" class="hidden">
+        <!-- Thẻ tổng quan -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm text-center">
+                <div id="stat-total-hours" class="text-2xl font-black text-indigo-600">0h</div>
+                <div class="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wide">Tổng giờ học</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm text-center">
+                <div id="stat-streak" class="text-2xl font-black text-orange-500">0</div>
+                <div class="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wide">Ngày chuỗi (streak)</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm text-center">
+                <div id="stat-exam-count" class="text-2xl font-black text-emerald-600">0</div>
+                <div class="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wide">Bài đã thi</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm text-center">
+                <div id="stat-avg-score" class="text-2xl font-black text-rose-500">0</div>
+                <div class="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wide">Điểm TB (/10)</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
+                <h3 class="text-lg font-extrabold text-slate-800 mb-4">⏱ Phút học — 7 ngày gần nhất</h3>
+                <canvas id="chart-study-days" height="220"></canvas>
+            </div>
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
+                <h3 class="text-lg font-extrabold text-slate-800 mb-4">🎯 Điểm số các lần thi gần đây</h3>
+                <canvas id="chart-exam-scores" height="220"></canvas>
+                <p id="stats-no-exam" class="hidden text-center text-sm font-bold text-slate-400 mt-6">Chưa có bài thi nào được ghi nhận.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- SECTION: TOOLKIT (BỘ CÔNG CỤ HÓA HỌC) -->
+<section id="sec-toolkit" class="app-section max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="text-center max-w-3xl mx-auto mb-10">
+        <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight mb-4">Sổ tay <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">Hóa Học</span></h1>
+        <p class="text-lg text-slate-500 font-medium">Bảng tuần hoàn, tra cứu phổ IR, màu kết tủa và công thức siêu tốc.</p>
+    </div>
+
+    <div class="flex justify-center mb-8">
+        <div class="inline-flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto max-w-full">
+            <button onclick="switchTab('tab-pt')" id="btn-tab-pt" class="tab-btn active px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-600 whitespace-nowrap">Bảng Tuần Hoàn</button>
+            <button onclick="switchTab('tab-ir')" id="btn-tab-ir" class="tab-btn px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-600 hover:bg-white whitespace-nowrap">Phổ IR</button>
+            <button onclick="switchTab('tab-color')" id="btn-tab-color" class="tab-btn px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-600 hover:bg-white whitespace-nowrap">Nhận biết & Kết tủa</button>
+            <button onclick="switchTab('tab-form')" id="btn-tab-form" class="tab-btn px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-600 hover:bg-white whitespace-nowrap">Công thức cơ bản</button>
+            <button onclick="switchTab('tab-graph')" id="btn-tab-graph" class="tab-btn px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-600 hover:bg-white whitespace-nowrap">📈 Vẽ đồ thị</button>
+            <button onclick="switchTab('tab-multi')" id="btn-tab-multi" class="tab-btn px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-600 hover:bg-white whitespace-nowrap">🧭 Đa môn</button>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2rem] p-6 shadow-soft border border-slate-200 relative overflow-hidden min-h-[60vh]">
+        <div id="tab-pt" class="tool-tab active">
+            <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2 mb-6"><span class="text-2xl">⚛️</span> Bảng Tuần Hoàn</h3>
+            <div id="pt-container" class="pt-grid bg-slate-50 p-4 rounded-xl border border-slate-100"></div>
+        </div>
+        <!-- TAB PHỔ IR -->
+        <div id="tab-ir" class="tool-tab">
+            <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2 mb-6"><span class="text-2xl">📈</span> Tra cứu Phổ Hồng Ngoại (IR)</h3>
+            <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                <table class="w-full lb-table text-sm">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr><th>Liên kết / Nhóm chức</th><th>Số sóng (cm⁻¹)</th><th>Đặc điểm Peak</th><th>Hợp chất thường gặp</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="font-extrabold text-blue-700">O - H (Alcohol)</td><td>3200 - 3600</td><td class="text-slate-500">Tù, bầu, cường độ mạnh</td><td>Alcohol, Phenol</td></tr>
+                        <tr><td class="font-extrabold text-rose-700">O - H (Carboxylic Acid)</td><td>2500 - 3300</td><td class="text-slate-500">Rất tù, trải rộng</td><td>Carboxylic Acid</td></tr>
+                        <tr><td class="font-extrabold text-emerald-700">C = O (Carbonyl)</td><td>1670 - 1740</td><td class="text-slate-500">Rất nhọn, cường độ mạnh</td><td>Aldehyde, Ketone, Carboxylic Acid, Ester</td></tr>
+                        <tr><td class="font-extrabold text-amber-600">N - H (Amine)</td><td>3300 - 3500</td><td class="text-slate-500">Nhọn, cường độ trung bình</td><td>Amine (bậc 1 có 2 peak, bậc 2 có 1 peak)</td></tr>
+                        <tr><td class="font-extrabold text-slate-700">C - H (Alkane)</td><td>2850 - 2960</td><td class="text-slate-500">Nhọn, ngay dưới 3000</td><td>Hầu hết hợp chất hữu cơ</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB MÀU KẾT TỦA & MÙI ESTER -->
+        <div id="tab-color" class="tool-tab">
+            <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2 mb-6"><span class="text-2xl">🧪</span> Nhận biết & Màu sắc kết tủa</h3>
+            
+            <!-- Khu vực 1: Grid Kết tủa -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+                <div class="p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:-translate-y-1 transition-transform shadow-sm">
+                    <div class="w-12 h-12 rounded-full border-4 border-slate-100 bg-white flex shrink-0 shadow-sm"></div>
+                    <div><h4 class="font-extrabold text-slate-800">Kết tủa Trắng</h4><p class="text-xs font-semibold text-slate-500 mt-1">BaSO₄, AgCl, CaCO₃, MgCO₃, Al(OH)₃</p></div>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:-translate-y-1 transition-transform shadow-sm">
+                    <div class="w-12 h-12 rounded-full border-4 border-blue-200 bg-blue-500 flex shrink-0 shadow-sm"></div>
+                    <div><h4 class="font-extrabold text-slate-800">Kết tủa Xanh lam</h4><p class="text-xs font-semibold text-slate-500 mt-1">Cu(OH)₂</p></div>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:-translate-y-1 transition-transform shadow-sm">
+                    <div class="w-12 h-12 rounded-full border-4 border-yellow-100 bg-yellow-400 flex shrink-0 shadow-sm"></div>
+                    <div><h4 class="font-extrabold text-slate-800">Kết tủa Vàng nhạt</h4><p class="text-xs font-semibold text-slate-500 mt-1">AgBr, AgI (vàng đậm), BaCrO₄</p></div>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:-translate-y-1 transition-transform shadow-sm">
+                    <div class="w-12 h-12 rounded-full border-4 border-orange-200 bg-orange-700 flex shrink-0 shadow-sm"></div>
+                    <div><h4 class="font-extrabold text-slate-800">Kết tủa Nâu đỏ</h4><p class="text-xs font-semibold text-slate-500 mt-1">Fe(OH)₃</p></div>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:-translate-y-1 transition-transform shadow-sm">
+                    <div class="w-12 h-12 rounded-full border-4 border-green-100 bg-green-600 flex shrink-0 shadow-sm"></div>
+                    <div><h4 class="font-extrabold text-slate-800">Kết tủa Xanh rêu</h4><p class="text-xs font-semibold text-slate-500 mt-1">Fe(OH)₂</p></div>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:-translate-y-1 transition-transform shadow-sm">
+                    <div class="w-12 h-12 rounded-full border-4 border-slate-800 bg-slate-900 flex shrink-0 shadow-sm"></div>
+                    <div><h4 class="font-extrabold text-slate-800">Kết tủa Đen</h4><p class="text-xs font-semibold text-slate-500 mt-1">CuS, PbS, Ag₂S</p></div>
+                </div>
+            </div>
+
+            <!-- Khu vực 2: Mùi Ester (Nằm hoàn toàn tách biệt bên ngoài Grid trên) -->
+            <div class="border-t border-slate-100 pt-8 mt-4">
+                <h4 class="font-extrabold text-slate-800 flex items-center gap-2 mb-6"><span class="text-xl">🌸</span> Nhận biết mùi đặc trưng (Ester)</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- Mùi chuối chín -->
+                    <div class="p-4 rounded-xl border border-slate-200 shadow-sm bg-yellow-50/50 flex flex-col items-center text-center hover:scale-105 transition-transform cursor-default">
+                        <div class="text-3xl mb-2">🍌</div>
+                        <h5 class="font-extrabold text-slate-800 text-sm">Mùi chuối chín</h5>
+                        <p class="text-[11px] font-bold text-yellow-700 mt-1 uppercase tracking-wide">Isoamyl acetate</p>
+                    </div>
+                    <!-- Mùi dứa -->
+                    <div class="p-4 rounded-xl border border-slate-200 shadow-sm bg-orange-50/50 flex flex-col items-center text-center hover:scale-105 transition-transform cursor-default">
+                        <div class="text-3xl mb-2">🍍</div>
+                        <h5 class="font-extrabold text-slate-800 text-sm">Mùi dứa chín</h5>
+                        <p class="text-[11px] font-bold text-orange-700 mt-1 uppercase tracking-wide">Ethyl butyrate</p>
+                    </div>
+                    <!-- Mùi hoa hồng -->
+                    <div class="p-4 rounded-xl border border-slate-200 shadow-sm bg-rose-50/50 flex flex-col items-center text-center hover:scale-105 transition-transform cursor-default">
+                        <div class="text-3xl mb-2">🌹</div>
+                        <h5 class="font-extrabold text-slate-800 text-sm">Mùi hoa hồng</h5>
+                        <p class="text-[11px] font-bold text-rose-700 mt-1 uppercase tracking-wide">Geranyl acetate</p>
+                    </div>
+                    <!-- Mùi hoa nhài -->
+                    <div class="p-4 rounded-xl border border-slate-200 shadow-sm bg-slate-50 flex flex-col items-center text-center hover:scale-105 transition-transform cursor-default">
+                        <div class="text-3xl mb-2">🌼</div>
+                        <h5 class="font-extrabold text-slate-800 text-sm">Mùi hoa nhài</h5>
+                        <p class="text-[11px] font-bold text-slate-600 mt-1 uppercase tracking-wide">Benzyl acetate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+       
+       <!-- TAB CÔNG THỨC -->
+        <div id="tab-form" class="tool-tab">
+            <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2 mb-6">
+                📝 Công thức cơ bản Hóa Học
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Box 1 -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="font-extrabold text-blue-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">
+                        1. Công thức mol & nồng độ
+                    </h4>
+                    <ul class="space-y-3 font-bold text-slate-700 text-[15px]">
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-blue-500 text-sm">🔹</span>
+                            <span class="flex-1">Số mol: $n = \frac{m}{M}$</span>
+                        </li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-blue-500 text-sm">🔹</span>
+                            <span class="flex-1">Số mol khí (đkc 25°C): $n = \frac{V}{24.79}$</span>
+                        </li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-blue-500 text-sm">🔹</span>
+                            <span class="flex-1">Nồng độ mol: $C_M = \frac{n}{V}$</span>
+                        </li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-blue-500 text-sm">🔹</span>
+                            <span class="flex-1">Nồng độ %: $C\% = \frac{m_{ct}}{m_{dd}} \times 100\%$</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Box 2 -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="font-extrabold text-emerald-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">
+                        2. Các công thức biến đổi
+                    </h4>
+                    <ul class="space-y-3 font-bold text-slate-700 text-[15px]">
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-orange-500 text-sm">🔸</span>
+                            <span class="flex-1">Khối lượng riêng: $D = \frac{m_{dd}}{V_{dd}}$</span>
+                        </li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-orange-500 text-sm">🔸</span>
+                            <span class="flex-1">Liên hệ C% và C_M: $C_M = \frac{10 \cdot D \cdot C\%}{M}$</span>
+                        </li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm">
+                            <span class="text-orange-500 text-sm">🔸</span>
+                            <span class="flex-1">Hiệu suất: $H = \frac{m_{\text{thực tế}}}{m_{\text{lý thuyết}}} \times 100\%$</span>
+                        </li>
+                    </ul>
+                </div>
+                <!-- Box 3: Nhiệt động học -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
+                    <h4 class="font-extrabold text-rose-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">
+                        3. Biến thiên Enthalpy - Nhiệt động học ($\Delta_r H^0_{298}$)
+                    </h4>
+                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-4 font-bold text-slate-700 text-[15px]">
+                        
+                        <!-- Công thức Nhiệt tạo thành -->
+                        <li class="bg-white p-5 rounded-xl border border-slate-100 flex flex-col justify-center items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">Tính theo Nhiệt tạo thành</span>
+                            <div class="text-lg text-slate-800">
+                                $\Delta_r H^0_{298} = \sum \Delta_f H^0_{298}(\text{sp}) - \sum \Delta_f H^0_{298}(\text{cđ})$
+                            </div>
+                        </li>
+                        
+                        <!-- Công thức Năng lượng liên kết -->
+                        <li class="bg-white p-5 rounded-xl border border-slate-100 flex flex-col justify-center items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">Tính theo Năng lượng liên kết</span>
+                            <div class="text-lg text-slate-800">
+                                $\Delta_r H^0_{298} = \sum E_b(\text{cđ}) - \sum E_b(\text{sp})$
+                            </div>
+                        </li>
+
+                    </ul>
+                </div>
+            </div>
+        </div>
+<!-- TAB VẼ ĐỒ THỊ -->
+        <div id="tab-graph" class="tool-tab">
+            <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2 mb-6">
+                <span class="text-2xl">📈</span> Siêu máy Vẽ Đồ Thị
+            </h3>
+            
+            <!-- Khung nhập liệu -->
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                <div class="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-xl px-5 py-3 shadow-inner">
+                    <span class="font-black text-slate-500 mr-3 text-lg">f(x) =</span>
+                    <input type="text" id="func-input" class="w-full bg-transparent outline-none font-mono text-lg text-blue-600 font-bold" placeholder="VD: x^2 - 4*x + 3 hoặc sin(x)">
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="plotGraph()" class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-md hover:shadow-lg transition-all">Vẽ ngay</button>
+                    <button onclick="downloadGraph()" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2">⬇️ Tải ảnh</button>
+                </div>
+            </div>
+            
+            <!-- Khung hiển thị đồ thị -->
+            <div class="w-full bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative h-[450px]">
+                <canvas id="mathChart"></canvas>
+            </div>
+        </div>
+
+<!-- TAB ĐA MÔN: Toán / Lý / Sinh / Anh -->
+        <div id="tab-multi" class="tool-tab">
+            <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2 mb-6">
+                <span class="text-2xl">🧭</span> Sổ tay nhanh Đa môn
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- TOÁN -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="font-extrabold text-blue-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">📐 Toán học</h4>
+                    <ul class="space-y-3 font-bold text-slate-700 text-[15px]">
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-blue-500 text-sm">🔹</span><span class="flex-1">Phương trình bậc 2: $x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-blue-500 text-sm">🔹</span><span class="flex-1">Đạo hàm: $(x^n)' = n\cdot x^{n-1}$, $(\sin x)' = \cos x$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-blue-500 text-sm">🔹</span><span class="flex-1">Cấp số cộng: $S_n = \frac{n}{2}(2u_1+(n-1)d)$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-blue-500 text-sm">🔹</span><span class="flex-1">Tổ hợp - Chỉnh hợp: $C_n^k=\frac{n!}{k!(n-k)!}$, $A_n^k=\frac{n!}{(n-k)!}$</span></li>
+                    </ul>
+                </div>
+
+                <!-- LÝ -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="font-extrabold text-orange-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">⚡ Vật lý</h4>
+                    <ul class="space-y-3 font-bold text-slate-700 text-[15px]">
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-orange-500 text-sm">🔸</span><span class="flex-1">Định luật II Newton: $F = m\cdot a$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-orange-500 text-sm">🔸</span><span class="flex-1">Dao động điều hoà: $x = A\cos(\omega t + \varphi)$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-orange-500 text-sm">🔸</span><span class="flex-1">Định luật Ohm: $I = \frac{U}{R}$, Công suất: $P = U\cdot I$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-orange-500 text-sm">🔸</span><span class="flex-1">Sóng: $v = \lambda \cdot f$</span></li>
+                    </ul>
+                </div>
+
+                <!-- SINH -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="font-extrabold text-emerald-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">🧬 Sinh học</h4>
+                    <ul class="space-y-3 font-bold text-slate-700 text-[15px]">
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-emerald-500 text-sm">🔹</span><span class="flex-1">Nguyên tắc bổ sung ADN: A-T (2 liên kết H), G-X (3 liên kết H)</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-emerald-500 text-sm">🔹</span><span class="flex-1">Tỉ lệ kiểu gen lai một cặp tính trạng (Menđen): $1:2:1$ hoặc $3:1$</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-emerald-500 text-sm">🔹</span><span class="flex-1">Hô hấp tế bào: $C_6H_{12}O_6 + 6O_2 \to 6CO_2 + 6H_2O + \text{năng lượng}$</span></li>
+                    </ul>
+                </div>
+
+                <!-- ANH -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="font-extrabold text-rose-700 mb-5 uppercase text-sm tracking-wider flex items-center gap-2">🇬🇧 Tiếng Anh</h4>
+                    <ul class="space-y-3 font-bold text-slate-700 text-[15px]">
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-rose-500 text-sm">🔸</span><span class="flex-1">Thì hiện tại đơn: S + V(s/es) — thói quen, sự thật</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-rose-500 text-sm">🔸</span><span class="flex-1">Câu bị động: S + be + V3/ed + (by O)</span></li>
+                        <li class="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 shadow-sm"><span class="text-rose-500 text-sm">🔸</span><span class="flex-1">Câu điều kiện loại 2: If + S + Ved, S + would + V</span></li>
+                    </ul>
+                </div>
+            </div>
+            <p class="text-xs font-semibold text-slate-500 mt-6 text-center">💡 Sổ tay đa môn giúp các bạn tra cứu công thức nhanh gọn - tiện lợi.</p>
+        </div>
+        
+</section>
+<!-- SECTION: TRANG CHỦ / DASHBOARD -->
+<section id="sec-dashboard" class="app-section active min-h-[calc(100vh-92px)] px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+  <div class="max-w-7xl mx-auto h-full">
+    <!-- VINH DANH TRANG CHỦ -->
+    <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <section class="rounded-[2rem] border border-cyan-400/15 bg-slate-900/80 p-6 shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 mb-5">
+          <div>
+            <p class="text-[11px] text-cyan-300 font-black uppercase tracking-[.18em]">VINH DANH HÔM NAY</p>
+            <h2 class="text-2xl font-black text-white mt-1">🔥 Top cày cuốc</h2>
+            <p class="text-xs text-slate-500 mt-1">3 học viên có tổng thời gian học nhiều nhất trong ngày</p>
+          </div>
+          <span class="text-2xl">⏱️</span>
+        </div>
+        <div id="dashboard-top-study" class="space-y-3">
+          <div class="py-8 text-center text-sm font-bold text-slate-500 animate-pulse">Đang tải bảng vinh danh...</div>
+        </div>
+      </section>
+
+      <section class="rounded-[2rem] border border-amber-400/15 bg-slate-900/80 p-6 shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 mb-5">
+          <div>
+            <p class="text-[11px] text-amber-300 font-black uppercase tracking-[.18em]">VINH DANH BỀN BỈ</p>
+            <h2 class="text-2xl font-black text-white mt-1">🔥 Top bền bỉ</h2>
+            <p class="text-xs text-slate-500 mt-1">3 học viên đang giữ streak cao nhất</p>
+          </div>
+          <span class="text-2xl">🏆</span>
+        </div>
+        <div id="dashboard-top-streak" class="space-y-3">
+          <div class="py-8 text-center text-sm font-bold text-slate-500 animate-pulse">Đang tải bảng vinh danh...</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- GÓC TRUYỀN CẢM HỨNG: CHỪA KHÔNG GIAN LỚN CHO DANH NGÔN MỖI NGÀY -->
+    <section class="dashboard-quote-card dashboard-quote-spacious mt-5">
+      <div class="dashboard-quote-inner">
+        <div class="dashboard-quote-accent"></div>
+        <p class="dashboard-quote-label">MỘT CÂU CHO NGÀY HÔM NAY</p>
+        <blockquote id="daily-motivation-text" class="dashboard-quote-text">Hãy tin vào những nỗ lực nhỏ được lặp lại đủ lâu.</blockquote>
+        <div class="dashboard-quote-byline">
+          <span id="daily-motivation-author">— Đang tải nguồn</span>
+          <span class="dashboard-quote-dot">•</span>
+          <span id="daily-motivation-date"></span>
+        </div>
+        <a id="daily-motivation-source" class="dashboard-quote-source" href="#" target="_blank" rel="noopener noreferrer">↗ Nguồn gốc câu nói</a>
+      </div>
+    </section>
+
+    <!-- SỰ KIỆN SẮP TỚI -->
+    <section id="dashboard-upcoming-events" class="mt-5 rounded-[2rem] border border-cyan-400/15 bg-slate-900/80 p-6 shadow-xl overflow-hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <p class="text-[11px] text-cyan-300 font-black uppercase tracking-[.18em]">LỊCH CỦA BẠN</p>
+          <h2 class="text-2xl font-black text-white mt-1">⏳ Sự kiện sắp tới</h2>
+          <p class="text-xs text-slate-500 mt-1">Đặt một sự kiện trong Lịch, trang chủ sẽ tự đếm ngược cho bạn.</p>
+        </div>
+        <button onclick="openCalendar()" class="px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 font-black text-sm hover:bg-cyan-500/15">📅 Mở lịch</button>
+      </div>
+      <div id="dashboard-upcoming-event-body" class="mt-5">
+        <div class="dashboard-event-empty">Chưa có sự kiện sắp tới. Bấm “Mở lịch” để đặt một mốc quan trọng.</div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 xl:grid-cols-[1.35fr_.65fr] gap-5 h-full">
+      <div class="rounded-[2rem] border border-cyan-400/20 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/60 p-6 sm:p-8 shadow-2xl overflow-hidden relative">
+        <div class="absolute -top-20 -right-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl"></div>
+        <div class="relative">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-7">
+            <div>
+              <p class="text-cyan-300 text-xs font-black uppercase tracking-[.18em]">HTVVM STUDIO</p>
+              <h1 class="text-3xl sm:text-4xl font-black text-white mt-2">Trung tâm học tập</h1>
+              <p class="text-slate-400 mt-2 max-w-2xl">Mọi công cụ quan trọng được gom vào một màn hình. Navbar vẫn giữ để chuyển trang thật nhanh.</p>
+            </div>
+            <button onclick="openProfile()" class="shrink-0 px-4 py-3 rounded-2xl bg-white/10 border border-white/10 hover:bg-white/15 text-white font-bold">👤 Hồ sơ</button>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <button onclick="openChemArena()" class="dashboard-mini dashboard-mini-arena">⚔️<span>Đấu trường Hóa</span><small>Realtime • 8 người</small></button>
+            <button onclick="switchSection('sec-library')" class="dashboard-mini">📚<span>Thư viện</span><small>Tài liệu</small></button>
+            <button onclick="openTeacherConfig()" class="dashboard-mini">⚙️<span>Tạo đề thi</span><small>Phòng thi</small></button>
+            <button onclick="openChemMaker()" class="dashboard-mini">✍️<span>Soạn PDF</span><small>Đề Hóa</small></button>
+            <button onclick="loadExamList()" class="dashboard-mini">📝<span>Thi Online</span><small>Làm bài</small></button>
+            <button onclick="openToolkit()" class="dashboard-mini">🧰<span>Công cụ</span><small>Hóa học</small></button>
+            <button onclick="switchSection('sec-study')" class="dashboard-mini">🚀<span>Góc học tập</span><small>Pomodoro</small></button>
+            <button onclick="openCommunity()" class="dashboard-mini">💬<span>Cộng đồng</span><small>Hỏi bài cùng nhau</small></button>
+            <button onclick="openStats()" class="dashboard-mini">📊<span>Thống kê</span><small>Tiến độ</small></button>
+            <button onclick="openCalendar()" class="dashboard-mini">📅<span>Lịch học</span><small>Ngày học</small></button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button onclick="openChemMaker()" class="dashboard-action bg-purple-500/10 border-purple-400/20">🧪 <span>Soạn một đề mới</span><b>→</b></button>
+            <button onclick="switchSection('sec-study')" class="dashboard-action bg-emerald-500/10 border-emerald-400/20">🎯 <span>Bắt đầu phiên học</span><b>→</b></button>
+            <button onclick="openStats()" class="dashboard-action bg-cyan-500/10 border-cyan-400/20">📈 <span>Xem tiến độ</span><b>→</b></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-5">
+        <div class="rounded-[2rem] border border-cyan-400/15 bg-slate-900/80 p-6 shadow-xl">
+          <div class="flex items-center justify-between mb-5"><div><p class="text-[11px] text-slate-500 font-black uppercase tracking-widest">Phiên truy cập</p><h2 class="text-xl font-black text-white mt-1">🕒 Bạn đang ở web</h2></div><span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span></div>
+          <div id="dashboard-web-time" class="text-4xl sm:text-5xl font-black text-cyan-300 tabular-nums tracking-tight">00:00:00</div>
+          <p class="text-xs text-slate-500 mt-2">Độc lập với thời gian học tập.</p>
+        </div>
+
+        <div class="dashboard-online-card rounded-[2rem] p-6 shadow-xl">
+          <div class="flex items-center justify-between mb-5">
+            <div><p class="text-[11px] text-emerald-300/80 font-black uppercase tracking-widest">Trung tâm học tập</p><h2 class="text-xl font-black text-white mt-1">👥 Đang online</h2></div>
+            <span class="dashboard-online-dot" title="Đang kết nối realtime"></span>
+          </div>
+          <div class="flex items-end gap-3">
+            <div id="dashboard-online-count" class="text-4xl sm:text-5xl font-black text-emerald-300 tabular-nums">1</div>
+            <div class="pb-1 text-sm font-black text-slate-400">người</div>
+          </div>
+          <p id="dashboard-online-status" class="text-xs text-slate-500 mt-2">Bạn đang ở cùng những người học khác.</p>
+        </div>
+
+        <div class="rounded-[2rem] border border-amber-400/15 bg-slate-900/80 p-6 shadow-xl">
+          <div class="flex items-center justify-between mb-4"><div><p class="text-[11px] text-slate-500 font-black uppercase tracking-widest">Tiện ích</p><h2 class="text-xl font-black text-white mt-1">⚡ Thao tác nhanh</h2></div></div>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="openCalendar()" class="dashboard-quick">📅 Lịch</button>
+            <button onclick="openStats()" class="dashboard-quick">📊 Thống kê</button>
+            <button onclick="openDonateModal()" class="dashboard-quick">💖 Ủng hộ</button>
+            <button onclick="toggleTheme()" class="dashboard-quick">🌙 Giao diện</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+
+<!-- SECTION: CỘNG ĐỒNG HỎI BÀI -->
+<section id="sec-community" class="app-section max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6">
+    <aside class="rounded-[2rem] border border-cyan-400/15 bg-slate-900/80 p-6 shadow-xl h-fit xl:sticky xl:top-28">
+      <p class="text-[11px] text-cyan-300 font-black uppercase tracking-[.18em]">HTVVM COMMUNITY</p>
+      <h2 class="text-2xl font-black text-white mt-1">💬 Hỏi bài cùng nhau</h2>
+      <p class="text-sm text-slate-400 mt-2 mb-5">Đăng câu hỏi, chia sẻ cách giải và cùng nhau trao đổi.</p>
+      <div class="space-y-3">
+        <input id="community-title" class="tw-input" maxlength="120" placeholder="Tiêu đề câu hỏi...">
+        <select id="community-subject" class="tw-input">
+          <option value="Hoá học">🧪 Hoá học</option><option value="Toán">📐 Toán</option><option value="Vật lý">⚡ Vật lý</option><option value="Sinh học">🧬 Sinh học</option><option value="Khác">📚 Khác</option>
+        </select>
+        <textarea id="community-body" class="tw-input min-h-[150px] resize-y" maxlength="3000" placeholder="Mô tả bài, dữ kiện, chỗ bạn đang vướng..."></textarea>
+        <button onclick="createCommunityPost()" id="community-post-btn" class="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black">ĐĂNG BÀI</button>
+        <p class="text-[11px] text-slate-500">Chỉ thành viên đăng nhập mới được đăng bài và bình luận.</p>
+      </div>
+    </aside>
+    <main>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div><h1 class="text-3xl font-black text-white">Dòng thời gian cộng đồng</h1><p class="text-sm text-slate-500 mt-1">Bài mới nhất tự động cập nhật realtime.</p></div>
+        <button onclick="loadCommunityPosts(true)" class="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-bold hover:bg-white/10">↻ Làm mới</button>
+      </div>
+      <div id="community-feed" class="space-y-4"><div class="rounded-2xl border border-white/10 bg-slate-900/60 p-10 text-center text-slate-500 font-bold animate-pulse">Đang tải cộng đồng...</div></div>
+    </main>
+  </div>
+</section>
+
+<!-- SECTION: THƯ VIỆN -->
+<section id="sec-library" class="app-section active max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+ 
+ <!-- Tiêu đề Gradient xịn xò (Cũ) -->
+ <div class="text-center max-w-3xl mx-auto mb-16">
+  <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight mb-6">Kho tài liệu <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">Toàn Diện</span></h1>
+  <p class="text-lg text-slate-500 font-medium">Hệ thống bài tập, đề thi trắc nghiệm và nền tảng thi thử trực tuyến chất lượng cao.</p>
+ </div>
+
+ <!-- Thanh tìm kiếm & Nút bấm môn học (Mới) -->
+ <div class="bg-white p-4 rounded-2xl shadow-soft border border-slate-200 mb-10">
+  <div class="relative mb-4">
+   <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+   <input id="searchInput" class="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-100 bg-slate-50 text-slate-900 font-semibold focus:ring-2 focus:ring-blue-600 outline-none transition-all" placeholder="Tìm kiếm tên đề, từ khóa..." oninput="applyFilters()">
+  </div>
+  
+  <div id="filter-tags" class="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+      <button onclick="filterDocs('all')" class="filter-btn active shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-blue-600 text-white transition-colors shadow-sm">Tất cả</button>
+      <button onclick="filterDocs('Toán')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Toán</button>
+      <button onclick="filterDocs('Vật lý')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Vật lý</button>
+      <button onclick="filterDocs('Hoá học')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Hoá học</button>
+      <button onclick="filterDocs('Sinh học')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Sinh học</button>
+      <button onclick="filterDocs('Lịch sử')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Lịch sử</button>
+      <button onclick="filterDocs('Địa lý')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Địa lý</button>
+      <button onclick="filterDocs('Ngữ Văn')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Ngữ Văn</button>
+      <button onclick="filterDocs('GDKTPL')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">GDKTPL</button>
+      <button onclick="filterDocs('Ngoại ngữ')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Ngoại ngữ</button>
+      <button onclick="filterDocs('ĐGNL')" class="filter-btn shrink-0 px-5 py-2 rounded-full font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">ĐGNL</button>
+  </div>
+ </div>
+ 
+ <!-- Lưới thẻ Tài liệu (Grid) -->
+ <div id="document-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8"></div>
+</section>
+<!-- SECTION: CẤU HÌNH PHÒNG THI (MỌI USER ĐỀU CÓ THỂ TẠO) -->
+<section id="sec-teacher-config" class="app-section max-w-4xl mx-auto px-4 py-12">
+ <div class="bg-white rounded-[2rem] p-8 md:p-10 shadow-soft border border-slate-200 relative overflow-hidden">
+  <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-400 to-rose-500"></div>
+  <div class="flex justify-between items-start mb-10">
+      <div>
+          <span class="inline-block px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-extrabold tracking-wider mb-3">CREATOR STUDIO</span>
+          <h2 class="text-3xl font-extrabold text-slate-900">Tạo Phòng Thi</h2>
+      </div>
+  </div>
+  <div class="space-y-6">
+   <div><label class="block text-sm font-bold text-slate-700 mb-2">Tên đề thi</label><input id="teacher-exam-title" class="tw-input" placeholder="Ví dụ: Kiểm tra 15 phút Ester"></div>
+   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+       <div><label class="block text-sm font-bold text-slate-700 mb-2">Link PDF đề thi (Tùy chọn)</label><input id="teacher-pdf-url" type="url" class="tw-input" placeholder="https://drive.google.com/..."></div>
+       <div><label class="block text-sm font-bold text-slate-700 mb-2">Hoặc tải file từ máy</label><input id="local-file" type="file" accept="image/*,.pdf" onchange="previewLocal(event)" class="tw-input !p-2.5 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700"></div>
+   </div>
+   <div class="flex items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-200 mt-8">
+       <div class="flex-1"><label class="block text-sm font-bold text-slate-700 mb-2">Thời gian làm bài (Phút)</label><input id="teacher-time" type="number" min="1" value="50" class="tw-input text-xl"></div>
+       <div class="w-px h-16 bg-slate-300 hidden sm:block"></div>
+       <div class="flex-1 text-center"><span class="block text-sm font-bold text-slate-500 mb-1">Tổng số câu hỏi</span><span id="total-preview" class="text-4xl font-extrabold text-blue-600">30</span></div>
+   </div>
+   <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div class="p-5 rounded-2xl bg-blue-50 border border-blue-100"><label class="block text-sm font-bold text-blue-800 mb-3 text-center">Phần 1: ABCD</label><input id="numABCD" type="number" min="0" value="20" class="w-full p-3 rounded-xl border border-blue-200 text-center font-extrabold text-2xl text-blue-700 outline-none"></div>
+    <div class="p-5 rounded-2xl bg-orange-50 border border-orange-100"><label class="block text-sm font-bold text-orange-800 mb-3 text-center">Phần 2: Đúng/Sai</label><input id="numTF" type="number" min="0" value="4" class="w-full p-3 rounded-xl border border-orange-200 text-center font-extrabold text-2xl text-orange-700 outline-none"></div>
+    <div class="p-5 rounded-2xl bg-emerald-50 border border-emerald-100"><label class="block text-sm font-bold text-emerald-800 mb-3 text-center">Phần 3: Tự luận</label><input id="numShort" type="number" min="0" value="6" class="w-full p-3 rounded-xl border border-emerald-200 text-center font-extrabold text-2xl text-emerald-700 outline-none"></div>
+   </div>
+   <div class="flex gap-4 pt-6 border-t border-slate-100">
+       <button onclick="buildTeacherSheet()" class="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg">Tiếp tục nhập đáp án</button>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- SECTION: NHẬP ĐÁP ÁN & TẠO PHÒNG -->
+<section id="sec-teacher-key" class="app-section max-w-[1600px] mx-auto px-4 py-8 teacher-mode">
+ <div class="bg-white rounded-[2rem] p-6 shadow-soft border border-slate-200 h-[calc(100vh-120px)] flex flex-col">
+  <div class="flex justify-between items-center border-b pb-4 mb-4 shrink-0">
+      <h2 class="text-2xl font-extrabold text-slate-900">🔑 Nhập đáp án chuẩn & tạo phòng</h2>
+      <button id="create-room-btn" onclick="createRoomToFirebase()" class="px-6 py-2.5 rounded-xl bg-orange-600 text-white font-bold">🚀 Tạo phòng</button>
+  </div>
+  <div id="room-share-panel" class="hidden mb-4 p-4 rounded-2xl border border-blue-200 bg-blue-50">
+      <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div class="flex-1 min-w-0">
+              <div class="text-xs font-black text-blue-700 uppercase tracking-wider mb-1">Phòng đã tạo</div>
+              <div class="flex items-center gap-3">
+                  <span id="created-room-code" class="text-2xl font-black text-slate-900 tracking-[0.18em]">------</span>
+                  <span id="created-room-meta" class="text-sm font-bold text-slate-500 truncate"></span>
+              </div>
+              <div id="created-room-link" class="mt-2 text-xs font-semibold text-slate-500 break-all"></div>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+              <button onclick="copyCreatedRoomLink()" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-extrabold">🔗 Sao chép link</button>
+              <button onclick="copyCreatedRoomCode()" class="px-4 py-2.5 rounded-xl bg-white border border-blue-200 text-blue-700 font-extrabold">📋 Sao chép mã</button>
+              <button onclick="showRoomQR()" class="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-extrabold">▣ QR</button>
+              <button onclick="openCreatedRoom()" class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold">🚀 Vào phòng</button>
+          </div>
+      </div>
+      <div id="room-qr-box" class="hidden mt-4 bg-white rounded-2xl p-4 border border-slate-200 w-fit">
+          <img id="room-qr" alt="QR phòng thi" class="w-48 h-48 mx-auto">
+      </div>
+  </div>
+  <div class="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
+   <div class="lg:w-7/12 flex flex-col bg-slate-50 border rounded-2xl overflow-hidden shadow-inner">
+       <div class="flex-1 overflow-auto p-4 relative text-center">
+           <div id="preview-placeholder" class="m-auto text-slate-500 font-semibold mt-10">Chưa có tài liệu xem trước</div>
+           <img id="preview-img" class="hidden max-w-full rounded-xl mx-auto"><iframe id="preview-pdf" class="hidden w-full h-full min-h-[800px] border-0"></iframe>
+       </div>
+   </div>
+   <div class="lg:w-5/12 flex flex-col bg-white rounded-2xl border shadow-sm overflow-hidden">
+       <div class="p-4 bg-slate-50 border-b font-bold text-slate-700">Phiếu Điền Đáp Án</div>
+       <div id="teacher-sheet-container" class="flex-1 overflow-y-auto p-6 scroll-smooth"></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- SECTION: DANH SÁCH PHÒNG THI -->
+<section id="sec-exam-list" class="app-section max-w-7xl mx-auto px-4 py-12">
+ <div class="flex justify-between items-center mb-10">
+  <h2 class="text-3xl font-extrabold text-slate-900">Phòng thi trực tuyến</h2>
+  <button onclick="loadExamList()" class="px-5 py-2.5 bg-white border rounded-xl font-bold hover:bg-slate-50">Làm mới danh sách</button>
+ </div>
+ <div id="live-exams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+</section>
+
+<!-- ============================================================
+     CHEM ARENA — ĐẤU TRƯỜNG HÓA HỌC REALTIME
+     Visual lấy cảm hứng từ Battle Arena ở file 1:
+     nền xanh sâu, horizon, grid 3D, thanh HP, VS, countdown.
+     Dữ liệu/room dùng Firebase hiện có của HTVVM.
+     ============================================================ -->
+<section id="sec-arena" class="app-section max-w-7xl mx-auto px-4 py-8">
+  <div class="chem-arena-shell">
+    <div class="chem-arena-bg-glow"></div>
+    <div class="chem-arena-grid"></div>
+    <div class="chem-arena-horizon"></div>
+
+    <div class="chem-arena-head">
+      <div>
+        <div class="chem-arena-eyebrow">HTVVM × HÓA LIEMS</div>
+        <h2>CHEM <span>ARENA</span></h2>
+        <p>ĐẤU TRƯỜNG HÓA HỌC TRỰC TUYẾN • REALTIME FIREBASE</p>
+      </div>
+      <div class="chem-arena-user">
+        <span>⚗️</span>
+        <div><small>NGƯỜI CHƠI</small><strong id="arena-user-name">Đang kết nối...</strong></div>
+      </div>
+    </div>
+
+    <div class="chem-arena-menu">
+      <button class="chem-arena-cta" onclick="arenaCreateRoom()">⚔️ TẠO PHÒNG ĐẤU</button>
+      <button onclick="arenaJoinPrompt()">🚀 VÀO PHÒNG BẰNG MÃ</button>
+      <button onclick="arenaOpenQuestionStudio()">🧪 KHO CÂU HỎI CỦA TÔI</button>
+      <button onclick="arenaLoadRooms()">🌐 PHÒNG ĐANG MỞ</button>
+    </div>
+
+    <div id="arena-room-list" class="chem-arena-room-list"></div>
+
+    <div class="chem-arena-foot">
+      <span>▣ Câu hỏi mặc định: Hóa học THPT</span>
+      <span>⌁ Có thể nhập LaTeX / MathJax / mhchem: <code>\ce{H2SO4}</code></span>
+      <span>● Mỗi phòng tối đa 8 người</span>
+    </div>
+  </div>
+</section>
+
+<!-- ARENA CREATOR STUDIO -->
+<section id="sec-arena-creator" class="app-section max-w-7xl mx-auto px-4 py-8">
+  <div class="arena-studio">
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
+      <div>
+        <span class="arena-kicker">CHEM QUESTION STUDIO</span>
+        <h2 class="text-3xl md:text-4xl font-black text-white mt-2">Tạo câu hỏi cho anh em thi ngay</h2>
+        <p class="text-slate-400 mt-2 max-w-3xl">Câu hỏi được lưu vào Firebase theo tài khoản tạo. Bạn có thể tạo nhanh, sửa, xóa và phát hành vào phòng đấu.</p>
+      </div>
+      <button onclick="openChemArena()" class="px-5 py-3 rounded-xl bg-slate-800 text-white font-extrabold border border-slate-700">← Về đấu trường</button>
+    </div>
+
+    <div class="grid lg:grid-cols-[1.05fr_.95fr] gap-6">
+      <div class="arena-editor-card">
+        <div class="flex items-center justify-between gap-3 mb-5">
+          <div><h3 class="text-xl font-black text-white">✍️ Soạn câu hỏi</h3><p class="text-xs text-slate-500">Trắc nghiệm 4 lựa chọn • 1 đáp án đúng</p></div>
+          <span id="arena-editor-status" class="arena-status-pill">MỚI</span>
+        </div>
+        <input id="arena-q-id" type="hidden">
+        <textarea id="arena-q-text" class="arena-input arena-textarea" placeholder="Ví dụ: Chất nào là chất oxi hóa mạnh trong phản ứng...?"></textarea>
+        <div class="grid md:grid-cols-2 gap-3 mt-3">
+          <input id="arena-opt-A" class="arena-input" placeholder="A. Đáp án">
+          <input id="arena-opt-B" class="arena-input" placeholder="B. Đáp án">
+          <input id="arena-opt-C" class="arena-input" placeholder="C. Đáp án">
+          <input id="arena-opt-D" class="arena-input" placeholder="D. Đáp án">
+        </div>
+        <div class="grid md:grid-cols-3 gap-3 mt-3">
+          <select id="arena-correct" class="arena-input"><option value="A">Đáp án đúng: A</option><option value="B">Đáp án đúng: B</option><option value="C">Đáp án đúng: C</option><option value="D">Đáp án đúng: D</option></select>
+          <select id="arena-diff" class="arena-input"><option value="NB">Nhận biết</option><option value="TH">Thông hiểu</option><option value="VD">Vận dụng</option><option value="VDC">Vận dụng cao</option></select>
+          <select id="arena-topic" class="arena-input"><option>Ester - Lipid</option><option>Carbohydrate</option><option>Nitrogen</option><option>Polymer</option><option>Điện hóa</option><option>Vô cơ</option><option>Hữu cơ</option><option>Đại cương</option><option>Tự chọn</option></select>
+        </div>
+        <textarea id="arena-explain" class="arena-input arena-textarea small" placeholder="Giải thích / mẹo / phương trình phản ứng (không bắt buộc)"></textarea>
+        <div class="grid sm:grid-cols-2 gap-3 mt-3">
+          <button onclick="arenaSaveQuestion()" class="arena-btn arena-btn-main">💾 LƯU CÂU HỎI</button>
+          <button onclick="arenaResetEditor()" class="arena-btn arena-btn-soft">↺ TẠO CÂU MỚI</button>
+        </div>
+        <div class="arena-tip">💡 Dùng <code>$...$</code> hoặc <code>\ce{...}</code> để hiển thị công thức đẹp bằng MathJax.</div>
+      </div>
+
+      <div class="arena-editor-card">
+        <div class="flex items-center justify-between gap-3 mb-5">
+          <div><h3 class="text-xl font-black text-white">📚 Kho câu hỏi đã tạo</h3><p class="text-xs text-slate-500">Các câu của tài khoản hiện tại</p></div>
+          <span id="arena-question-count" class="arena-count">0</span>
+        </div>
+        <div id="arena-question-bank" class="arena-q-list"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARENA LIVE ROOM -->
+<section id="sec-arena-live" class="app-section fixed inset-0 z-[400]">
+  <div class="chem-live">
+    <div class="chem-live-top">
+      <div class="chem-live-brand"><b>CHEM ARENA</b><span id="arena-live-title">Phòng đấu</span></div>
+      <div class="chem-live-room">MÃ PHÒNG <strong id="arena-live-code">------</strong></div>
+      <div class="chem-live-top-actions"><button onclick="arenaCopyCode()" class="chem-icon-btn">⧉</button><button onclick="arenaLeaveRoom()" class="chem-icon-btn">✕</button></div>
+    </div>
+
+    <div class="chem-live-main">
+      <div class="chem-live-left">
+        <div class="chem-side-card">
+          <div class="chem-side-title">👥 NGƯỜI CHƠI <span id="arena-player-count">0/8</span></div>
+          <div id="arena-live-players" class="arena-live-players"></div>
+        </div>
+        <div class="chem-side-card">
+          <div class="chem-side-title">📜 NHẬT KÝ</div>
+          <div id="arena-live-log" class="arena-live-log"></div>
+        </div>
+      </div>
+
+      <div class="chem-battle-card">
+        <div class="chem-battle-top">
+          <div class="chem-fighter">
+            <div class="chem-fighter-avatar" id="arena-me-avatar">🧪</div>
+            <div class="chem-fighter-info"><div id="arena-me-name" class="chem-fighter-name">Bạn</div><div class="chem-hp"><i id="arena-me-hp"></i></div><small id="arena-me-hp-text">200 / 200 HP</small></div>
+          </div>
+          <div class="chem-clock"><small id="arena-live-phase">PHÒNG CHỜ</small><strong id="arena-live-timer">--</strong><em id="arena-live-qmeta">HÓA HỌC</em></div>
+          <div class="chem-fighter enemy">
+            <div class="chem-fighter-info"><div id="arena-target-name" class="chem-fighter-name">Đối thủ</div><div class="chem-hp enemy"><i id="arena-target-hp"></i></div><small id="arena-target-hp-text">200 / 200 HP</small></div>
+            <div class="chem-fighter-avatar">⚗️</div>
+          </div>
+        </div>
+
+        <div class="chem-arena-stage">
+          <div class="chem-stage-glow"></div>
+          <div class="chem-fighter-big" id="arena-me-fighter">🧙‍♂️</div>
+          <div class="chem-vs-badge" id="arena-vs-badge">VS</div>
+          <div class="chem-fighter-big enemy" id="arena-target-fighter">🧟</div>
+        </div>
+
+        <div class="chem-question-card" id="arena-question-card">
+          <div id="arena-lobby-view" class="arena-live-center">
+            <div class="arena-live-symbol">⚗️</div>
+            <h3>Chờ quản trò bắt đầu</h3>
+            <p id="arena-lobby-help">Chia sẻ mã phòng cho bạn bè. Bạn có thể tối đa 8 người.</p>
+            <div class="arena-host-actions" id="arena-host-actions"></div>
+          </div>
+          <div id="arena-playing-view" class="hidden">
+            <div class="chem-question-meta"><span id="arena-question-diff">VẬN DỤNG</span><strong id="arena-turn-label">TRẢ LỜI</strong></div>
+            <div id="arena-question-text" class="chem-qtext"></div>
+            <div id="arena-answers" class="chem-answers"></div>
+            <div id="arena-explanation" class="arena-explanation hidden"></div>
+          </div>
+          <div id="arena-ended-view" class="hidden arena-live-center">
+            <div class="arena-live-symbol">🏆</div>
+            <h3 id="arena-ended-title">KẾT THÚC</h3>
+            <p id="arena-ended-desc"></p>
+            <div id="arena-final-ranking" class="arena-final-ranking"></div>
+            <button onclick="openChemArena()" class="arena-btn arena-btn-main max-w-sm">⚔️ VỀ ĐẤU TRƯỜNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: HỌC SINH ĐĂNG KÝ -->
+<section id="sec-student-join" class="app-section max-w-md mx-auto px-4 py-20">
+ <div class="bg-white rounded-[2rem] p-10 shadow-soft border text-center">
+  <h2 class="text-2xl font-extrabold mb-2">Đăng ký vào thi</h2>
+  <p id="join-title" class="text-sm font-bold text-slate-500 mb-3 bg-slate-100 py-2 rounded-lg truncate"></p>
+  <div id="join-room-code" class="text-xs font-black tracking-[0.2em] text-blue-600 bg-blue-50 border border-blue-100 py-2 rounded-xl mb-6">MÃ PHÒNG: ------</div>
+  <input id="studentName" class="tw-input !text-center !text-lg mb-8" placeholder="Nhập tên thật...">
+  <button onclick="startExam()" class="w-full py-4 rounded-xl bg-blue-600 text-white font-extrabold text-lg">VÀO PHÒNG THI</button>
+ </div>
+</section>
+
+<!-- SECTION: HỌC SINH LÀM BÀI -->
+<section id="sec-taking-exam" class="app-section student-mode h-screen w-screen fixed top-0 left-0 z-[100] bg-slate-100 p-2 sm:p-4">
+ <div class="flex flex-col lg:flex-row gap-4 h-full w-full max-w-[1800px] mx-auto">
+  <div class="flex-1 bg-white rounded-2xl flex flex-col overflow-hidden border shadow-soft">
+   <div class="p-3 border-b flex justify-between items-center bg-slate-50">
+       <span class="font-bold text-slate-700 truncate" id="taking-title">Đề thi</span>
+       <div id="timer" class="bg-blue-100 px-5 py-1.5 rounded-full font-extrabold text-blue-700 text-xl">00:00</div>
+   </div>
+   <div class="flex-1 relative">
+       <iframe id="student-pdf" class="w-full h-full border-0"></iframe>
+   </div>
+  </div>
+  <div class="w-full lg:w-[450px] bg-white rounded-2xl flex flex-col border shadow-soft shrink-0">
+   <div id="student-sheet" class="flex-1 overflow-y-auto p-5"></div>
+   <div class="p-5 border-t bg-slate-50 rounded-b-2xl">
+       <button id="submit-btn" onclick="manualSubmit()" class="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-lg">NỘP BÀI NGAY</button>
+       <div id="result" class="hidden text-center bg-white p-6 rounded-2xl shadow-sm border mt-4">
+           <p class="text-sm font-bold text-slate-500">Điểm số của bạn</p>
+           <div id="score" class="text-5xl font-extrabold text-slate-900 mb-3">0/10</div>
+           <p class="text-xs font-bold text-emerald-600 mb-6">✅ Câu đúng màu xanh • ❌ Câu sai có hiển thị đáp án đúng ngay bên dưới</p>
+           <button onclick="viewLeaderboard(currentRoomId)" class="w-full py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors">🏆 Xem BXH</button>
+       </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- SECTION: BẢNG XẾP HẠNG -->
+<section id="sec-leaderboard" class="app-section max-w-4xl mx-auto px-4 py-12">
+ <div class="bg-white rounded-[2rem] p-8 shadow-soft border text-center relative overflow-hidden">
+  <div class="absolute top-0 left-0 w-full h-2 bg-amber-400"></div>
+  <h2 class="text-3xl font-extrabold mb-8">🏆 Bảng Vinh Danh</h2>
+  <div id="lb-container" class="bg-white rounded-2xl overflow-x-auto shadow-sm"></div>
+  <button onclick="loadExamList()" class="px-8 py-3 mt-8 bg-slate-100 border rounded-xl font-bold hover:bg-slate-200">Quay lại danh sách</button>
+ </div>
+</section>
+
+<!-- MODAL BẢNG TUẦN HOÀN (GIAO DIỆN WIDE 2 CỘT VIP) -->
+<div id="element-modal" class="hidden fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 transition-opacity">
+    
+    <div class="bg-white rounded-[2rem] w-full max-w-5xl overflow-hidden shadow-2xl transform scale-100 transition-transform flex flex-col md:flex-row relative">
+        
+        <!-- Nút đóng -->
+        <button onclick="closeModal()" class="absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 font-black transition-colors shadow-sm">✕</button>
+
+        <!-- CỘT TRÁI: THÔNG TIN CHI TIẾT (Chiếm 40%) -->
+        <div id="modal-left-col" class="w-full md:w-5/12 bg-slate-50 p-8 flex flex-col transition-colors duration-300">
+            
+            <!-- Tiêu đề: Khối lượng, Z, Ký hiệu, Tên -->
+            <div class="flex items-center mb-6 border-b border-slate-300/40 pb-6">
+                <div class="flex flex-col text-right font-black text-slate-800 text-xl leading-none mr-2">
+                    <span id="modal-mass">59</span>
+                    <span id="modal-z">28</span>
+                </div>
+                <h2 id="modal-sym" class="text-[5rem] leading-none font-black text-slate-900 tracking-tighter">Ni</h2>
+                <h3 id="modal-name" class="text-3xl font-extrabold text-slate-800 ml-4">Niken</h3>
+            </div>
+
+            <!-- Box Card chứa dữ liệu (Màu sẽ đổi theo loại nguyên tố) -->
+            <div id="modal-info-card" class="rounded-3xl p-6 flex-1 shadow-inner transition-colors duration-300">
+                <div class="space-y-4 font-bold text-sm">
+                    
+                    <div class="flex justify-between items-center border-b border-black/10 pb-3">
+                        <span class="opacity-70 uppercase tracking-widest text-[11px] font-black">Loại</span>
+                        <span id="modal-type" class="text-base text-right max-w-[60%]">Kim loại chuyển tiếp</span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center border-b border-black/10 pb-3">
+                        <span class="opacity-70 uppercase tracking-widest text-[11px] font-black">Nhóm / Chu kỳ</span>
+                        <span id="modal-group" class="text-base">10 / 4</span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center border-b border-black/10 pb-3">
+                        <span class="opacity-70 uppercase tracking-widest text-[11px] font-black">Cấu hình E</span>
+                        <span id="modal-ec" class="text-base tracking-wide font-mono">[Ar] 3d8 4s2</span>
+                    </div>
+
+                    <!-- Box Thông tin thú vị (Tương đương chỗ Ion phổ biến trong ảnh) -->
+                    <div class="mt-6 bg-white/40 rounded-2xl p-4 shadow-sm border border-white/20">
+                        <p class="opacity-70 uppercase tracking-widest text-[10px] font-black text-center mb-2">Fact thú vị</p>
+                        <p id="modal-fact" class="text-sm font-semibold text-center leading-relaxed">-</p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- CỘT PHẢI: KHÔNG GIAN HIỂN THỊ MÔ HÌNH (Chiếm 60%) -->
+        <div class="w-full md:w-7/12 bg-white p-8 flex flex-col items-center justify-center relative min-h-[400px] md:min-h-[500px]">
+            
+            <!-- Khu vực nhét cái 3Dmol hoặc Bohr Model của ní vào đây -->
+            <div id="bohr-model-container" class="w-full h-full flex items-center justify-center"></div>
+            
+            <!-- Nút giả lập dưới đáy cho giống ảnh -->
+            <div class="absolute bottom-6 flex gap-2 bg-slate-100 p-1.5 rounded-full shadow-sm border border-slate-200">
+                <button class="px-6 py-2 rounded-full bg-slate-900 text-white font-extrabold text-sm shadow-md">Cấu trúc</button>
+                <button class="px-6 py-2 rounded-full text-slate-500 font-extrabold text-sm hover:text-slate-800">Obitan</button>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<!-- MODAL VẼ PHÂN TỬ -->
+<div id="draw-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity p-4">
+    <div class="bg-white rounded-[2rem] p-6 w-full max-w-2xl transform transition-transform scale-95" id="draw-modal-content">
+        <div class="flex justify-between mb-4"><h2 class="text-xl font-extrabold">🎨 Trình vẽ cấu trúc</h2><button onclick="closeDrawModal()" class="font-bold">✕</button></div>
+        <div class="border-2 rounded-xl mb-4 overflow-hidden"><div id="jsme_container" style="width: 100%; height: 400px;"></div></div>
+        <div class="flex justify-end gap-3"><button onclick="closeDrawModal()" class="px-5 py-2 bg-slate-100 font-bold rounded-xl">Hủy</button><button onclick="insertChemStruct()" class="px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl">Chèn vào đề</button></div>
+    </div>
+</div>
+
+<!-- MODAL DONATE -->
+<div id="donate-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 p-4">
+    <div class="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl transform transition-transform scale-95 relative" id="donate-modal-content">
+        <button onclick="closeDonateModal()" class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 font-bold">✕</button>
+        <div class="text-center mb-6"><div class="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">☕</div><h2 class="text-2xl font-extrabold text-slate-900 mb-1">Tiếp thêm động lực!</h2><p class="text-sm text-slate-500 font-medium px-2">Nếu web giúp bạn học Hóa nhàn hơn, hãy mời Dev một ly cafe để duy trì server nhé!</p></div>
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col items-center justify-center shadow-inner">
+            <p class="text-[11px] font-extrabold text-rose-400 uppercase tracking-widest mb-3">Quét mã QR để ủng hộ</p>
+            <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 mb-3 hover:scale-105 transition-transform duration-300">
+    <img src="/qr-donate.png" alt="QR Donate" class="w-48 h-48 object-cover rounded-lg">
+</div>
+            <p class="font-extrabold text-slate-800 text-lg"></p>
+            <p class="text-xs font-bold text-slate-500 mt-1"></p>
+        </div>
+        <p class="text-center text-xs font-bold text-rose-500 mt-6 animate-pulse">Cảm ơn bạn rất nhiều! 🥰</p>
+    </div>
+</div>
+<!-- MODAL HỒ SƠ CÁ NHÂN & STREAK -->
+<div id="profile-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 p-4">
+    <div class="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl transform transition-transform scale-95 relative" id="profile-modal-content">
+        <button onclick="closeProfile()" class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 font-bold transition-colors">✕</button>
+        
+      <!-- Thông tin cơ bản -->
+        <div class="flex flex-col items-center mb-6 mt-2">
+            <!-- Cụm Avatar có thể Click để đổi ảnh -->
+            <div class="relative inline-block cursor-pointer group mb-4" onclick="document.getElementById('avatar-upload').click()" title="Nhấn để đổi ảnh đại diện">
+                <img id="profile-avatar" src="" alt="Avatar" class="w-24 h-24 rounded-full shadow-lg border-4 border-slate-100 object-cover bg-white group-hover:brightness-75 transition-all">
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span class="text-white text-3xl drop-shadow-md">📷</span>
+                </div>
+                <!-- Khung chọn file (Bị giấu đi) -->
+                <input type="file" id="avatar-upload" accept="image/*" class="hidden" onchange="uploadCustomAvatar(event)">
+            </div>
+            
+            <h2 class="text-2xl font-extrabold text-slate-900" id="profile-name">Học viên</h2>
+            <p class="text-sm font-bold text-slate-500" id="profile-email">Đang tải...</p>
+        </div>
+
+        <!-- Chỉ số Cày cuốc -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <!-- Ô Lửa học tập (Streak) -->
+            <div class="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex flex-col items-center justify-center text-center shadow-sm">
+                <span class="text-3xl mb-1 drop-shadow-sm">🔥</span>
+                <span class="text-3xl font-black text-orange-600 mb-1" id="profile-streak">0</span>
+                <span class="text-[10px] font-extrabold text-orange-800 uppercase tracking-widest">Ngày liên tiếp</span>
+            </div>
+            <!-- Ô Tổng giờ học (Pomodoro) -->
+            <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex flex-col items-center justify-center text-center shadow-sm">
+                <span class="text-3xl mb-1 drop-shadow-sm">⏳</span>
+                <span class="text-3xl font-black text-blue-600 mb-1" id="profile-study-time">0h</span>
+                <span class="text-[10px] font-extrabold text-blue-800 uppercase tracking-widest">Tổng giờ cày</span>
+            </div>
+        </div>
+
+        <!-- Lịch sử danh hiệu cao nhất -->
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-inner">
+            <h4 class="font-extrabold text-slate-700 mb-3 text-sm flex items-center gap-2">🏆 Danh hiệu hiện tại</h4>
+            <div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                <div class="text-4xl drop-shadow-md" id="profile-rank-icon">💧</div>
+                <div>
+                    <h5 class="font-black text-lg text-slate-800" id="profile-rank-name">Tập sự</h5>
+                    <p class="text-[11px] font-bold text-slate-400 mt-0.5">Tiếp tục cày Pomodoro nhé!</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Nút Đăng xuất được dời vào đây -->
+        <button onclick="logoutFirebase()" class="w-full py-3.5 mt-6 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-600 transition-colors font-extrabold shadow-sm flex justify-center items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            Đăng xuất khỏi hệ thống
+        </button>
+    </div>
+</div>
+<!-- SECTION: GÓC HỌC TẬP (STUDY DASHBOARD) -->
+<section id="sec-study" class="app-section hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- Tiêu đề -->
+    <div class="mb-10 text-center">
+        <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">Góc <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">Học Tập</span></h1>
+        <p class="text-lg text-slate-500 font-medium">Bật Lofi, dán tài liệu và vào chế độ tập trung tuyệt đối nhé!</p>
+        <div class="max-w-6xl mx-auto mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3"><span class="text-xs font-black uppercase tracking-widest text-slate-400">🎯 Mục tiêu hôm nay</span><span id="today-goal-label" class="text-sm font-black text-emerald-600">60 phút</span></div>
+                <div class="flex gap-2 mb-3">
+                    <button onclick="setDailyGoal(30)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">30m</button>
+                    <button onclick="setDailyGoal(60)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">60m</button>
+                    <button onclick="setDailyGoal(120)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">120m</button>
+                    <button onclick="setDailyGoal(prompt('Mục tiêu bao nhiêu phút?', '90'))" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">Tùy chỉnh</button>
+                </div>
+                <div class="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden"><div id="today-goal-progress" class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width:0%"></div></div>
+                <p id="today-goal-text" class="text-[11px] font-bold text-slate-400 mt-2">0 / 60 phút</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">📈 Hôm nay</div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="rounded-xl bg-blue-50 p-3"><div id="today-study-min" class="text-xl font-black text-blue-700">0</div><div class="text-[10px] font-bold text-slate-400">phút học</div></div>
+                    <div class="rounded-xl bg-purple-50 p-3"><div id="today-session-count" class="text-xl font-black text-purple-700">0</div><div class="text-[10px] font-bold text-slate-400">phiên</div></div>
+                    <div class="rounded-xl bg-amber-50 p-3"><div id="today-focus-streak" class="text-xl font-black text-amber-700">0</div><div class="text-[10px] font-bold text-slate-400">ngày</div></div>
+                </div>
+            </div>
+            <div class="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 shadow-sm text-white">
+                <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">🧠 Chế độ tập trung</div>
+                <p class="text-sm text-slate-300 mb-4">Ẩn điều hướng, AI và các yếu tố gây xao nhãng.</p>
+                <button onclick="toggleFocusMode()" class="w-full py-3 rounded-xl bg-white text-slate-900 font-black hover:bg-emerald-100 transition-colors">🎯 BẮT ĐẦU FOCUS MODE</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- CỘT TRÁI (KHÔNG GIAN LÀM VIỆC - VIDEO & TÀI LIỆU) -->
+        <div class="lg:col-span-2 space-y-8">
+            
+            <!-- 1. Trình phát YouTube / Lofi -->
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
+                <h3 class="text-xl font-extrabold text-slate-800 mb-4 flex items-center gap-2">🎧 Phát Video YouTube / Lofi</h3>
+                <div class="flex flex-col sm:flex-row gap-3 mb-5">
+                    <input id="yt-input" type="text" placeholder="Dán link YouTube (VD: https://youtu.be/...)" class="flex-1 p-4 rounded-xl border-2 border-slate-100 bg-slate-50 font-medium outline-none focus:border-red-400 focus:bg-white transition-all">
+                    <button onclick="embedYouTube()" class="bg-red-500 hover:bg-red-600 text-white font-extrabold px-8 py-4 rounded-xl shadow-md transition-all">Phát Video</button>
+                </div>
+                <!-- Khung hiển thị Video -->
+                <div id="yt-player" class="w-full aspect-video bg-slate-100 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 font-bold overflow-hidden">
+                    <span class="text-4xl mb-2">📺</span>
+                    Video sẽ hiển thị ở đây
+                </div>
+            </div>
+            <!-- Nút bật phòng học ảo -->
+            <div class="mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-[2rem] shadow-sm text-white flex justify-between items-center">
+                <div>
+                    <h3 class="text-xl font-black mb-1">📹 Phòng Tự Học Ảo (Study with me)</h3>
+                    <p class="text-sm font-medium opacity-90">Bật cam, tắt mic và cùng anh em cày cuốc nào!</p>
+                </div>
+                <button onclick="joinStudyRoom()" class="px-6 py-3 bg-white text-indigo-600 font-black rounded-xl hover:scale-105 transition-transform shadow-md">
+                    VÀO PHÒNG NGAY
+                </button>
+            </div>
+            
+            <!-- Khung chứa Camera (Mặc định ẩn) -->
+            <div id="study-room-container" class="hidden w-full h-[600px] mt-6 rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-slate-900">
+                <!-- Jitsi sẽ nhét nguyên cái phòng họp vào đây -->
+            </div>
+
+            <!-- 2. Trình đọc Tài Liệu -->
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
+                <h3 class="text-xl font-extrabold text-slate-800 mb-4 flex items-center gap-2">📄 Xem Tài Liệu (PDF / Docs)</h3>
+                <div class="flex flex-col sm:flex-row gap-3 mb-5">
+                    <input id="doc-input" type="text" placeholder="Dán link Google Drive hoặc PDF vào đây..." class="flex-1 p-4 rounded-xl border-2 border-slate-100 bg-slate-50 font-medium outline-none focus:border-blue-400 focus:bg-white transition-all">
+                    <button onclick="embedDocument()" class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-8 py-4 rounded-xl shadow-md transition-all">Mở File</button>
+                </div>
+                <!-- Khung hiển thị Tài liệu -->
+                <div id="doc-player" class="w-full h-[600px] bg-slate-100 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 font-bold overflow-hidden">
+                    <span class="text-4xl mb-2">📑</span>
+                    Tài liệu sẽ hiển thị ở đây
+                </div>
+            </div>
+
+        </div>
+
+        <!-- CỘT PHẢI (CÔNG CỤ THỜI GIAN & ĐỘNG LỰC) -->
+        <div class="space-y-8">
+            
+           <!-- 3. Bộ đếm thời gian Pomodoro xịn xò (CÓ TÙY CHỈNH GIỜ/PHÚT) -->
+            
+            
+            <div class="bg-white p-8 rounded-[2rem] shadow-lg border-2 border-emerald-50 text-center relative group">
+                <!-- Icon gợi ý sửa -->
+                <div class="absolute top-6 right-6 text-slate-200 group-hover:text-emerald-500 transition-colors" title="Bấm vào số để sửa giờ!">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                </div>
+
+                <div class="flex justify-center gap-2 mb-8 bg-slate-100 p-1.5 rounded-xl">
+                    <button onclick="setPomoMode('pomo')" id="mode-pomo" class="flex-1 py-2 rounded-lg font-extrabold bg-white text-emerald-600 shadow-sm transition-all">Pomodoro</button>
+                    <button onclick="setPomoMode('short')" id="mode-short" class="flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all">Nghỉ ngắn</button>
+                    <button onclick="setPomoMode('long')" id="mode-long" class="flex-1 py-2 rounded-lg font-extrabold text-slate-400 hover:text-slate-600 transition-all">Nghỉ dài</button>
+                </div>
+                
+                <!-- Khu vực hiển thị GIỜ PHÚT (Bấm vào để nhập số) -->
+                <div class="flex justify-center items-center text-[5rem] leading-none font-black text-slate-800 font-mono mb-8 tracking-tighter">
+                    <input id="input-m" type="number" min="0" max="999" value="25" oninput="userCustomTime()" class="w-32 bg-transparent text-right outline-none hover:bg-slate-50 focus:bg-slate-50 focus:ring-4 ring-emerald-100 rounded-2xl transition-all hide-arrows cursor-text">
+                    <span class="mx-1 pb-3 text-slate-400">:</span>
+                    <input id="input-s" type="number" min="0" max="59" value="00" oninput="userCustomTime()" class="w-32 bg-transparent text-left outline-none hover:bg-slate-50 focus:bg-slate-50 focus:ring-4 ring-emerald-100 rounded-2xl transition-all hide-arrows cursor-text">
+                </div>
+                
+                <div class="flex justify-center gap-3">
+                    <button onclick="togglePomodoro()" id="btn-pomo-action" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl px-8 py-5 rounded-2xl transition-all shadow-md hover:shadow-lg w-full">BẮT ĐẦU</button>
+                    <button onclick="resetPomodoro()" class="bg-slate-100 hover:bg-slate-200 text-slate-500 font-extrabold px-6 py-5 rounded-2xl transition-all"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
+                </div>
+            </div>
+            <!-- 4. Xếp Hạng Cày Cuốc (Dựa trên thời gian Pomodoro) -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-[2rem] shadow-sm border border-blue-100 text-center relative overflow-hidden">
+                <h4 class="text-blue-700 font-black uppercase text-xs tracking-widest mb-6">🏆 Danh Hiệu Tập Trung</h4>
+                
+                <div id="rank-icon" class="text-7xl mb-4 transform hover:scale-110 transition-transform cursor-pointer drop-shadow-md">💧</div>
+                <h2 id="rank-name" class="text-xl font-extrabold text-blue-600 mb-1">Tập sự (Nước tinh khiết)</h2>
+                <p id="rank-time" class="text-sm text-slate-500 font-bold mb-5">Thời gian tích lũy: 0 phút</p>
+                
+                <!-- Thanh kinh nghiệm (Kéo dài đến cấp tiếp theo) -->
+                <div class="w-full bg-slate-200/80 rounded-full h-3 relative overflow-hidden shadow-inner">
+                    <div id="rank-progress" class="bg-blue-500 h-3 rounded-full transition-all duration-1000 w-0"></div>
+                </div>
+                <p id="rank-next" class="text-[11px] font-bold text-slate-400 mt-2 text-right">Cần 60p để thăng cấp</p>
+            </div>
+            </section>
+
+<!-- ========================================== -->
+<!-- JAVASCRIPT GOM CHUNG HẾT VÀO ĐÂY -->
+<!-- ========================================== -->
+
+<!-- NÚT NỔI AI TRỢ GIẢNG (GÓC DƯỚI BÊN PHẢI) -->
+<button onclick="toggleAIChat()" class="fixed bottom-6 right-6 z-[9999] w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full shadow-lg hover:shadow-2xl hover:scale-110 transition-transform flex items-center justify-center text-white text-2xl border-2 border-white/20">
+    ✨
+</button>
+
+<!-- KHUNG CHAT AI (MẶC ĐỊNH ẨN) -->
+<div id="ai-chatbox" class="fixed bottom-24 right-6 z-[9999] w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 hidden flex-col overflow-hidden transition-all duration-300 transform scale-95 opacity-0 origin-bottom-right">
+    
+    <!-- Phần Đầu (Header) -->
+    <div class="bg-gradient-to-r from-purple-600 to-blue-600 p-4 flex justify-between items-center text-white shadow-md z-10">
+       <div class="font-extrabold flex items-center gap-2">
+    <img src="/ai-avatar.png" class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-sm" alt="AI"> AI Trợ Giảng
+</div>
+        <button onclick="toggleAIChat()" class="text-white/80 hover:text-white font-bold bg-white/10 hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">✕</button>
+    </div>
+    
+    <!-- Phần Thân (Nơi hiển thị tin nhắn) -->
+    <div id="ai-chat-body" class="h-80 p-4 overflow-y-auto bg-slate-50 flex flex-col gap-4 text-sm scroll-smooth">
+        <div class="bg-white border border-slate-200 text-slate-700 p-3 rounded-2xl rounded-tl-none self-start max-w-[85%] font-medium shadow-sm">
+            Chào bạn! 👋 Tui là AI Trợ giảng đây. Bí bài nào cứ chụp ảnh gửi lên chúng ta cùng chia sẻ!
+        </div>
+    </div>
+    
+    <!-- Phần Đuôi (Nhập liệu & Gửi ảnh) -->
+    <div class="p-3 bg-white border-t border-slate-100 flex items-center gap-2">
+        <!-- Nút Tải ảnh / Bật Camera (capture="environment" ưu tiên cam sau của điện thoại) -->
+        <label class="cursor-pointer p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-purple-600 hover:bg-purple-50 transition-colors shadow-inner">
+            <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleAIImageUpload(event)">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </label>
+        
+        <input type="text" id="ai-input" placeholder="Hỏi thêm gì hông..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white transition-colors font-medium text-slate-700">
+        
+        <button onclick="sendAIMessage()" class="p-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-bold shadow-md transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+        </button>
+    </div>
+</div>
+
+<!-- FOCUS MODE / TOAST / SHORTCUTS -->
+<div id="focus-overlay" class="hidden fixed inset-0 z-[10000] bg-slate-950 text-white">
+  <div class="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(circle_at_top,_rgba(16,185,129,.35),_transparent_45%)]"></div>
+  <div class="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
+    <div class="text-emerald-400 font-black uppercase tracking-[.35em] text-xs mb-6">FOCUS MODE</div>
+    <div id="focus-clock" class="text-7xl sm:text-9xl font-black font-mono tracking-tight">25:00</div>
+    <div id="focus-status" class="mt-4 text-slate-400 font-bold">Đang chuẩn bị phiên tập trung...</div>
+    <div class="mt-10 flex flex-wrap justify-center gap-3">
+      <button onclick="togglePomodoro(); syncFocusOverlay()" class="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 font-black">▶ / ⏸</button>
+      <button onclick="toggleFocusMode()" class="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 font-black">Thoát Focus</button>
+    </div>
+    <div class="mt-8 text-xs text-slate-500 font-bold">Ctrl + Shift + F để bật/tắt • Esc để thoát</div>
+  </div>
+</div>
+
+<!-- STUDY BREAK / ANTI-AFK -->
+<div id="study-break-backdrop" class="study-break-backdrop" aria-hidden="true">
+  <div class="study-break-modal">
+    <audio id="study-break-music" loop preload="auto" src="/study-break-music.wav"></audio>
+    <button type="button" id="study-break-music-toggle" class="study-break-music-btn" onclick="toggleStudyBreakMusic()">🔊 Nhạc thư giãn</button>
+    <div class="study-break-image-wrap">
+      <div class="study-break-image-badge">🖼️ ẢNH NHẮC NGHỈ</div>
+      <img id="study-break-image" class="study-break-image" alt="Lời nhắc nghỉ ngơi" />
+      <button type="button" class="study-break-image-upload-btn" onclick="document.getElementById('study-break-image-input').click()">
+        📷 Chọn / thay ảnh
+      </button>
+    </div>
+    <div class="study-break-content">
+      <div id="study-break-kicker" class="study-break-kicker">NHẮC NGHỈ • MỐC 5 GIỜ</div>
+      <h2 id="study-break-title">Cậu học 5 tiếng rồi đó ✨</h2>
+      <p id="study-break-message">Chắc cậu học cũng mệt rồi nhỉ ? Ra nghỉ tý chơi với tớ rồi mình học tiếp nha</p><div id="study-break-countdown" class="study-break-countdown">Tự động tạm dừng sau <strong>30</strong> giây</div>
+      <div class="study-break-upload">
+        <span>Ảnh mặc định lấy từ <b>/study-break-5h.png</b>. Bạn có thể đặt file này trong <b>public/</b> của project Vercel.</span>
+        <input id="study-break-image-input" type="file" accept="image/*" hidden onchange="handleStudyBreakImage(event)">
+      </div>
+    </div>
+    <div class="study-break-actions">
+      <button id="study-break-continue" class="study-break-continue" onclick="continueAfterStudyBreak()">▶️ Tiếp tục học</button>
+      <button id="study-break-stop" class="study-break-stop" onclick="stopAfterStudyBreak()">Dạ vâng nghỉ ạ</button>
+    </div>
+  </div>
+</div>
+
+<div id="study-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] hidden px-5 py-3 rounded-xl bg-slate-900 text-white text-sm font-extrabold shadow-2xl"></div>
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"e3c1c9af36de41759418005494a48906","r":1,"spa":2}' crossorigin="anonymous"></script>
+<script src="/js/core.js"></script>
+<script src="/js/arena-core.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/scripts.js"></script>
+<script src="/js/study.js"></script>
+<script src="/js/exam-engine.js"></script>
+<script src="/js/learning.js"></script>
+<script src="/js/library.js"></script>
+<script src="/js/data-access.js"></script>
+<link rel="stylesheet" href="/css/studio.css">
+<script src="/js/admissions-core.js"></script>
+<script src="/js/admissions-data.js"></script>
+<script src="/js/admissions.js"></script>
+<script src="/js/studio.js"></script>
+</body>
+</html>
