@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict');const {beginAttempt,advanceAttempt,cleanAnswers}=require('../lib/exam-core');
+const room={title:'Test',config:{abcd:1,tf:0,short:0,timeLimit:1},answers:{abcd_1:'B'}};
+test('server fixes start and duration independently of client',()=>{const a=beginAttempt(room,{uid:'u'},'id',1000);assert.equal(a.startAt,1000);assert.equal(a.duration,60);});
+test('late submit grades last server checkpoint',()=>{let a=beginAttempt(room,{uid:'u'},'id',1000);a=advanceAttempt(a,'save',{revision:1,answers:{abcd_1:'A'}},2000);a=advanceAttempt(a,'submit',{revision:2,answers:{abcd_1:'B'}},62000);assert.equal(a.result.score,0);assert.equal(a.usedCheckpoint,true);assert.equal(a.submittedAt,61000);});
+test('old checkpoint cannot overwrite new answers',()=>{let a=beginAttempt(room,{uid:'u'},'id',1000);a=advanceAttempt(a,'save',{revision:2,answers:{abcd_1:'B'}},2000);a=advanceAttempt(a,'save',{revision:1,answers:{abcd_1:'A'}},3000);a=advanceAttempt(a,'submit',{revision:2,answers:{abcd_1:'A'}},4000);assert.equal(a.result.score,10);});
+test('resubmission is immutable',()=>{let a=beginAttempt(room,{uid:'u'},'id',1000);a=advanceAttempt(a,'submit',{revision:1,answers:{abcd_1:'B'}},2000);const b=advanceAttempt(a,'submit',{revision:99,answers:{abcd_1:'A'}},3000);assert.deepEqual(a,b);});
+test('only valid configured answer fields survive',()=>{assert.deepEqual(cleanAnswers(room.config,{abcd_1:'B',abcd_2:'C',score:'10',short_1:'x'}),{abcd_1:'B'});});

@@ -1,0 +1,5 @@
+const test=require('node:test'),assert=require('node:assert/strict'),{resolveArena}=require('../js/arena-core');
+const room=()=>({hostUid:'a',phase:'playing',currentIndex:0,deadline:2000,questionIds:['q','q2'],questions:{q:{c:'B'},q2:{c:'A'}},players:{a:{uid:'a',hp:200,score:0,joinedAt:1},b:{uid:'b',hp:200,score:0,joinedAt:2}},responses:{0:{a:{option:'B',correct:false,answeredAt:1500},b:{option:'A',correct:true,answeredAt:1600}}}});
+test('arena grades official option instead of client correct boolean',()=>{const r=resolveArena(room(),'a',1700,0);assert.equal(r.players.a.score,100);assert.equal(r.players.b.score,0);assert.equal(r.players.b.hp,175);});
+test('retry cannot resolve a turn twice',()=>{const r=resolveArena(room(),'a',1700,0);assert.equal(resolveArena(r,'a',1800,0),undefined);});
+test('non-host cannot resolve and incomplete turn waits for deadline',()=>{const r=room();assert.equal(resolveArena(r,'b',3000,0),undefined);delete r.responses[0].b;assert.equal(resolveArena(r,'a',1700,0),undefined);assert.equal(resolveArena(r,'a',3000,0).currentIndex,1);});
