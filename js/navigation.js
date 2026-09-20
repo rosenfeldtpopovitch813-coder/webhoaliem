@@ -1,6 +1,6 @@
 (function(){
  'use strict';
- const map={'sec-dashboard':'nav-home','sec-library':'nav-library','sec-exam-list':'nav-exam','sec-student-join':'nav-exam','sec-taking-exam':'nav-exam','sec-leaderboard':'nav-exam','sec-teacher-config':'nav-teacher','sec-teacher-key':'nav-teacher','sec-chemmaker':'nav-chemmaker','sec-toolkit':'nav-toolkit','sec-study':'nav-study','sec-stats':'nav-stats','sec-community':'nav-community','sec-arena':'nav-arena','sec-arena-creator':'nav-arena','sec-arena-live':'nav-arena','sec-learning':'nav-learning'};
+ const map={'sec-dashboard':'nav-home','sec-library':'nav-library','sec-exam-list':'nav-exam','sec-student-join':'nav-exam','sec-taking-exam':'nav-exam','sec-leaderboard':'nav-exam','sec-teacher-config':'nav-teacher','sec-teacher-key':'nav-teacher','sec-chemmaker':'nav-chemmaker','sec-toolkit':'nav-toolkit','sec-study':'nav-study','sec-stats':'nav-stats','sec-community':'nav-community','sec-arena':'nav-arena','sec-arena-creator':'nav-arena','sec-arena-live':'nav-arena','sec-learning':'nav-learning','sec-theme-store':'nav-theme','sec-admin-center':'nav-admin'};
  window.switchSection=function(id,options={}){
   if(!window.auth?.currentUser)return false;
   if(!map[id]||!document.getElementById(id))id='sec-dashboard';

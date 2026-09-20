@@ -1,22 +1,11 @@
-/* Reference data: THPT admission cutoffs (2025), checked 17/09/2026. Update from each official source before a new cycle. */
-(function(root){root.HLAdmissionsData=[
- {id:'uit-it',school:'ĐH Công nghệ Thông tin — ĐHQG TP.HCM',major:'Công nghệ thông tin',cutoff:26.60,combinations:['A00','A01','D01','D07'],tags:'công nghệ máy tính dữ liệu',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=4'},
- {id:'uit-se',school:'ĐH Công nghệ Thông tin — ĐHQG TP.HCM',major:'Kỹ thuật phần mềm',cutoff:26.00,combinations:['A00','A01','D01','D07'],tags:'công nghệ lập trình',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=4'},
- {id:'uit-ds',school:'ĐH Công nghệ Thông tin — ĐHQG TP.HCM',major:'Khoa học dữ liệu',cutoff:27.70,combinations:['A00','A01','D01','D07'],tags:'công nghệ dữ liệu toán',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=4'},
- {id:'uet-it',school:'ĐH Công nghệ — ĐHQG Hà Nội',major:'Công nghệ thông tin',cutoff:28.19,combinations:['A00','A01','D01','X26'],tags:'công nghệ máy tính',source:'https://uet.edu.vn/tuyen-sinh/'},
- {id:'uet-me',school:'ĐH Công nghệ — ĐHQG Hà Nội',major:'Kỹ thuật cơ điện tử',cutoff:25.00,combinations:['A00','A01','D01','D07'],tags:'kỹ thuật robot công nghệ',source:'https://uet.edu.vn/tuyen-sinh/'},
- {id:'ussh-media',school:'ĐH KHXH&NV — ĐHQG TP.HCM',major:'Truyền thông đa phương tiện',cutoff:26.10,combinations:['D01','D14','D15'],tags:'truyền thông sáng tạo xã hội',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=12'},
- {id:'ussh-en',school:'ĐH KHXH&NV — ĐHQG TP.HCM',major:'Ngôn ngữ Anh',cutoff:23.65,combinations:['D01'],tags:'ngôn ngữ ngoại ngữ xã hội',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=12'},
- {id:'uel-econ',school:'ĐH Kinh tế — Luật — ĐHQG TP.HCM',major:'Kinh tế học',cutoff:25.42,combinations:['A00','A01','D01','D07'],tags:'kinh tế kinh doanh toán',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=5'},
- {id:'ctu-biz',school:'ĐH Cần Thơ',major:'Quản trị kinh doanh',cutoff:19.62,combinations:['A00','A01','D01'],tags:'kinh doanh quản trị',source:'https://tuyensinh.ctu.edu.vn/images/upload/TT_TS/2025/diemchuan2025-tb.pdf'},
- {id:'ctu-bio',school:'ĐH Cần Thơ',major:'Công nghệ sinh học',cutoff:18.68,combinations:['A00','B00','D07'],tags:'sinh học hóa học sức khỏe',source:'https://tuyensinh.ctu.edu.vn/images/upload/TT_TS/2025/diemchuan2025-tb.pdf'},
- {id:'ntu-it',school:'ĐH Nha Trang',major:'Công nghệ thông tin',cutoff:20.00,combinations:['A01','D01','D07','D96'],tags:'công nghệ biển kỹ thuật',source:'https://tuyensinh.ntu.edu.vn/diem-trung-tuyen-cac-nam'},
- {id:'hiu-it',school:'ĐH Quốc tế Hồng Bàng',major:'Công nghệ thông tin',cutoff:15.00,combinations:['A00','A01','D01'],tags:'công nghệ ứng dụng',source:'https://hiu.vn/thi-sinh-can-biet/diem-chuan-nganh-cong-nghe-thong-tin/'},
- {id:'hiu-media',school:'ĐH Quốc tế Hồng Bàng',major:'Truyền thông đa phương tiện',cutoff:15.00,combinations:['A01','C00','D01','D14','D15'],tags:'truyền thông sáng tạo',source:'https://hiu.vn/thi-sinh-can-biet/diem-chuan-nganh-truyen-thong-da-phuong-tien/'},
- {id:'hutech-biz',school:'ĐH Công nghệ TP.HCM (HUTECH)',major:'Quản trị kinh doanh',cutoff:15.00,combinations:['A00','A01','D01'],tags:'kinh doanh quản trị marketing',source:'https://www.hutech.edu.vn/tuyensinh/tin-tuyen-sinh/14627816-truong-dai-hoc-cong-nghe-tp-hcm-hutech-chinh-thuc-cong-bo-diem-chuan-nam-2025-15-19-diem'},
- {id:'huflit-it',school:'ĐH Ngoại ngữ — Tin học TP.HCM (HUFLIT)',major:'Kỹ thuật phần mềm',cutoff:15.00,combinations:['A00','A01','D01'],tags:'công nghệ ngoại ngữ lập trình',source:'https://huflit.edu.vn/vi/tin-tuc/nganh-ky-thuat-phan-mem-huflit/'},
- {id:'uef-biz',school:'ĐH Kinh tế — Tài chính TP.HCM (UEF)',major:'Quản trị kinh doanh',cutoff:15.00,combinations:['A00','A01','D01'],tags:'kinh doanh quốc tế',source:'https://www.uef.edu.vn/tin-tuyen-sinh/uef-cong-bo-diem-chuan-trung-tuyen-dai-hoc-chinh-quy-nam-2025-32076'},
- {id:'angiang-chem',school:'ĐH An Giang — ĐHQG TP.HCM',major:'Sư phạm Hóa học',cutoff:20.00,combinations:['A00','B00','D07'],tags:'hóa học giáo dục sư phạm',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=16'},
- {id:'angiang-it',school:'ĐH An Giang — ĐHQG TP.HCM',major:'Công nghệ thông tin',cutoff:18.00,combinations:['A00','A01','D01'],tags:'công nghệ máy tính',source:'https://tuyensinh.vnuhcm.edu.vn/index.php?route=catalog/truong/tree&truong_id=16'},
- {id:'hust-chem',school:'ĐH Bách khoa Hà Nội',major:'Kỹ thuật hóa học',cutoff:24.50,combinations:['A00','B00','D07'],tags:'hóa học kỹ thuật nghiên cứu',source:'https://www.hust.edu.vn/vi/news/tin-tuc-su-kien/bach-khoa-ha-noi-2-diem-moi-mua-tuyen-sinh-2025-655325.html'}
- ];})(this);
+/* 2026 official-rule container. School/major cutoffs are intentionally empty until officially verified. */
+(function(root){
+ root.HLAdmissionsData={
+  year:2026,
+  source:'https://tuyensinh.moet.gov.vn/ts/van-ban/thong-tu-06-2026-tt-bgddt-cua-bo-giao-duc-va-dao-tao-ban-hanh-quy-che-tuyen-sinh-cac-nganh-dao-tao-t--9483cd05-0038-4279-8fe7-ea36aa5e67ac',
+  officialDataAvailable:false,
+  updatedAt:'2026-09-20T00:00:00+07:00',
+  rules:{maxAspirations:15,teacherProgramMaxAspirations:5,minThreeSubjectScore:15,maxAdditionPoints:3,maxFinalScore:30,maxAdmissionMethods:5,schoolReportSemesters:6,schoolReportMinimumSubjects:3,schoolReportRequiresMathOrLiterature:true},
+  records:[]
+ };
+})(this);
