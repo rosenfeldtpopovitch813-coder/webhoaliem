@@ -230,8 +230,9 @@ function initFirebase() {
                 window.dispatchEvent(new CustomEvent('firebase:user-ready',{detail:{uid:user.uid,avatar:window.__communityAvatar}}));
             }); 
             
-            // AI tự động kiểm tra chuỗi ngày của học viên
+            // Streak chỉ được ghi bởi server sau khi study session được xác nhận.
             checkAndUpdateStreak(user);
+            loadRole(user);
             setTimeout(loadDashboardLeaderboards, 150);
             const fallbackName = user.displayName || user.email?.split('@')[0] || 'Học viên';
             db.ref('users/' + user.uid).update({
@@ -1366,63 +1367,59 @@ function toggleAIChat() {
     syncStudyStats();
   }
 
-  // Streak siêu dễ: Cứ đăng nhập là có lửa (Streak)
+  // Study streak là dữ liệu server-authoritative; login không tự tăng streak.
   window.checkAndUpdateStreak = async function(user){
     try{
-      ensureTodayStore();
-      const ref = db.ref('users/' + user.uid);
-      const snap = await ref.once('value');
+      const snap = await db.ref('users/' + user.uid).once('value');
       const data = snap.val() || {};
-      
-      let profileStreak = safeNum(data.streak);
-      const lastLogin = data.lastLoginDate || '';
-      const today = dateKey();
-      const yesterday = yesterdayKey();
-
-      // Phục hồi tổng giờ học cho thẻ rank
-      // Phục hồi dữ liệu từ Firebase nhưng không ghi đè phần local chưa đồng bộ.
-      if(data.totalStudySeconds){
-          totalStudySeconds = Math.max(safeNum(totalStudySeconds), safeNum(data.totalStudySeconds));
-      }
       const cloudToday = safeNum(deepGet(data,`dailyStudy/${dateKey()}`));
-      const localToday = getTodaySeconds();
-      if(cloudToday > localToday) localStorage.setItem(STORE.todaySeconds,String(cloudToday));
       const cloudSessions = safeNum(deepGet(data,`dailySessions/${dateKey()}`));
+      const localToday = getTodaySeconds();
       const localSessions = getTodaySessions();
+      if(cloudToday > localToday) localStorage.setItem(STORE.todaySeconds,String(cloudToday));
       if(cloudSessions > localSessions) localStorage.setItem(STORE.sessions,String(cloudSessions));
+      if(typeof data.totalStudySeconds === 'number') totalStudySeconds = Math.max(safeNum(totalStudySeconds), data.totalStudySeconds);
+      if(document.getElementById('profile-streak')) document.getElementById('profile-streak').textContent = String(safeNum(data.studyStreak));
       bindStudyRealtime(user);
       if(typeof updateRankUI === 'function') updateRankUI();
-
-      // THUẬT TOÁN STREAK: CHỈ CẦN LOGIN
-      if (lastLogin !== today) {
-          if (lastLogin === yesterday) {
-              profileStreak += 1; // Nối chuỗi
-          } else {
-              profileStreak = 1; // Đứt chuỗi -> Bắt đầu lại
-          }
-          // Lưu lại Firebase ngay lập tức
-          await ref.update({ streak: profileStreak, lastLoginDate: today });
-      }
-
-      // Cập nhật ra giao diện
-      if(document.getElementById('profile-streak')) {
-          document.getElementById('profile-streak').textContent = String(profileStreak);
-      }
-      
       updateStudyDashboard();
-    } catch(e) { console.warn('streak lỗi gòi:', e); }
+    } catch(e) { console.warn('study state read-only sync', e); }
   };
 
-  // Creator model: mọi tài khoản đã đăng nhập đều có quyền tạo phòng thi.
-  currentRole='creator';
-  async function loadRole(user){
-    currentRole='creator';
-    const btn=document.getElementById('nav-teacher');
-    if(btn) btn.classList.remove('hidden');
-    const badge=document.getElementById('user-display-name');
-    if(badge && user) badge.textContent=(user.displayName||user.email||'Học viên').split('@')[0];
+  function applyRoleUI(){
+    const isTeacher=!!window.HLAuthz?.teacher, isAdmin=!!window.HLAuthz?.admin, isStudent=!isTeacher && !isAdmin;
+    ['nav-teacher','teacher-shortcut','sec-teacher-config','sec-teacher-key'].forEach(id=>document.getElementById(id)?.classList.toggle('hidden',!isTeacher && !isAdmin));
+    document.getElementById('nav-admin')?.classList.toggle('hidden',!isAdmin);
+    document.querySelectorAll('[data-student-only="true"]').forEach(el=>el.classList.toggle('hidden',!isStudent));
+    document.querySelectorAll('.admissions-planner').forEach(el=>{if(!isStudent) el.remove();});
+    const badge=document.getElementById('user-role-badge'); if(badge){badge.textContent=isAdmin?'ADMIN':isTeacher?'GIÁO VIÊN':'HỌC SINH';badge.className=`hl-role-badge ${isAdmin?'is-admin':isTeacher?'is-teacher':'is-student'}`;}
+    const nav=document.querySelector('#main-nav .nav-btn')?.parentElement;
+    if(nav && isStudent && !document.getElementById('nav-admission')){ const b=document.createElement('button'); b.id='nav-admission'; b.className='nav-btn text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all hover:bg-white'; b.textContent='🎓 Nguyện vọng'; b.onclick=()=>HLLearning?.open?.('plan'); nav.append(b); }
+    if(!isStudent) document.getElementById('nav-admission')?.remove();
+    if(nav && isAdmin && !document.getElementById('nav-admin')){ const b=document.createElement('button'); b.id='nav-admin'; b.className='nav-btn text-violet-700 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all hover:bg-violet-50'; b.textContent='🛡️ Admin'; b.onclick=()=>window.HLAdmin?.open(); nav.append(b); }
+    window.dispatchEvent(new CustomEvent('hl:role-ready',{detail:{role:currentRole,student:isStudent,teacher:isTeacher,admin:isAdmin}}));
   }
-  window.openTeacherConfig=function(){ switchSection('sec-teacher-config'); };
+  async function loadRole(user){
+    try{
+      const tokenResult=await user.getIdTokenResult(true);
+      const claims=tokenResult?.claims||{};
+      const isAdmin=claims.admin===true || claims.role==='admin';
+      const isTeacher=isAdmin || claims.teacher===true || claims.role==='teacher';
+      currentRole=isAdmin?'admin':isTeacher?'teacher':'student';
+      window.HLAuthz={role:currentRole,admin:isAdmin,teacher:isTeacher,claims};
+      applyRoleUI();
+      const badge=document.getElementById('user-display-name');
+      if(badge) badge.textContent=(user.displayName||user.email||'Học viên').split('@')[0];
+    }catch(e){
+      currentRole='student'; window.HLAuthz={role:'student',admin:false,teacher:false,claims:{}}; applyRoleUI(); console.warn('role claims',e);
+    }
+  }
+  window.HLRequireRole=function(role){
+    const ok=role==='admin'?window.HLAuthz?.admin:role==='teacher'?window.HLAuthz?.teacher:true;
+    if(!ok) window.toast?.('Bạn không có quyền truy cập khu vực này.');
+    return !!ok;
+  };
+  window.openTeacherConfig=function(){ if(window.HLRequireRole('teacher')) switchSection('sec-teacher-config'); };
 
   // Fuzzy search: bỏ dấu + chuẩn hóa Hoá/Hóa + token gần đúng.
   function fold(s){ return String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/đ/g,'d').replace(/hoá/g,'hoa').replace(/[^a-z0-9\s+.#-]/g,' ').replace(/\s+/g,' ').trim(); }
@@ -1536,7 +1533,7 @@ function toggleAIChat() {
     updatePomoUI();
     updateRankUI();
     updateStudyDashboard();
-    if(typeof auth!=='undefined' && auth) auth.onAuthStateChanged(u=>{ if(u) loadRole(u); });
+    if(typeof auth!=='undefined' && auth) auth.onAuthStateChanged(u=>{ if(u) loadRole(u); else { window.HLAuthz={role:'student',admin:false,teacher:false,claims:{}}; applyRoleUI(); } });
     const input=document.getElementById('searchInput'); if(input) input.setAttribute('autocomplete','off');
   });
 
@@ -1669,6 +1666,7 @@ function toggleAIChat() {
     if(!database) return alert('❌ Firebase Database chưa sẵn sàng. Hãy tải lại trang.');
 
     const creator=currentCreator();
+    if(!window.HLRequireRole?.('teacher')) return;
     if(!creator.uid){
       return alert('❌ Bạn cần đăng nhập để tạo phòng.');
     }
@@ -2577,6 +2575,8 @@ window.uploadCustomAvatar = function(e) {
     if(typeof updatePomoUI === 'function') updatePomoUI();
     if(typeof updateRankUI === 'function') updateRankUI();
     if(typeof syncStudyStats === 'function') syncStudyStats();
+    // Final authoritative flush after the Pomodoro state is stopped.
+    void window.HLStudy?.stop();
     if(typeof enableInputs === 'function') enableInputs();
     setBtn(false,false);
     if(typeof syncFocusOverlay === 'function') syncFocusOverlay();
