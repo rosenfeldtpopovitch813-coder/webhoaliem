@@ -34,3 +34,136 @@ body.theme-dark{color:var(--theme-text)!important}
 .hl-theme-preview-modal{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:22px}.hl-theme-preview-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.72);backdrop-filter:blur(8px)}.hl-theme-preview-dialog{position:relative;width:min(980px,96vw);max-height:92vh;overflow:auto;border-radius:24px;background:var(--theme-surface,#fff);color:var(--theme-text,#0f172a);border:1px solid var(--theme-border,#dbeafe);box-shadow:0 30px 100px -35px rgba(0,0,0,.7);padding:20px}.hl-theme-preview-head{display:flex;align-items:center;justify-content:space-between;gap:16px}.hl-theme-icon-lg{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-border)}.hl-theme-icon-lg svg{width:28px;height:28px}.hl-theme-close{width:38px;height:38px;border-radius:12px;background:var(--theme-surface-2);border:1px solid var(--theme-border);font-size:24px;line-height:1}.hl-theme-preview-large{margin-top:18px}.hl-theme-preview-large .theme-shot{height:330px}.hl-theme-preview-info{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:13px;opacity:.75}.hl-theme-preview-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.hl-btn-primary,.hl-btn-secondary{padding:11px 14px;border-radius:12px;font-weight:900}.hl-btn-primary{background:var(--accent);color:var(--accent-text)}.hl-btn-secondary{background:var(--theme-surface-2);border:1px solid var(--theme-border)}.hl-theme-preview-active:after{content:'ĐANG XEM THỬ GIAO DIỆN';position:fixed;right:18px;bottom:18px;z-index:19999;padding:9px 12px;border-radius:999px;background:var(--accent);color:var(--accent-text);font:900 11px system-ui;box-shadow:0 12px 30px -10px var(--accent-glow)}
 @media(max-width:900px){.theme-grid{grid-template-columns:1fr}.theme-catalog-intro{align-items:flex-start;flex-direction:column}.theme-preview-wrap .theme-shot{height:190px}.hl-theme-preview-large .theme-shot{height:220px}}
 @media(prefers-reduced-motion:reduce){.theme-shot--aurora,.theme-shot--cyber .shot-ambience,.theme-shot--magic .shot-ambience,.theme-shot--fire .shot-ambience,.theme-shot--chemistry .shot-ambience:before,.theme-shot--chemistry .shot-ambience:after{animation:none!important}}
+
+/* ===== HTVVM PREMIUM ICON SYSTEM v2 ===== */
+#main-nav .nav-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+#main-nav .theme-nav-icon{width:17px;height:17px;display:inline-grid;place-items:center;flex:0 0 17px;color:currentColor;filter:drop-shadow(0 2px 5px var(--accent-glow,transparent));}
+#main-nav .theme-nav-icon svg{width:17px;height:17px;display:block}
+#main-nav .theme-nav-label{line-height:1}
+
+.theme-meta{min-height:115px}
+.theme-icon-pack{display:flex;align-items:center;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid var(--theme-border)}
+.theme-icon-pack span{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-border);box-shadow:0 4px 12px -8px var(--accent-glow);transition:transform .18s ease,box-shadow .18s ease}
+.theme-icon-pack span:hover{transform:translateY(-2px) scale(1.06);box-shadow:0 10px 16px -10px var(--accent-glow)}
+.theme-icon-pack svg{width:15px;height:15px}
+
+.shot-tabs{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;position:absolute;left:8px;right:8px;bottom:7px;padding:5px;border-radius:10px;background:rgba(4,8,18,.55);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(10px);z-index:5}
+.theme-shot--classic .shot-tabs,.theme-shot--volleyball .shot-tabs,.theme-shot--ice .shot-tabs{background:rgba(255,255,255,.75);border-color:rgba(15,23,42,.1)}
+.shot-tab{display:flex;align-items:center;justify-content:center;gap:3px;min-width:0;padding:3px 2px;border-radius:7px;color:var(--shot-muted);opacity:.88;transition:transform .2s ease,color .2s ease,background .2s ease}
+.shot-tab span{width:13px;height:13px;display:grid;place-items:center;flex:0 0 13px}.shot-tab span svg{width:13px;height:13px}.shot-tab em{font-style:normal;font-size:5.8px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shot-tab.is-active{background:color-mix(in srgb,var(--shot-a) 22%,transparent);color:var(--shot-text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--shot-a) 38%,transparent)}
+.shot-tab:hover{transform:translateY(-1px);color:var(--shot-text)}
+
+.theme-shot--anime .shot-tabs{animation:tabGlowAnime 3s ease-in-out infinite alternate}
+.theme-shot--football .shot-tabs{border-style:dashed}
+.theme-shot--volleyball .shot-tabs{box-shadow:0 0 0 1px rgba(249,115,22,.12),0 6px 22px -12px rgba(249,115,22,.5)}
+.theme-shot--magic .shot-tab.is-active{box-shadow:0 0 0 1px rgba(196,181,253,.35),0 0 16px -5px var(--shot-a)}
+.theme-shot--ice .shot-tab.is-active{box-shadow:0 0 0 1px rgba(14,165,233,.3),inset 0 0 14px rgba(255,255,255,.4)}
+.theme-shot--fire .shot-tabs{animation:emberTabs 2.4s ease-in-out infinite alternate}
+.theme-shot--space .shot-tabs{background:rgba(3,8,20,.7)}
+.theme-shot--cyber .shot-tab{font-family:monospace;letter-spacing:.02em}
+.theme-shot--chemistry .shot-tab span{border-radius:50%}
+.theme-shot--aurora .shot-tabs{background:linear-gradient(90deg,rgba(20,184,166,.16),rgba(34,197,94,.16),rgba(59,130,246,.14));background-size:180% 100%;animation:auroraTabs 6s ease-in-out infinite alternate}
+.theme-shot--fantasy .shot-tab.is-active{background:linear-gradient(135deg,rgba(168,85,247,.25),rgba(236,72,153,.18));box-shadow:0 0 18px -7px var(--shot-a)}
+.theme-shot--minimal-dark .shot-tabs{background:#0f141d;border-color:#334155}
+
+.shot-mini-card{margin-top:14px;padding:7px 8px;border-radius:8px;background:var(--shot-surface-2);border:1px solid var(--shot-border);display:flex;flex-direction:column;gap:2px}
+.shot-mini-card b{font-size:7px;letter-spacing:.08em;color:var(--shot-a)}.shot-mini-card span{font-size:6px;color:var(--shot-muted);font-weight:700}
+
+.hl-theme-preview-feature-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.hl-theme-preview-feature-grid>div{padding:11px 12px;border:1px solid var(--theme-border);border-radius:14px;background:var(--theme-surface-2);display:flex;flex-direction:column;gap:4px}.hl-theme-preview-feature-grid b{font-size:12px}.hl-theme-preview-feature-grid span{font-size:11px;opacity:.72;line-height:1.35}
+
+.theme-card--anime .theme-icon,.theme-card--magic .theme-icon,.theme-card--fantasy .theme-icon{animation:iconFloat 3s ease-in-out infinite}
+.theme-card--football .theme-icon,.theme-card--volleyball .theme-icon{border-radius:50%}
+.theme-card--ice .theme-icon{transform:rotate(45deg);border-radius:10px}.theme-card--ice .theme-icon svg{transform:rotate(-45deg)}
+.theme-card--fire .theme-icon{animation:emberPulse 1.8s ease-in-out infinite alternate}
+.theme-card--space .theme-icon{animation:orbitCard 5s linear infinite}
+.theme-card--cyber .theme-icon{border-radius:7px;box-shadow:inset 0 0 0 1px rgba(34,211,238,.25),0 0 18px -8px var(--accent-glow)}
+.theme-card--chemistry .theme-icon{border-radius:50% 50% 45% 55%}
+.theme-card--aurora .theme-icon{background:linear-gradient(135deg,var(--accent-soft),rgba(59,130,246,.12));animation:auroraCard 5s ease-in-out infinite alternate}
+
+@keyframes tabGlowAnime{to{box-shadow:0 0 0 1px rgba(236,72,153,.14),0 0 22px -10px #ec4899}}
+@keyframes emberTabs{to{box-shadow:0 0 0 1px rgba(249,115,22,.2),0 0 24px -9px #ef4444}}
+@keyframes auroraTabs{from{background-position:0% 50%}to{background-position:100% 50%}}
+@keyframes iconFloat{50%{transform:translateY(-3px) rotate(2deg)}}
+@keyframes emberPulse{to{box-shadow:0 0 0 1px rgba(239,68,68,.2),0 0 24px -8px #ef4444;transform:translateY(-1px)}}
+@keyframes orbitCard{to{transform:rotate(360deg)}}
+@keyframes auroraCard{to{filter:hue-rotate(18deg);transform:translateY(-1px)}}
+
+@media(max-width:900px){.shot-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}.shot-tab em{font-size:5.4px}.hl-theme-preview-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){.theme-card--anime .theme-icon,.theme-card--magic .theme-icon,.theme-card--fantasy .theme-icon,.theme-card--fire .theme-icon,.theme-card--space .theme-icon,.theme-card--aurora .theme-icon,.theme-shot--anime .shot-tabs,.theme-shot--fire .shot-tabs,.theme-shot--aurora .shot-tabs{animation:none!important}}
+
+
+/* ===== PREMIUM TAB ICON PACKS v3 ===== */
+#main-nav .theme-nav-icon{position:relative;overflow:visible;transition:transform .22s ease,filter .22s ease,opacity .22s ease}
+#main-nav .theme-nav-icon svg{overflow:visible}
+#main-nav .nav-btn[data-theme-tab="home"] .theme-nav-icon{--tab-order:1}
+#main-nav .nav-btn[data-theme-tab="library"] .theme-nav-icon{--tab-order:2}
+#main-nav .nav-btn[data-theme-tab="exam"] .theme-nav-icon{--tab-order:3}
+#main-nav .nav-btn[data-theme-tab="study"] .theme-nav-icon{--tab-order:4}
+#main-nav .nav-btn[data-theme-tab="community"] .theme-nav-icon{--tab-order:5}
+#main-nav .nav-btn[data-theme-tab="theme"] .theme-nav-icon{--tab-order:6}
+#main-nav .nav-btn:hover .theme-nav-icon{transform:translateY(-1px) scale(1.06)}
+body[data-theme="classic"] #main-nav .theme-nav-icon{filter:drop-shadow(0 2px 5px rgba(37,99,235,.18))}
+body[data-theme="anime"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 7px rgba(236,72,153,.48));animation:premiumIconFloat 2.8s ease-in-out infinite}
+body[data-theme="football"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 5px rgba(22,163,74,.35))}
+body[data-theme="volleyball"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 6px rgba(249,115,22,.38));animation:sportIconBounce 1.9s ease-in-out infinite}
+body[data-theme="magic"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 8px rgba(139,92,246,.55));animation:runeIconPulse 3.2s linear infinite}
+body[data-theme="ice"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 7px rgba(14,165,233,.42));animation:iceIconShimmer 2.8s ease-in-out infinite}
+body[data-theme="fire"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 9px rgba(239,68,68,.58));animation:fireIconFlicker 1.25s ease-in-out infinite alternate}
+body[data-theme="space"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 8px rgba(99,102,241,.5));animation:spaceIconOrbit 5.5s linear infinite}
+body[data-theme="cyber"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 7px rgba(6,182,212,.55));animation:cyberIconScan 2.4s linear infinite}
+body[data-theme="chemistry"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 7px rgba(20,184,166,.48));animation:chemIconDrift 3.5s ease-in-out infinite}
+body[data-theme="aurora"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 8px rgba(34,197,94,.45));animation:auroraIconHue 5s ease-in-out infinite alternate}
+body[data-theme="fantasy"] #main-nav .theme-nav-icon{filter:drop-shadow(0 0 8px rgba(168,85,247,.5));animation:fantasyIconFloat 3s ease-in-out infinite}
+body[data-theme="minimal-dark"] #main-nav .theme-nav-icon{filter:drop-shadow(0 2px 4px rgba(148,163,184,.15))}
+
+/* Tab-specific accents inside each icon family: same tab meaning, different visual language. */
+body[data-theme="football"] .nav-btn[data-theme-tab="home"] .theme-nav-icon{color:#22c55e}
+body[data-theme="football"] .nav-btn[data-theme-tab="library"] .theme-nav-icon{color:#84cc16}
+body[data-theme="football"] .nav-btn[data-theme-tab="exam"] .theme-nav-icon{color:#facc15}
+body[data-theme="football"] .nav-btn[data-theme-tab="study"] .theme-nav-icon{color:#34d399}
+body[data-theme="football"] .nav-btn[data-theme-tab="community"] .theme-nav-icon{color:#86efac}
+body[data-theme="football"] .nav-btn[data-theme-tab="theme"] .theme-nav-icon{color:#bef264}
+body[data-theme="fire"] .nav-btn[data-theme-tab="home"] .theme-nav-icon{color:#fb7185}
+body[data-theme="fire"] .nav-btn[data-theme-tab="library"] .theme-nav-icon{color:#fb923c}
+body[data-theme="fire"] .nav-btn[data-theme-tab="exam"] .theme-nav-icon{color:#f59e0b}
+body[data-theme="fire"] .nav-btn[data-theme-tab="study"] .theme-nav-icon{color:#ef4444}
+body[data-theme="fire"] .nav-btn[data-theme-tab="community"] .theme-nav-icon{color:#f97316}
+body[data-theme="fire"] .nav-btn[data-theme-tab="theme"] .theme-nav-icon{color:#facc15}
+body[data-theme="ice"] .nav-btn[data-theme-tab="home"] .theme-nav-icon{color:#0284c7}
+body[data-theme="ice"] .nav-btn[data-theme-tab="library"] .theme-nav-icon{color:#0ea5e9}
+body[data-theme="ice"] .nav-btn[data-theme-tab="exam"] .theme-nav-icon{color:#38bdf8}
+body[data-theme="ice"] .nav-btn[data-theme-tab="study"] .theme-nav-icon{color:#06b6d4}
+body[data-theme="ice"] .nav-btn[data-theme-tab="community"] .theme-nav-icon{color:#22d3ee}
+body[data-theme="ice"] .nav-btn[data-theme-tab="theme"] .theme-nav-icon{color:#60a5fa}
+body[data-theme="cyber"] .nav-btn[data-theme-tab="home"] .theme-nav-icon{color:#22d3ee}
+body[data-theme="cyber"] .nav-btn[data-theme-tab="library"] .theme-nav-icon{color:#67e8f9}
+body[data-theme="cyber"] .nav-btn[data-theme-tab="exam"] .theme-nav-icon{color:#38bdf8}
+body[data-theme="cyber"] .nav-btn[data-theme-tab="study"] .theme-nav-icon{color:#2dd4bf}
+body[data-theme="cyber"] .nav-btn[data-theme-tab="community"] .theme-nav-icon{color:#a5f3fc}
+body[data-theme="cyber"] .nav-btn[data-theme-tab="theme"] .theme-nav-icon{color:#5eead4}
+
+@keyframes premiumIconFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-2px) rotate(1deg)}}
+@keyframes sportIconBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px) rotate(2deg)}}
+@keyframes runeIconPulse{50%{transform:rotate(2deg) scale(1.04);filter:drop-shadow(0 0 11px rgba(139,92,246,.7))}}
+@keyframes iceIconShimmer{50%{transform:translateY(-1px);filter:drop-shadow(0 0 12px rgba(125,211,252,.8))}}
+@keyframes fireIconFlicker{0%{transform:translateY(0) rotate(-1deg) scale(1)}100%{transform:translateY(-1px) rotate(1deg) scale(1.05)}}
+@keyframes spaceIconOrbit{to{transform:rotate(360deg)}}
+@keyframes cyberIconScan{0%,100%{opacity:.85}50%{opacity:1;filter:drop-shadow(0 0 12px rgba(34,211,238,.8))}}
+@keyframes chemIconDrift{50%{transform:translateY(-2px) rotate(2deg)}}
+@keyframes auroraIconHue{50%{filter:hue-rotate(18deg) drop-shadow(0 0 10px rgba(34,197,94,.6))}}
+@keyframes fantasyIconFloat{50%{transform:translateY(-2px) rotate(-2deg) scale(1.03)}}
+
+/* Make the preview's bottom tab strip clearly communicate that each tab has its own icon. */
+.theme-shot .shot-tabs .shot-tab:nth-child(1) svg{filter:drop-shadow(0 0 4px var(--shot-a))}
+.theme-shot .shot-tabs .shot-tab:nth-child(2) svg{opacity:.94}
+.theme-shot .shot-tabs .shot-tab:nth-child(3) svg{opacity:.88}
+.theme-shot .shot-tabs .shot-tab:nth-child(4) svg{transform:translateY(-.2px)}
+.theme-shot .shot-tabs .shot-tab:nth-child(5) svg{opacity:.9}
+.theme-shot .shot-tabs .shot-tab:nth-child(6) svg{filter:drop-shadow(0 0 4px var(--shot-a))}
+.theme-shot .shot-tabs .shot-tab:nth-child(7) svg{opacity:.9}
+.theme-shot .shot-tabs .shot-tab:nth-child(8) svg{opacity:1}
+
+@media(prefers-reduced-motion:reduce){
+  #main-nav .theme-nav-icon,.theme-shot .shot-tabs .shot-tab svg{animation:none!important}
+}
