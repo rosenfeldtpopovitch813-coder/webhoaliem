@@ -211,7 +211,8 @@ function initFirebase() {
             if(login) login.classList.add('hidden');
             if(nav) nav.classList.remove('hidden');
             document.getElementById('firebase-status').textContent='Đã đăng nhập';
-            switchSection(location.hash.slice(1)||'sec-dashboard', {replace:true}); 
+            const initialSection = window.__getInitialSection ? window.__getInitialSection() : (location.hash.slice(1)||'sec-dashboard');
+            window.switchSection(initialSection, {replace:true}); 
             
             let displayName = user.displayName || user.email || "Học viên";
             if(userName) userName.innerText = String(displayName).split('@')[0];

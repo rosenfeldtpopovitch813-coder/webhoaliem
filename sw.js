@@ -1,4 +1,4 @@
-const CACHE='webhoaliem-shell-v4-20260920';
+const CACHE='webhoaliem-shell-v4-20260923';
 const FILES=['/','/index.html','/style.css','/css/utilities.css','/css/education.css','/scripts.js','/js/core.js','/js/navigation.js','/js/arena-core.js','/js/study.js','/js/exam-engine.js','/js/learning.js','/js/data-access.js','/js/vendor/firebase-app.js','/js/vendor/firebase-auth.js','/js/vendor/firebase-database.js','/js/vendor/papaparse.min.js','/favicon.png'];
 FILES.push('/js/library.js','/js/theme-system.js','/js/admin-center.js','/js/leaderboard-upgrade.js','/css/themes.css');
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)));});
