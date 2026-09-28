@@ -45,11 +45,97 @@
    for(const [q,v]of Object.entries(answers)){const input=document.getElementById('input-'+q);if(input)input.value=v;else document.querySelector(`#student-sheet input[name="${CSS.escape(q)}"][value="${CSS.escape(String(v))}"]`)?.setAttribute('checked','');}
    for(const [q,v]of Object.entries(attempt.marked||{}))if(v)document.getElementById('row-'+q)?.classList.add('row-marked');
    document.getElementById('result').classList.add('hidden');const button=document.getElementById('submit-btn');button.style.display='block';button.textContent='Nộp bài';button.disabled=false;
+   renderQuickNav();
+   updateExamStats();
+   if(window.innerWidth<1024) switchMobileExamTab('pdf');
+   if(examConfig?.lockFullscreen&&document.documentElement.requestFullscreen){
+     document.documentElement.requestFullscreen().catch(()=>{});
+   }
    switchSection('sec-taking-exam');clearInterval(tickId);save();tickId=setInterval(renderTimer,500);renderTimer();
    if(data?.status==='submitted')showResult(data);else if(attempt.status==='pending'){lock();setTimeout(submitExam,0);}else setTimeout(checkpoint,0);
   }catch(error){console.warn('Start exam',error);alert(error.message||'Không thể mở bài thi.');}finally{busy=false;}
  };
- window.saveAns=function(q,v){if(!attempt||attempt.status!=='active')return;answers[q]=String(v).trim();attempt.revision++;save();clearTimeout(saveTimer);saveTimer=setTimeout(checkpoint,800);};
+ function updateExamStats(){
+  const answeredKeys=Object.keys(answers||{}).filter(k=>answers[k]!==undefined&&answers[k]!=='');
+  const total=(examConfig?.abcd||0)+(examConfig?.tf||0)*4+(examConfig?.short||0);
+  const count=answeredKeys.length;
+  const progressText=document.getElementById('exam-progress-text');
+  if(progressText) progressText.textContent=`${count} / ${total}`;
+  const sheetCount=document.getElementById('btn-mobile-sheet-count');
+  if(sheetCount) sheetCount.textContent=count;
+  const floatCount=document.getElementById('mobile-float-count');
+  if(floatCount) floatCount.textContent=count;
+  const summary=document.getElementById('exam-sheet-summary');
+  if(summary) summary.textContent=`${count} đã làm`;
+  document.querySelectorAll('#exam-quick-nav button').forEach(btn=>{
+    const q=btn.dataset.question;
+    const isAnswered=q&&(answers[q]!==undefined&&answers[q]!=='');
+    btn.className=isAnswered?'px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 bg-blue-600 text-white shadow-sm':'px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 bg-slate-200 text-slate-700 hover:bg-slate-300';
+  });
+ }
+ function renderQuickNav(){
+  const nav=document.getElementById('exam-quick-nav');
+  if(!nav) return;
+  nav.innerHTML='';
+  const rows=document.querySelectorAll('#student-sheet [id^="row-"]');
+  rows.forEach((row,i)=>{
+    const qId=row.id.replace('row-','');
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.dataset.question=qId;
+    btn.textContent=String(i+1);
+    btn.className='px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 bg-slate-200 text-slate-700 hover:bg-slate-300';
+    btn.onclick=()=>{
+      row.scrollIntoView({behavior:'smooth',block:'center'});
+      if(window.innerWidth<1024) switchMobileExamTab('sheet');
+    };
+    nav.appendChild(btn);
+  });
+ }
+ window.switchMobileExamTab=function(tab){
+  const pdfContainer=document.getElementById('exam-pdf-container');
+  const sheetContainer=document.getElementById('exam-sheet-container');
+  const btnPdf=document.getElementById('btn-mobile-pdf');
+  const btnSheet=document.getElementById('btn-mobile-sheet');
+  updateExamStats();
+  if(tab==='pdf'){
+    if(pdfContainer){ pdfContainer.classList.remove('hidden'); pdfContainer.classList.add('flex'); }
+    if(sheetContainer){ sheetContainer.classList.add('hidden'); sheetContainer.classList.remove('flex'); }
+    if(btnPdf) btnPdf.className='flex-1 py-2.5 rounded-xl font-black text-sm bg-white text-blue-600 shadow-sm transition-all flex items-center justify-center gap-2';
+    if(btnSheet) btnSheet.className='flex-1 py-2.5 rounded-xl font-black text-sm text-slate-600 transition-all flex items-center justify-center gap-2';
+  }else{
+    if(pdfContainer){ pdfContainer.classList.add('hidden'); pdfContainer.classList.remove('flex'); }
+    if(sheetContainer){ sheetContainer.classList.remove('hidden'); sheetContainer.classList.add('flex'); }
+    if(btnSheet) btnSheet.className='flex-1 py-2.5 rounded-xl font-black text-sm bg-white text-blue-600 shadow-sm transition-all flex items-center justify-center gap-2';
+    if(btnPdf) btnPdf.className='flex-1 py-2.5 rounded-xl font-black text-sm text-slate-600 transition-all flex items-center justify-center gap-2';
+  }
+ };
+ window.resumeExamFullscreen=function(){
+  const alertBox=document.getElementById('exam-fullscreen-alert');
+  if(alertBox) alertBox.classList.add('hidden');
+  if(!document.fullscreenElement&&document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }
+ };
+ window.exitExamPrompt=function(){
+  if(!confirm('Bạn có chắc chắn muốn rời khỏi bài thi?\nBài làm của bạn đã được tự động lưu nháp trên thiết bị.')) return;
+  if(document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+  const alertBox=document.getElementById('exam-fullscreen-alert');
+  if(alertBox) alertBox.classList.add('hidden');
+  switchSection('sec-exam-list');
+  window.toast?.('Đã tạm dừng bài thi. Bản nháp được lưu trên thiết bị.',3000);
+ };
+ document.addEventListener('fullscreenchange',()=>{
+  if(attempt&&attempt.status==='active'&&examConfig?.lockFullscreen){
+    const alertBox=document.getElementById('exam-fullscreen-alert');
+    if(!document.fullscreenElement){
+      if(alertBox) alertBox.classList.remove('hidden');
+    }else{
+      if(alertBox) alertBox.classList.add('hidden');
+    }
+  }
+ });
+ window.saveAns=function(q,v){if(!attempt||attempt.status!=='active')return;answers[q]=String(v).trim();attempt.revision++;updateExamStats();save();clearTimeout(saveTimer);saveTimer=setTimeout(checkpoint,800);};
  window.mark=function(q,checked){if(!attempt||attempt.status!=='active')return;attempt.marked[q]=checked;document.getElementById('row-'+q)?.classList.toggle('row-marked',checked);save();};
  window.submitExam=async function(){
   if(!attempt||busy||attempt.status==='submitted')return;busy=true;attempt.status='pending';attempt.submittedAt=attempt.submittedAt||Math.min(now(),attempt.startAt+attempt.duration*1000);clearInterval(tickId);clearTimeout(saveTimer);lock();save();
