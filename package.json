@@ -3,12 +3,14 @@
   "version": "1.1.0",
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.cjs",
-    "check": "node tests/check.cjs",
+    "dev": "node server.cjs",
+    "build": "npm run build:css",
     "start": "node server.cjs",
+    "test": "node --test test/*.test.cjs",
+    "check": "node test/check.cjs",
     "vercel-build": "npm run build:css",
     "build:css": "tailwindcss -i css/utilities.input.css -o css/utilities.css --minify",
-    "test:browser": "node tests/browser.cjs"
+    "test:browser": "node test/browser.cjs"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0"

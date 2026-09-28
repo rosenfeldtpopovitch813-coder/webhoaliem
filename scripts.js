@@ -1493,8 +1493,12 @@ function toggleAIChat() {
   // AI proxy: API key không còn nằm trong browser bundle. Frontend gọi /api/gemini.
   function aiBubble(content, me=false){ const body=document.getElementById('ai-chat-body'); if(!body) return null; const div=document.createElement('div'); div.className=me?'bg-blue-600 text-white p-3 rounded-2xl rounded-tr-none self-end max-w-[85%] font-medium shadow-sm mt-4':'bg-white border border-slate-200 text-slate-800 p-4 rounded-2xl rounded-tl-none self-start max-w-[90%] shadow-sm mt-4 leading-relaxed'; div.innerHTML=me?html(content):html(content).replace(/\n/g,'<br>'); body.appendChild(div); body.scrollTop=body.scrollHeight; if(!me&&window.MathJax?.typesetPromise) MathJax.typesetPromise([div]).catch(()=>{}); return div; }
   window.askGemini=async function(promptText, base64Image=null, mimeType=null){
+    if(!auth?.currentUser){
+      throw new Error('Vui lòng đăng nhập tài khoản để trò chuyện cùng AI trợ giảng.');
+    }
     const systemInstruction='Bạn là gia sư Hóa học và Toán học cho học sinh Việt Nam. Hướng dẫn từng bước, ưu tiên gợi ý trước khi cho đáp án hoàn chỉnh. Dùng LaTeX $...$ cho công thức. Nếu là đề thi, nêu rõ dữ kiện, phương pháp, kết quả và kiểm tra đáp số.';
-    const resp=await fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+await auth.currentUser.getIdToken()},signal:AbortSignal.timeout(60000),body:JSON.stringify({systemInstruction,prompt:promptText,image:base64Image?{data:base64Image,mimeType}:null,history:aiHistory.slice(-10)})});
+    const token=await auth.currentUser.getIdToken();
+    const resp=await fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},signal:AbortSignal.timeout(60000),body:JSON.stringify({systemInstruction,prompt:promptText,image:base64Image?{data:base64Image,mimeType}:null,history:aiHistory.slice(-10)})});
     let data=null;
     try{ data=await resp.json(); }catch(_){ data=null; }
     if(!resp.ok){
@@ -3025,7 +3029,528 @@ window.uploadCustomAvatar = function(e) {
     // Chỉ tự vào route khi user đã đăng nhập sẵn.
     setTimeout(()=>handleArenaRoute(),700);
   });
+
+  // ==========================================
+  // 🎨 WHITEBOARD & TEACHER TOOLS MODULE
+  // ==========================================
+  window.clearAIChat = function() {
+    if (typeof aiHistory !== 'undefined' && Array.isArray(aiHistory)) aiHistory.length = 0;
+    const body = document.getElementById('ai-chat-body');
+    if (body) {
+      body.innerHTML = '<div class="bg-white border border-slate-200 text-slate-800 p-4 rounded-2xl rounded-tl-none self-start max-w-[90%] shadow-sm leading-relaxed">👋 Chào bạn! Mình là AI trợ giảng. Bạn cần mình giải đáp câu hỏi Hóa học hay bài tập nào hôm nay?</div>';
+    }
+    const input = document.getElementById('ai-input');
+    if (input) input.value = '';
+    if (window.toast) window.toast('Đã xóa lịch sử chat AI.');
+  };
+
+  window.previewLocal = function(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const url = e.target.result;
+      const input = document.getElementById('teacher-pdf-url');
+      if (input) input.value = url;
+      const previewPdf = document.getElementById('preview-pdf');
+      const placeholder = document.getElementById('preview-placeholder');
+      if (previewPdf) {
+        previewPdf.src = url;
+        previewPdf.classList.remove('hidden');
+      }
+      if (placeholder) placeholder.classList.add('hidden');
+      if (window.toast) window.toast('Đã tải tệp lên làm đề thi.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // --- WHITEBOARD ENGINE ---
+  let wbCanvas = null;
+  let wbCtx = null;
+  let wbTool = 'pen';
+  let wbColor = '#ffffff';
+  let wbSize = 3;
+  let wbBg = 'blackboard';
+  let wbHistory = [];
+  let wbHistoryIndex = -1;
+  let isDrawing = false;
+  let startX = 0;
+  let startY = 0;
+  let previewSnapshot = null;
+
+  const BG_COLORS = {
+    blackboard: '#131b17',
+    greenboard: '#064e3b',
+    whiteboard: '#ffffff',
+    grid: '#f0f9ff'
+  };
+
+  function initWhiteboard() {
+    wbCanvas = document.getElementById('whiteboard-canvas');
+    if (!wbCanvas) return;
+    wbCtx = wbCanvas.getContext('2d', { willReadFrequently: true });
+    
+    function resizeCanvas() {
+      if (!wbCanvas) return;
+      const container = document.getElementById('wb-canvas-container');
+      const rect = container ? container.getBoundingClientRect() : wbCanvas.getBoundingClientRect();
+      const prevData = (wbCanvas.width > 0 && wbCanvas.height > 0) ? wbCtx.getImageData(0, 0, wbCanvas.width, wbCanvas.height) : null;
+      wbCanvas.width = Math.max(300, Math.floor(rect.width || 800));
+      wbCanvas.height = Math.max(200, Math.floor(rect.height || 520));
+      if (prevData) {
+        wbCtx.putImageData(prevData, 0, 0);
+      } else {
+        fillWbBg();
+        saveWbState();
+      }
+    }
+
+    resizeCanvas();
+    window.addEventListener('resize', () => {
+      if (document.getElementById('tab-whiteboard')?.classList.contains('active')) {
+        resizeCanvas();
+      }
+    });
+
+    wbCanvas.addEventListener('pointerdown', handlePointerDown);
+    wbCanvas.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    wbCanvas.addEventListener('pointercancel', handlePointerUp);
+  }
+
+  function fillWbBg() {
+    if (!wbCtx || !wbCanvas) return;
+    wbCtx.save();
+    wbCtx.fillStyle = BG_COLORS[wbBg] || '#131b17';
+    wbCtx.fillRect(0, 0, wbCanvas.width, wbCanvas.height);
+    if (wbBg === 'grid') {
+      wbCtx.strokeStyle = '#bae6fd';
+      wbCtx.lineWidth = 1;
+      const step = 25;
+      for (let x = step; x < wbCanvas.width; x += step) {
+        wbCtx.beginPath();
+        wbCtx.moveTo(x, 0);
+        wbCtx.lineTo(x, wbCanvas.height);
+        wbCtx.stroke();
+      }
+      for (let y = step; y < wbCanvas.height; y += step) {
+        wbCtx.beginPath();
+        wbCtx.moveTo(0, y);
+        wbCtx.lineTo(wbCanvas.width, y);
+        wbCtx.stroke();
+      }
+    }
+    wbCtx.restore();
+  }
+
+  function saveWbState() {
+    if (!wbCtx || !wbCanvas) return;
+    wbHistoryIndex++;
+    if (wbHistoryIndex < wbHistory.length) {
+      wbHistory = wbHistory.slice(0, wbHistoryIndex);
+    }
+    wbHistory.push(wbCtx.getImageData(0, 0, wbCanvas.width, wbCanvas.height));
+    if (wbHistory.length > 30) {
+      wbHistory.shift();
+      wbHistoryIndex--;
+    }
+  }
+
+  function getCanvasCoords(e) {
+    if (!wbCanvas) return { x: 0, y: 0 };
+    const rect = wbCanvas.getBoundingClientRect();
+    const scaleX = wbCanvas.width / (rect.width || 1);
+    const scaleY = wbCanvas.height / (rect.height || 1);
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  }
+
+  function handlePointerDown(e) {
+    if (!wbCtx || !wbCanvas) return;
+    wbCanvas.setPointerCapture?.(e.pointerId);
+    const pos = getCanvasCoords(e);
+    startX = pos.x;
+    startY = pos.y;
+    isDrawing = true;
+
+    if (wbTool === 'text') {
+      const text = prompt('Nhập văn bản cần viết lên bảng:');
+      if (text) {
+        wbCtx.save();
+        wbCtx.fillStyle = wbColor;
+        wbCtx.font = `bold ${Math.max(14, wbSize * 5)}px 'Be Vietnam Pro', sans-serif`;
+        wbCtx.fillText(text, startX, startY);
+        wbCtx.restore();
+        saveWbState();
+      }
+      isDrawing = false;
+      return;
+    }
+
+    if (['line', 'rect', 'circle'].includes(wbTool)) {
+      previewSnapshot = wbCtx.getImageData(0, 0, wbCanvas.width, wbCanvas.height);
+      return;
+    }
+
+    wbCtx.save();
+    wbCtx.beginPath();
+    wbCtx.moveTo(startX, startY);
+    applyToolStyle();
+  }
+
+  function applyToolStyle() {
+    if (!wbCtx) return;
+    wbCtx.lineCap = 'round';
+    wbCtx.lineJoin = 'round';
+    if (wbTool === 'eraser') {
+      wbCtx.strokeStyle = BG_COLORS[wbBg] || '#131b17';
+      wbCtx.lineWidth = wbSize * 4;
+      wbCtx.globalAlpha = 1.0;
+    } else if (wbTool === 'highlighter') {
+      wbCtx.strokeStyle = wbColor;
+      wbCtx.lineWidth = wbSize * 3;
+      wbCtx.globalAlpha = 0.35;
+    } else {
+      wbCtx.strokeStyle = wbColor;
+      wbCtx.lineWidth = wbSize;
+      wbCtx.globalAlpha = 1.0;
+    }
+  }
+
+  function handlePointerMove(e) {
+    if (!isDrawing || !wbCtx || !wbCanvas) return;
+    const pos = getCanvasCoords(e);
+
+    if (['line', 'rect', 'circle'].includes(wbTool)) {
+      if (previewSnapshot) wbCtx.putImageData(previewSnapshot, 0, 0);
+      wbCtx.save();
+      applyToolStyle();
+      wbCtx.beginPath();
+      if (wbTool === 'line') {
+        wbCtx.moveTo(startX, startY);
+        wbCtx.lineTo(pos.x, pos.y);
+      } else if (wbTool === 'rect') {
+        wbCtx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
+      } else if (wbTool === 'circle') {
+        const radius = Math.hypot(pos.x - startX, pos.y - startY);
+        wbCtx.arc(startX, startY, radius, 0, 2 * Math.PI);
+      }
+      wbCtx.stroke();
+      wbCtx.restore();
+      return;
+    }
+
+    wbCtx.lineTo(pos.x, pos.y);
+    wbCtx.stroke();
+  }
+
+  function handlePointerUp() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    previewSnapshot = null;
+    if (wbCtx) wbCtx.restore();
+    saveWbState();
+  }
+
+  window.setWbTool = function(tool) {
+    wbTool = tool;
+    document.querySelectorAll('.wb-tool-btn').forEach(btn => {
+      btn.classList.remove('active', 'bg-blue-600', 'text-white');
+      btn.classList.add('text-slate-600');
+    });
+    const activeBtn = document.getElementById('wb-tool-' + tool);
+    if (activeBtn) {
+      activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
+      activeBtn.classList.remove('text-slate-600');
+    }
+  };
+
+  window.setWbColor = function(color) {
+    wbColor = color;
+    const picker = document.getElementById('wb-color-picker');
+    if (picker) picker.value = color;
+  };
+
+  window.setWbSize = function(size) {
+    wbSize = Math.max(1, Number(size) || 3);
+    const label = document.getElementById('wb-size-label');
+    if (label) label.textContent = wbSize;
+  };
+
+  window.setWbBg = function(bg) {
+    wbBg = bg;
+    const buttons = {
+      blackboard: 'wb-bg-black',
+      greenboard: 'wb-bg-green',
+      whiteboard: 'wb-bg-white',
+      grid: 'wb-bg-grid'
+    };
+    Object.entries(buttons).forEach(([key, id]) => {
+      const el = document.getElementById(id);
+      if (el) {
+        if (key === bg) {
+          el.classList.add('ring-2', 'ring-blue-500');
+        } else {
+          el.classList.remove('ring-2', 'ring-blue-500');
+        }
+      }
+    });
+
+    if (bg === 'whiteboard' && wbColor === '#ffffff') {
+      setWbColor('#0f172a');
+    } else if (bg !== 'whiteboard' && wbColor === '#0f172a') {
+      setWbColor('#ffffff');
+    }
+
+    fillWbBg();
+    saveWbState();
+  };
+
+  window.clearWhiteboard = function() {
+    if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ bảng viết?')) return;
+    fillWbBg();
+    saveWbState();
+  };
+
+  window.undoWhiteboard = function() {
+    if (!wbCtx || wbHistoryIndex <= 0) return;
+    wbHistoryIndex--;
+    wbCtx.putImageData(wbHistory[wbHistoryIndex], 0, 0);
+  };
+
+  window.redoWhiteboard = function() {
+    if (!wbCtx || wbHistoryIndex >= wbHistory.length - 1) return;
+    wbHistoryIndex++;
+    wbCtx.putImageData(wbHistory[wbHistoryIndex], 0, 0);
+  };
+
+  window.downloadWhiteboard = function() {
+    if (!wbCanvas) return;
+    const link = document.createElement('a');
+    link.download = `Bang-Giang-HTVVM-${new Date().toISOString().slice(0,10)}.png`;
+    link.href = wbCanvas.toDataURL('image/png');
+    link.click();
+    if (window.toast) window.toast('Đã tải hình ảnh bảng viết.');
+  };
+
+  // --- TEACHER WHEEL ENGINE ---
+  let wheelNames = [];
+  let wheelCanvas = null;
+  let wheelCtx = null;
+  let currentAngle = 0;
+  let isSpinning = false;
+  const WHEEL_PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'];
+
+  const SAMPLE_NAMES = [
+    'Nguyễn Văn An',
+    'Trần Thị Bình',
+    'Lê Hoàng Cường',
+    'Phạm Minh Đức',
+    'Vũ Thị Hoa',
+    'Đặng Quốc Huy',
+    'Bùi Ngọc Linh',
+    'Đỗ Thành Nam',
+    'Hoàng Yến Nhi',
+    'Ngô Gia Phúc'
+  ];
+
+  function initWheel() {
+    wheelCanvas = document.getElementById('wheel-canvas');
+    if (!wheelCanvas) return;
+    wheelCtx = wheelCanvas.getContext('2d');
+    const input = document.getElementById('wheel-names-input');
+    if (input && !input.value.trim()) {
+      input.value = SAMPLE_NAMES.join('\n');
+    }
+    updateWheelFromInput();
+  }
+
+  function drawWheel() {
+    if (!wheelCtx || !wheelCanvas) return;
+    const width = wheelCanvas.width;
+    const height = wheelCanvas.height;
+    const center = width / 2;
+    const radius = center - 8;
+    const count = wheelNames.length;
+
+    wheelCtx.clearRect(0, 0, width, height);
+
+    if (count === 0) {
+      wheelCtx.save();
+      wheelCtx.beginPath();
+      wheelCtx.arc(center, center, radius, 0, 2 * Math.PI);
+      wheelCtx.fillStyle = '#f1f5f9';
+      wheelCtx.fill();
+      wheelCtx.strokeStyle = '#cbd5e1';
+      wheelCtx.lineWidth = 4;
+      wheelCtx.stroke();
+      wheelCtx.fillStyle = '#64748b';
+      wheelCtx.font = 'bold 16px "Be Vietnam Pro", sans-serif';
+      wheelCtx.textAlign = 'center';
+      wheelCtx.textBaseline = 'middle';
+      wheelCtx.fillText('Danh sách rỗng', center, center);
+      wheelCtx.restore();
+      return;
+    }
+
+    const arc = (2 * Math.PI) / count;
+
+    for (let i = 0; i < count; i++) {
+      const angle = currentAngle + i * arc;
+      wheelCtx.save();
+      wheelCtx.beginPath();
+      wheelCtx.moveTo(center, center);
+      wheelCtx.arc(center, center, radius, angle, angle + arc);
+      wheelCtx.closePath();
+      wheelCtx.fillStyle = WHEEL_PALETTE[i % WHEEL_PALETTE.length];
+      wheelCtx.fill();
+      wheelCtx.strokeStyle = '#ffffff';
+      wheelCtx.lineWidth = 2;
+      wheelCtx.stroke();
+
+      // Label text
+      wheelCtx.translate(center, center);
+      wheelCtx.rotate(angle + arc / 2);
+      wheelCtx.textAlign = 'right';
+      wheelCtx.fillStyle = '#ffffff';
+      wheelCtx.font = 'bold 14px "Be Vietnam Pro", sans-serif';
+      wheelCtx.shadowColor = 'rgba(0,0,0,0.5)';
+      wheelCtx.shadowBlur = 4;
+      const label = wheelNames[i].length > 18 ? wheelNames[i].slice(0, 16) + '…' : wheelNames[i];
+      wheelCtx.fillText(label, radius - 20, 5);
+      wheelCtx.restore();
+    }
+
+    // Center Hub
+    wheelCtx.save();
+    wheelCtx.beginPath();
+    wheelCtx.arc(center, center, 24, 0, 2 * Math.PI);
+    wheelCtx.fillStyle = '#ffffff';
+    wheelCtx.fill();
+    wheelCtx.strokeStyle = '#e2e8f0';
+    wheelCtx.lineWidth = 3;
+    wheelCtx.stroke();
+    wheelCtx.restore();
+  }
+
+  window.updateWheelFromInput = function() {
+    const input = document.getElementById('wheel-names-input');
+    if (!input) return;
+    wheelNames = input.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const countEl = document.getElementById('wheel-names-count');
+    if (countEl) countEl.textContent = wheelNames.length;
+    drawWheel();
+  };
+
+  window.loadSampleWheelNames = function() {
+    const input = document.getElementById('wheel-names-input');
+    if (input) {
+      input.value = SAMPLE_NAMES.join('\n');
+      updateWheelFromInput();
+    }
+  };
+
+  window.resetStudentWheelList = function() {
+    const input = document.getElementById('wheel-names-input');
+    if (input) {
+      input.value = '';
+      updateWheelFromInput();
+    }
+    const winnerBox = document.getElementById('wheel-winner-box');
+    if (winnerBox) winnerBox.classList.add('hidden');
+  };
+
+  window.spinStudentWheel = function() {
+    if (isSpinning) return;
+    if (!wheelNames.length) {
+      alert('Vui lòng nhập danh sách học sinh trước khi quay.');
+      return;
+    }
+    isSpinning = true;
+    const btn = document.getElementById('btn-spin-wheel');
+    if (btn) btn.disabled = true;
+    const winnerBox = document.getElementById('wheel-winner-box');
+    if (winnerBox) winnerBox.classList.add('hidden');
+
+    const totalRounds = 5 + Math.floor(Math.random() * 5);
+    const extraAngle = Math.random() * 2 * Math.PI;
+    const totalRotation = totalRounds * 2 * Math.PI + extraAngle;
+    const start = performance.now();
+    const duration = 4000;
+    const initialAngle = currentAngle;
+
+    function easeOutCubic(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function animate(now) {
+      const elapsed = now - start;
+      const progress = Math.min(1, elapsed / duration);
+      currentAngle = initialAngle + totalRotation * easeOutCubic(progress);
+      drawWheel();
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        isSpinning = false;
+        if (btn) btn.disabled = false;
+        // The pointer is at top: 3*PI/2 in standard radians
+        const count = wheelNames.length;
+        const arc = (2 * Math.PI) / count;
+        // Normalize angle to [0, 2*PI]
+        const pointerAngle = (3 * Math.PI / 2);
+        let normalized = (pointerAngle - (currentAngle % (2 * Math.PI))) % (2 * Math.PI);
+        if (normalized < 0) normalized += 2 * Math.PI;
+        const winnerIndex = Math.floor(normalized / arc) % count;
+        const winner = wheelNames[winnerIndex] || wheelNames[0];
+
+        const winnerNameEl = document.getElementById('wheel-winner-name');
+        if (winnerNameEl) winnerNameEl.textContent = winner;
+        if (winnerBox) winnerBox.classList.remove('hidden');
+        if (window.toast) window.toast('🎉 Chúc mừng ' + winner + '!');
+      }
+    }
+
+    requestAnimationFrame(animate);
+  };
+
+  window.removeWheelWinner = function() {
+    const winnerNameEl = document.getElementById('wheel-winner-name');
+    const winner = winnerNameEl?.textContent?.trim();
+    if (!winner) return;
+    const input = document.getElementById('wheel-names-input');
+    if (input) {
+      const lines = input.value.split('\n').map(s => s.trim()).filter(s => s && s !== winner);
+      input.value = lines.join('\n');
+      updateWheelFromInput();
+    }
+    const winnerBox = document.getElementById('wheel-winner-box');
+    if (winnerBox) winnerBox.classList.add('hidden');
+    if (window.toast) window.toast('Đã loại ' + winner + ' khỏi danh sách quay.');
+  };
+
+  // Khởi tạo Whiteboard & Wheel khi chuyển tab
+  const origSwitchTab = window.switchTab;
+  window.switchTab = function(tabId) {
+    if (typeof origSwitchTab === 'function') origSwitchTab(tabId);
+    if (tabId === 'tab-whiteboard') {
+      setTimeout(initWhiteboard, 50);
+    } else if (tabId === 'tab-wheel') {
+      setTimeout(initWheel, 50);
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initWhiteboard();
+    initWheel();
+  });
 })();
+
 
 /* ===== ORIGINAL INLINE SCRIPT 12 ===== */
 window.addEventListener('firebase:user-ready',()=>{ try{ window.loadDashboardArenaRooms?.(); }catch(_){ } });
