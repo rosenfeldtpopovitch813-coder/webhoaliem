@@ -1,7 +1,19 @@
 /* Education system. Existing identifiers and component markup remain compatible. */
 :root{--hl-bg:#f4f7fb;--hl-surface:#fff;--hl-ink:#17243b;--hl-muted:#52647a;--hl-line:#dce4ee;--hl-primary:#3455cf;--hl-soft:#edf2ff;--bg-deep:var(--hl-bg);--text-primary:var(--hl-ink);--text-secondary:var(--hl-muted);--border-subtle:var(--hl-line)}
 html,body{background:var(--hl-bg)!important;color:var(--hl-ink)!important;background-image:none!important;line-height:1.6}
-body.hl-dark{--hl-bg:#101827;--hl-surface:#182438;--hl-ink:#edf3fd;--hl-muted:#bdc9dc;--hl-line:#34435d;--hl-soft:#243552;--hl-primary:#9bb1ff;color-scheme:dark}
+body.hl-dark{--hl-bg:#0f172a;--hl-surface:#1e293b;--hl-ink:#f8fafc;--hl-muted:#94a3b8;--hl-line:#334155;--hl-soft:#1e293b;--hl-primary:#38bdf8;color-scheme:dark}
+body.hl-dark input,body.hl-dark textarea,body.hl-dark select{background-color:#0f172a!important;color:#f8fafc!important;border-color:#334155!important}
+body.hl-dark input::placeholder,body.hl-dark textarea::placeholder{color:#64748b!important}
+body.hl-dark .tw-input{background-color:#0f172a!important;color:#f8fafc!important;border-color:#334155!important}
+body.hl-dark [id$="-modal"]>div,body.hl-dark .modal-content,body.hl-dark .calendar-box{background-color:#1e293b!important;color:#f8fafc!important;border-color:#334155!important}
+body.hl-dark #community-feed article{background-color:#1e293b!important;border-color:#334155!important}
+body.hl-dark #ai-chatbox{background-color:#1e293b!important;border-color:#334155!important}
+body.hl-dark #ai-chat-body{background-color:#0f172a!important}
+body.hl-dark #ai-chat-body>div{background-color:#1e293b!important;border-color:#334155!important;color:#f8fafc!important}
+body.hl-dark .lb-table tbody tr:hover{background-color:#334155!important}
+body.hl-dark .lb-table th{background-color:#0f172a!important;color:#94a3b8!important;border-color:#334155!important}
+body.hl-dark .lb-table td{border-color:#334155!important;color:#f8fafc!important}
+body.hl-dark .border-slate-200,body.hl-dark .border-slate-100{border-color:#334155!important}
 *{box-sizing:border-box}img,video,canvas{max-width:100%}button,input,select,textarea{font:inherit}button,a,input,select,textarea{touch-action:manipulation}button{min-height:40px}button:disabled{opacity:.6;cursor:wait}
 body :is(.bg-white,.bg-white\/80,.bg-white\/90,.bg-slate-50,.bg-slate-50\/50,.bg-slate-50\/80,.bg-slate-100){background:var(--hl-surface)!important;backdrop-filter:none!important;color:var(--hl-ink)}
 body :is(.text-slate-900,.text-slate-800,.text-slate-700){color:var(--hl-ink)!important}body :is(.text-slate-600,.text-slate-500,.text-slate-400){color:var(--hl-muted)!important}
