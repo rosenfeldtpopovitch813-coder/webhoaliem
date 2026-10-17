@@ -55,7 +55,7 @@
    const data=await request('continue',sessionId);reconcile(data);confirmation=false;lastSend=0;return true;
   }catch{await stop();return false;}
  }
- window.HLStudy={sync,stop,resume,pauseForConfirmation(){confirmation=true;}};
+ window.HLStudy={sync,stop,resume,continue:resume,pauseForConfirmation(){confirmation=true;}};
  const originalToggle=window.togglePomodoro;
  window.togglePomodoro=function(){
    const was=!!window.isPomoRunning;

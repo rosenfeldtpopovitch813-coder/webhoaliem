@@ -32,7 +32,7 @@
   finally{syncing=false;}
  }
  window.startExam=async function(){
-  if(busy)return;const name=document.getElementById('studentName').value.trim();if(!name||!owner())return alert('Hãy đăng nhập và nhập tên.');busy=true;
+  if(busy)return;const name=document.getElementById('studentName').value.trim();if(!name||!owner())return window.toast?.('Hãy đăng nhập và nhập tên.');busy=true;
   try{
    const saved=HL.storage.get(key()),resume=!!saved?.serverBacked&&saved.uid===owner()&&saved.status!=='submitted';let data;
    if(navigator.onLine)data=await request(resume?'resume':'start',{roomId:currentRoomId,attemptId:resume?saved.id:crypto.randomUUID(),name});
@@ -41,6 +41,8 @@
    else attempt={id:data.id,uid:owner(),name,roomId:currentRoomId,startAt:data.startAt,duration:data.duration,status:'active',answers:saved?.answers||{},marked:{},revision:0,serverBacked:true,room:{title:data.title,config:data.config}};
    if(data){attempt.startAt=data.startAt;attempt.duration=data.duration;if(data.revision>attempt.revision){attempt.answers=data.answers;attempt.revision=data.revision;}attempt.room={title:data.title,config:data.config};}
    studentName=attempt.name;answers={...attempt.answers};examConfig=attempt.room.config;
+   const takingTitle=document.getElementById('taking-title');if(takingTitle)takingTitle.textContent=attempt.room?.title||'Đề thi';
+   document.getElementById('exam-lock-badge')?.classList.toggle('hidden',!examConfig?.lockFullscreen);
    document.getElementById('student-sheet').innerHTML=sheetHTML(examConfig,false);
    for(const [q,v]of Object.entries(answers)){const input=document.getElementById('input-'+q);if(input)input.value=v;else document.querySelector(`#student-sheet input[name="${CSS.escape(q)}"][value="${CSS.escape(String(v))}"]`)?.setAttribute('checked','');}
    for(const [q,v]of Object.entries(attempt.marked||{}))if(v)document.getElementById('row-'+q)?.classList.add('row-marked');
@@ -53,7 +55,7 @@
    }
    switchSection('sec-taking-exam');clearInterval(tickId);save();tickId=setInterval(renderTimer,500);renderTimer();
    if(data?.status==='submitted')showResult(data);else if(attempt.status==='pending'){lock();setTimeout(submitExam,0);}else setTimeout(checkpoint,0);
-  }catch(error){console.warn('Start exam',error);alert(error.message||'Không thể mở bài thi.');}finally{busy=false;}
+  }catch(error){console.warn('Start exam',error);window.toast?.(error.message||'Không thể mở bài thi.');}finally{busy=false;}
  };
  function updateExamStats(){
   const answeredKeys=Object.keys(answers||{}).filter(k=>answers[k]!==undefined&&answers[k]!=='');
@@ -118,7 +120,7 @@
   }
  };
  window.exitExamPrompt=function(){
-  if(!confirm('Bạn có chắc chắn muốn rời khỏi bài thi?\nBài làm của bạn đã được tự động lưu nháp trên thiết bị.')) return;
+  
   if(document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen().catch(()=>{});
   const alertBox=document.getElementById('exam-fullscreen-alert');
   if(alertBox) alertBox.classList.add('hidden');
