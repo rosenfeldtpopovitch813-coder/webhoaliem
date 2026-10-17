@@ -26,7 +26,7 @@
         },
         "customAvatar": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "newData.isString() && newData.val().length <= 300000"
+          ".validate": "newData.isString() && newData.val().length <= 300000 && newData.val().matches(/^data:image\\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\\/=]+$/)"
         },
         "streak": {
           ".write": false
@@ -68,6 +68,9 @@
           ".write": false
         },
         "themeOwnerships": {
+          ".write": false
+        },
+        "examHistory": {
           ".write": false
         }
       }

@@ -17,13 +17,13 @@
 <script src="/js/vendor/firebase-app.js"></script>
 <script src="/js/vendor/firebase-database.js"></script>
 <script src="/js/vendor/firebase-auth.js"></script>
-<script src="https://meet.jit.si/external_api.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.4/3Dmol-min.js"></script>
+<script defer src="https://meet.jit.si/external_api.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.4/3Dmol-min.js"></script>
 <!-- THƯ VIỆN VẼ ĐỒ THỊ (CHART.JS & MATH.JS) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
 <!-- THƯ VIỆN CHO CHEMMAKER -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
   window.MathJax = {
     tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], packages: {'[+]': ['mhchem']} },
@@ -31,7 +31,7 @@
   };
 </script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-<script type="text/javascript" src="https://jsme-editor.github.io/dist/jsme/jsme.nocache.js"></script>
+<script defer type="text/javascript" src="https://jsme-editor.github.io/dist/jsme/jsme.nocache.js"></script>
 
 <script>
     if(window.tailwind) tailwind.config = {
@@ -235,8 +235,7 @@
 <!-- SECTION: CHEMMAKER (SOẠN ĐỀ HÓA PDF) -->
 <section id="sec-chemmaker" class="app-section max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     <div class="bg-white rounded-[2rem] shadow-soft border border-slate-200 p-6 relative overflow-hidden">
-        <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-            <!-- THANH TIÊU ĐỀ & NÚT BẤM (Đã được bôi keo dính chặt lên trần) -->
+        <!-- THANH TIÊU ĐỀ & NÚT BẤM (Đã được bôi keo dính chặt lên trần) -->
         <div class="sticky top-0 z-50 bg-white pt-4 flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
             <div>
                  <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2"><span class="text-purple-500">✍️</span> HTVVM ChemMaker</h1>
@@ -765,6 +764,7 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
         </div>
         <button onclick="openCalendar()" class="px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 font-black text-sm hover:bg-cyan-500/15">📅 Mở lịch</button>
       </div>
+      <div id="dashboard-arena-rooms" class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 hidden"></div>
       <div id="dashboard-upcoming-event-body" class="mt-5">
         <div class="dashboard-event-empty">Chưa có sự kiện sắp tới. Bấm “Mở lịch” để đặt một mốc quan trọng.</div>
       </div>
@@ -1317,10 +1317,10 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
             <!-- Khu vực nhét cái 3Dmol hoặc Bohr Model của ní vào đây -->
             <div id="bohr-model-container" class="w-full h-full flex items-center justify-center"></div>
             
-            <!-- Nút giả lập dưới đáy cho giống ảnh -->
+            <!-- Nút chuyển đổi Mô hình Obitan (Bohr) & Cấu trúc phân tử 3D -->
             <div class="absolute bottom-6 flex gap-2 bg-slate-100 p-1.5 rounded-full shadow-sm border border-slate-200">
-                <button class="px-6 py-2 rounded-full bg-slate-900 text-white font-extrabold text-sm shadow-md">Cấu trúc</button>
-                <button class="px-6 py-2 rounded-full text-slate-500 font-extrabold text-sm hover:text-slate-800">Obitan</button>
+                <button type="button" id="btn-model-bohr" onclick="switchElementModel('bohr')" class="px-6 py-2 rounded-full bg-slate-900 text-white font-extrabold text-sm shadow-md transition-all">Obitan</button>
+                <button type="button" id="btn-model-3d" onclick="switchElementModel('3d')" class="px-6 py-2 rounded-full text-slate-500 font-extrabold text-sm hover:text-slate-800 transition-all">Cấu trúc 3D</button>
             </div>
         </div>
         
@@ -1421,7 +1421,7 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
                     <button onclick="setDailyGoal(30)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">30m</button>
                     <button onclick="setDailyGoal(60)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">60m</button>
                     <button onclick="setDailyGoal(120)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">120m</button>
-                    <button onclick="setDailyGoal(prompt('Mục tiêu bao nhiêu phút?', '90'))" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">Tùy chỉnh</button>
+                    <button onclick="setDailyGoal(90)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-xs font-extrabold">Tùy chỉnh</button>
                 </div>
                 <div class="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden"><div id="today-goal-progress" class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width:0%"></div></div>
                 <p id="today-goal-text" class="text-[11px] font-bold text-slate-400 mt-2">0 / 60 phút</p>
@@ -1536,7 +1536,9 @@ Bài 2: Tính khối lượng $\ce{BaSO4 v}$ thu được khi cho $\ce{BaCl2}$ t
                 </div>
                 <p id="rank-next" class="text-[11px] font-bold text-slate-400 mt-2 text-right">Cần 60p để thăng cấp</p>
             </div>
-            </section>
+        </div>
+    </div>
+</section>
 
 <!-- ========================================== -->
 <!-- JAVASCRIPT GOM CHUNG HẾT VÀO ĐÂY -->
