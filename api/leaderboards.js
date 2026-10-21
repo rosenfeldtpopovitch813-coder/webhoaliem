@@ -1,0 +1,4 @@
+import { db,identity,fail,assert } from '../lib/exam-server.js';
+import { getVNDayIndex } from '../shared/time-utils.js';
+import { titleFor } from '../shared/study-core.js';
+export default async function handler(req,res){res.setHeader('Cache-Control','no-store');try{assert(req.method==='GET','Method không hợp lệ.',405);await identity(req);const snap=await db().ref('study_tracking').orderByChild('totalMs').limitToLast(100).get();const day=getVNDayIndex();const rows=[];snap.forEach(child=>{const s=child.val();if(s.sharing===true){rows.push({name:String(s.displayName||'Người học').slice(0,80),totalSeconds:Math.floor((s.totalMs||0)/1000),todaySeconds:s.dayIndex===day?Math.floor((s.dailyMs||0)/1000):0,streak:s.lastStudyDay>=day-1?s.streak||0:0,title:titleFor(Math.floor((s.totalMs||0)/1000))});}});rows.sort((a,b)=>b.totalSeconds-a.totalSeconds);return res.json({rows:rows.slice(0,30)});}catch(err){return fail(res,err);}}
