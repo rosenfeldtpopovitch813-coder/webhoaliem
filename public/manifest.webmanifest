@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "HTVVM Studio",
+  "short_name": "HTVVM",
+  "description": "Không gian học tập, khảo thí và trợ giảng Hóa học",
+  "lang": "vi-VN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
