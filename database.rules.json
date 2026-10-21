@@ -1,0 +1,88 @@
+{
+  "rules": {
+    "study_tracking": {
+      ".read": false,
+      ".write": false,
+      ".indexOn": [
+        "totalMs"
+      ]
+    },
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === true)",
+        "profile": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['displayName', 'updatedAt']) && newData.childrenCount() <= 4",
+          "displayName": {
+            ".validate": "newData.isString() && newData.val().length <= 80"
+          },
+          "photoURL": {
+            ".validate": "newData.isString() && newData.val().length <= 2048"
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "bio": {
+            ".validate": "newData.isString() && newData.val().length <= 280"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "preferences": {
+          "theme": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.isString() && (newData.val() === 'aurora' || newData.val() === 'light' || newData.val() === 'midnight')"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "stats": {
+          ".write": false
+        },
+        "$other": {
+          ".write": false
+        }
+      }
+    },
+    "exams_public": {
+      ".read": false,
+      ".write": false
+    },
+    "exams_answers": {
+      ".read": false,
+      ".write": false
+    },
+    "arena_rooms": {
+      ".read": false,
+      ".write": false
+    },
+    "leaderboards": {
+      ".read": true,
+      ".write": false
+    },
+    "roles": {
+      ".read": false,
+      ".write": false
+    },
+    "exams_meta": {
+      ".read": false,
+      ".write": false
+    },
+    "exams_private": {
+      ".read": false,
+      ".write": false
+    },
+    "exam_sessions": {
+      ".read": false,
+      ".write": false
+    },
+    "server_rate_limits": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

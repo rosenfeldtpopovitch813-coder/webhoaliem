@@ -1,24 +1,23 @@
 {
-  "name": "webhoaliem",
-  "version": "1.1.0",
+  "name": "htvvm-hoaliems-v2",
+  "version": "7.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "node server.cjs",
-    "build": "npm run build:css",
-    "start": "node server.cjs",
-    "test": "node --test test/*.test.cjs",
-    "check": "node test/check.cjs",
-    "vercel-build": "npm run build:css",
-    "build:css": "tailwindcss -i css/utilities.input.css -o css/utilities.css --minify",
-    "test:browser": "node test/browser.cjs"
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test ./test/*.test.js",
+    "check": "npm run test && npm run build"
   },
   "dependencies": {
-    "firebase-admin": "^13.0.0"
-  },
-  "engines": {
-    "node": ">=22"
+    "firebase": "^11.10.0",
+    "firebase-admin": "^12.7.0"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.17"
+    "vite": "^6.3.5",
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8.5.3",
+    "autoprefixer": "^10.4.21"
   }
 }
