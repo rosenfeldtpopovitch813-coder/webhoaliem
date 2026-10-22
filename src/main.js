@@ -3,12 +3,13 @@ import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
 import { startRouter, ROUTES, resolveRoute, loadRouteView, navigate } from './core/router.js';
 import { initializeTheme, THEMES, changeTheme } from './core/theme.js';
-import { firebaseReady, signInGoogle, signOutUser } from './core/firebase.js';
+import { firebaseReady, databaseReady, signInGoogle, signOutUser } from './core/firebase.js';
 import { startAuth } from './core/auth.js';
 import { element, button } from './core/dom.js';
+import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/chemmaker', '◈', 'ChemMaker'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/community', '☷', 'Cộng đồng & AI'], ['/admissions', '⌁', 'Nguyện vọng'], ['/admin', '⚙', 'Quản trị'] ];
+const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/chemmaker', '◈', 'ChemMaker'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/admissions', '⌁', 'Nguyện vọng'], ['/admin', '⚙', 'Quản trị'] ];
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
@@ -19,7 +20,7 @@ function createShell() {
   const sidebar = element('aside', 'sidebar'); sidebar.id = 'sidebar';
   const brand = element('div', 'brand');
   brand.append(element('span', 'brand-symbol', 'H'), element('div', 'brand-copy'));
-  brand.lastChild.append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO V2'));
+  brand.lastChild.append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO')); 
   const navLabel = element('div', 'nav-section-label', 'ĐIỀU HƯỚNG');
   const links = element('nav', 'nav-list');
   for (const [path, glyph, title] of nav) {
@@ -31,7 +32,7 @@ function createShell() {
     }); links.append(link);
   }
   const sideFooter = element('div', 'sidebar-bottom');
-  sideFooter.append(element('span', 'phase-dot'), element('span', '', 'Phase 7 · Admissions, AI & PWA'));
+  sideFooter.append(element('span', 'brand-status-dot'), element('span', '', 'Không gian học tập')); 
   sidebar.append(brand, navLabel, links, sideFooter);
   const content = element('div', 'content-area');
   const topbar = element('header', 'topbar');
@@ -59,6 +60,54 @@ function createShell() {
   content.append(topbar, notice, main); shell.append(sidebar, content); root.append(shell);
   frame = { sidebar, links, select, account, main, notice, status, installApp };
 }
+let entryScreen = null;
+function safeWelcomeSeen(uid) { try { return localStorage.getItem(`htvvm-welcome-seen:${uid}`) === '1'; } catch { return false; } }
+function markWelcomeSeen(uid) { try { localStorage.setItem(`htvvm-welcome-seen:${uid}`, '1'); } catch {} }
+function removeEntryScreen() { if (entryScreen) entryScreen.remove(); entryScreen = null; }
+function drawEntryScreen() {
+  removeEntryScreen();
+  if (!firebaseReady) return;
+  const { user, authLoading } = AppStore.getState();
+  const screen = element('section', 'entry-screen');
+  entryScreen = screen;
+  if (authLoading) {
+    const loading = element('div', 'entry-loading-card');
+    loading.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'HTVVM STUDIO'), element('h1', 'entry-title', 'Đang kiểm tra phiên đăng nhập'), element('p', 'entry-copy', 'Đang kết nối an toàn với không gian học tập…'));
+    screen.append(loading);
+  } else if (!user) {
+    const layout = element('div', 'entry-layout');
+    const intro = element('div', 'entry-intro');
+    intro.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'HTVVM STUDIO'), element('h1', 'entry-title', 'Không gian học tập của bạn.'), element('p', 'entry-copy', 'Luyện thi, hệ thống kiến thức, tập trung và theo dõi tiến trình học trên một nền tảng duy nhất.'));
+    const featureList = element('div', 'entry-feature-list');
+    for (const [icon, title, desc] of [['▤','Phòng thi','Luyện tập và xem kết quả'],['◷','Góc tập trung','Pomodoro, tài liệu và âm nhạc'],['✦','Trợ lý AI','Hỏi đáp và giải thích từng bước']]) {
+      const item = element('div', 'entry-feature'); item.append(element('span','',icon), element('div','', ''));
+      item.lastChild.append(element('strong','',title), element('small','',desc)); featureList.append(item);
+    }
+    intro.append(featureList);
+    const login = element('div', 'entry-login-card');
+    login.append(element('span','entry-google-mark','G'), element('h2','entry-login-title','Đăng nhập để bắt đầu'), element('p','entry-login-copy','Dùng tài khoản Google để đồng bộ hồ sơ và lưu tiến trình học tập của bạn.'));
+    const loginButton = makeButton('Tiếp tục với Google', 'entry-google-button', async () => {
+      loginButton.disabled = true; loginButton.textContent = 'Đang chuyển đến Google…';
+      try { await signInGoogle(); }
+      catch (error) { const message = error.message || 'Không thể đăng nhập Google.'; authError.textContent = message; AppStore.set('notice', `Không thể đăng nhập: ${message}`); loginButton.disabled = false; loginButton.textContent = 'Tiếp tục với Google'; }
+    });
+    const authError = element('p', 'entry-auth-error', '');
+    login.append(loginButton, authError, element('p','entry-privacy-note','Thông tin xác thực được xử lý qua Firebase Authentication.'));
+    layout.append(intro, login); screen.append(layout);
+  } else if (!safeWelcomeSeen(user.uid)) {
+    const card = element('div', 'entry-welcome-card');
+    card.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'SẴN SÀNG HỌC TẬP'), element('h1', 'entry-title', `Chào mừng${user.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}!`), element('p', 'entry-copy', 'Không gian học tập đã sẵn sàng. Chọn mục tiêu hôm nay và bắt đầu từ bước nhỏ nhất.'));
+    const checklist = element('div', 'entry-welcome-points');
+    checklist.append(element('span','','✓  Theo dõi thời gian học'), element('span','','✓  Lưu tài liệu và nhạc học'), element('span','','✓  Hỏi trợ lý AI bất cứ lúc nào'));
+    const enter = makeButton('Vào không gian học tập →', 'entry-google-button', () => { markWelcomeSeen(user.uid); removeEntryScreen(); });
+    card.append(checklist, enter); screen.append(card);
+  } else {
+    entryScreen = null;
+    return;
+  }
+  root.append(screen);
+}
+
 function updateSidebar() { frame.sidebar.classList.toggle('open', sidebarOpen); }
 function drawAccount() {
   const { user, role, roleVerified, authLoading } = AppStore.getState();
@@ -105,7 +154,7 @@ function updateNotice() {
 function setSyncBadge() { frame.status.textContent = AppClock.isSynced ? '● Giờ máy chủ đã đồng bộ' : '◌ Giờ máy chủ chưa đồng bộ'; frame.status.classList.toggle('synced', AppClock.isSynced); }
 async function syncClock() { await AppClock.syncWithServer(); AppStore.set('timeSynced', AppClock.isSynced); setSyncBadge(); }
 
-initializeTheme(); createShell(); startRouter(); startAuth();
+initializeTheme(); createShell(); mountAIBot(); startRouter(); startAuth();
 frame.select.value = AppStore.get('theme');
 AppStore.subscribe('theme', value => { frame.select.value = value; });
 AppStore.subscribe('route', drawRoute);
@@ -115,11 +164,14 @@ AppStore.subscribe('user', drawAccount);
 AppStore.subscribe('role', drawAccount);
 AppStore.subscribe('roleVerified', drawAccount);
 AppStore.subscribe('authLoading', drawAccount);
+AppStore.subscribe('user', drawEntryScreen);
+AppStore.subscribe('authLoading', drawEntryScreen);
 AppStore.subscribe('notice', updateNotice);
-if (!firebaseReady) AppStore.set('notice', 'Chế độ xem thử: thêm biến môi trường VITE_FIREBASE_* để bật đăng nhập và đồng bộ Theme.');
+if (!firebaseReady) AppStore.set('notice', 'Chế độ xem thử: thêm các biến VITE_FIREBASE_* để bật đăng nhập.');
+else if (!databaseReady) AppStore.set('notice', 'Thiếu VITE_FIREBASE_DATABASE_URL: đăng nhập vẫn dùng được, nhưng đồng bộ dữ liệu cần URL Realtime Database.');
 window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); window.__htvvmInstallPrompt = event; if (frame?.installApp) frame.installApp.hidden = false; });
 window.addEventListener('appinstalled', () => { window.__htvvmInstallPrompt = null; if (frame?.installApp) frame.installApp.hidden = true; });
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('PWA worker registration failed:', error));
-drawAccount(); drawRoute(); syncClock();
+drawAccount(); drawEntryScreen(); drawRoute(); syncClock();
 window.addEventListener('pageshow', syncClock);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncClock(); });
