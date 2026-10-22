@@ -6,7 +6,7 @@ export const ROUTES = Object.freeze({
   '/chemmaker': { title: 'ChemMaker', module: 'chemmaker', roles: ['teacher', 'admin'] },
   '/handbook': { title: 'Sổ tay', module: 'handbook' },
   '/focus': { title: 'Góc tập trung', module: 'focus-zone' },
-  '/community': { title: 'Cộng đồng & AI', module: 'community-ai' },
+  '/community': { title: 'Trợ lý AI', module: 'community-ai' },
   '/admissions': { title: 'Nguyện vọng', module: 'admissions' },
   '/admin': { title: 'Quản trị', module: 'placeholder', roles: ['admin'] }
 });

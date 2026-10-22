@@ -10,10 +10,13 @@ export const config = {
   projectId: env.VITE_FIREBASE_PROJECT_ID,
   appId: env.VITE_FIREBASE_APP_ID
 };
-export const firebaseReady = Boolean(config.apiKey && config.authDomain && config.databaseURL && config.projectId && config.appId);
-const app = firebaseReady ? (getApps()[0] || initializeApp(config)) : null;
+export const firebaseReady = Boolean(config.apiKey && config.authDomain && config.projectId && config.appId);
+export const databaseReady = Boolean(firebaseReady && config.databaseURL);
+const appConfig = { ...config };
+if (!appConfig.databaseURL) delete appConfig.databaseURL;
+const app = firebaseReady ? (getApps()[0] || initializeApp(appConfig)) : null;
 export const auth = app ? getAuth(app) : null;
-export const database = app ? getDatabase(app) : null;
+export const database = app && databaseReady ? getDatabase(app, config.databaseURL) : null;
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
