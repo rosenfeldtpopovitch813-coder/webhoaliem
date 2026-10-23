@@ -1,5 +1,5 @@
 import { db, identity, fail, assert, newId } from '../lib/exam-server.js';
-import { validateQuestions, publicQuestions, gradeExam } from '../shared/exam-grading.js';
+import { validateQuestions, publicQuestions, gradeExam, sanitizeDraftAnswers, sanitizeFlaggedQuestions } from '../shared/exam-grading.js';
 const MAX_BODY = 350000;
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store, private');
@@ -38,7 +38,37 @@ export default async function handler(req,res) {
       const tx=await sessionRef.transaction(current => current || {startedAt:now,endsAt:now+meta.durationMinutes*60000,status:'active',name:user.name},undefined,false);
       const session=tx.snapshot.val(); assert(session,'Không khởi tạo được phiên thi.',500);
       const questions=(await database.ref(`exams_public/${id}`).get()).val();
-      return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status},serverNow:Date.now(), result:session.status==='submitted'?session.result:null});
+      return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status,draftAnswers:session.draftAnswers||{},draftUpdatedAt:session.draftUpdatedAt||0,flaggedQuestions:session.flaggedQuestions||[]},serverNow:Date.now(),result:session.status==='submitted'?session.result:null});
+    }
+    if (action==='save-draft') {
+      assert(req.method==='POST','POST bắt buộc.');
+      const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
+      const publicSet=(await database.ref(`exams_public/${id}`).get()).val(); assert(Array.isArray(publicSet),'Không tìm thấy đề.',404);
+      const draftAnswers=sanitizeDraftAnswers(publicSet,req.body.answers||{});
+      const flaggedQuestions=sanitizeFlaggedQuestions(publicSet,req.body.flaggedQuestions||[]);
+      const sessionRef=database.ref(`exam_sessions/${id}/${user.uid}`); const now=Date.now();
+      const tx=await sessionRef.transaction(session=>{
+        if(!session || session.status!=='active' || now>session.endsAt+30000) return;
+        return {...session,draftAnswers,flaggedQuestions,draftUpdatedAt:now};
+      },undefined,false);
+      assert(tx.committed,'Phiên thi đã kết thúc hoặc không còn tồn tại; không thể lưu bản nháp.',409);
+      return res.json({savedAt:tx.snapshot.val().draftUpdatedAt,answerCount:Object.keys(draftAnswers).length,flaggedCount:flaggedQuestions.length});
+    }
+    if (action==='history') {
+      assert(req.method==='GET','GET bắt buộc.');
+      const metaSnap=await database.ref('exams_meta').orderByChild('createdAt').limitToLast(100).get();
+      const metas=Object.values(metaSnap.val()||{});
+      const records=await Promise.all(metas.map(async meta=>{
+        if(!meta?.id) return null;
+        const attemptSnap=await database.ref(`exam_sessions/${meta.id}/${user.uid}`).get();
+        if(!attemptSnap.exists()) return null;
+        const attempt=attemptSnap.val();
+        if(attempt?.status!=='submitted' || !attempt.result) return null;
+        return {examId:meta.id,examTitle:meta.title||'Đề thi',durationMinutes:meta.durationMinutes||0,startedAt:attempt.startedAt||0,submittedAt:attempt.submittedAt||0,elapsedMs:Math.max(0,(attempt.submittedAt||0)-(attempt.startedAt||0)),score:Number(attempt.result.score)||0,total:Number(attempt.result.total)||0,fullyCorrect:Number(attempt.result.fullyCorrect)||0};
+      }));
+      const history=records.filter(Boolean).sort((a,b)=>b.submittedAt-a.submittedAt).slice(0,100);
+      const scores=history.map(x=>x.score);
+      return res.json({history,summary:{total:history.length,averageScore:scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100)/100:0,bestScore:scores.length?Math.max(...scores):0,latestScore:scores[0]??null}});
     }
     if (action==='submit') {
       assert(req.method==='POST','POST bắt buộc.'); const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
@@ -54,11 +84,19 @@ export default async function handler(req,res) {
       const tx=await sessionRef.transaction(current => {
         if (!current || current.status!=='active') return;
         if (submittedAt > current.endsAt+30000) return;
-        return {...current,status:'submitted',submittedAt,result};
+        const {draftAnswers:_draftAnswers,draftUpdatedAt:_draftUpdatedAt,flaggedQuestions:_flaggedQuestions,...rest}=current;
+        return {...rest,status:'submitted',submittedAt,result};
       },undefined,false);
       const saved=tx.snapshot.val(); assert(saved?.status==='submitted','Không thể ghi bài nộp.',409);
       // Retries return the first committed result; no double grading.
       return res.json({result:saved.result,alreadySubmitted:!tx.committed});
+    }
+    if (action==='review') {
+      assert(req.method==='GET','GET bắt buộc.');
+      const id=String(req.query.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
+      const attemptSnap=await database.ref(`exam_sessions/${id}/${user.uid}`).get();
+      assert(attemptSnap.exists() && attemptSnap.val()?.status==='submitted' && attemptSnap.val()?.result,'Chưa có kết quả đã nộp cho đề này.',404);
+      return res.json({examId:id,result:attemptSnap.val().result});
     }
     if (action==='mistakes') {
       const snap=await database.ref('exam_sessions').get();
