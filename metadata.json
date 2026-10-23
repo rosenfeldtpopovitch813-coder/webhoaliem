@@ -1,7 +1,0 @@
-{
-  "name": "HTVVM Studio",
-  "description": "Hành trình vượt vũ môn - Nền tảng học tập và ôn thi trực tuyến.",
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
