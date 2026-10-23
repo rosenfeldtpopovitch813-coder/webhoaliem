@@ -3,6 +3,7 @@ import { auth } from '../../core/firebase.js';
 import { HEARTBEAT_MS, titleFor } from '../../../shared/study-core.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
 const fmt=s=>`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+function field(type, placeholder, value = '') { const el = element(type === 'textarea' ? 'textarea' : 'input', 'exam-input'); if (type !== 'textarea') el.type = type; el.placeholder = placeholder; el.value = value; return el; }
 let cleanup=()=>{};
 export function renderFocus(){cleanup();const root=element('div','focus-page');const heading=element('section','focus-hero');heading.append(element('h2','hero-title','◷ Góc tập trung'),element('p','hero-subtitle','Pomodoro, tài liệu, nhạc học và theo dõi thời gian học.'));root.append(heading);
  const grid=element('div','focus-layout');const left=element('div','focus-stack');const right=element('div','focus-stack');grid.append(left,right);root.append(grid);
