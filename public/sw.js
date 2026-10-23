@@ -1,4 +1,4 @@
-const CACHE_NAME = 'htvvm-studio-clean-ui-2';
+const CACHE_NAME = 'htvvm-studio-clean-ui-5';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -24,7 +24,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   // Never cache authenticated JSON, exam submissions, AI requests, or external content.
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.includes('/__/auth/')) return;
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/exam-visual/') || url.pathname.startsWith('/focus-notes/') || url.pathname.includes('/__/auth/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
