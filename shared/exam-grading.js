@@ -48,3 +48,34 @@ export function gradeExam(questions, submitted = {}) {
   const score = possible ? Math.round((earned / possible) * 1000) / 100 : 0;
   return { score, earnedHundredths:earned, possibleHundredths:possible, details, total:questions.length, fullyCorrect:details.filter(d=>d.correct).length };
 }
+
+
+/** Keep only well-formed answers for public questions before storing a resumable draft. */
+/** Keep only question ids present in the public exam when saving answer-sheet flags. */
+export function sanitizeFlaggedQuestions(questions, flaggedQuestions) {
+  if (!Array.isArray(questions)) throw Error('Không tìm thấy cấu trúc đề thi.');
+  if (!Array.isArray(flaggedQuestions)) return [];
+  const validIds = new Set(questions.map(q => q?.id).filter(id => typeof id === 'string'));
+  return [...new Set(flaggedQuestions.filter(id => typeof id === 'string' && validIds.has(id)))].slice(0, 60);
+}
+
+export function sanitizeDraftAnswers(questions, answers) {
+  if (!Array.isArray(questions)) throw Error('Không tìm thấy cấu trúc đề thi.');
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers) || Object.keys(answers).length > 60) throw Error('Bản nháp không hợp lệ.');
+  const byId = new Map(questions.map(q => [q.id, q]));
+  const cleaned = {};
+  for (const [id, value] of Object.entries(answers)) {
+    const q = byId.get(id);
+    if (!q) continue;
+    if (q.part === 'I') {
+      if (typeof value === 'string' && /^[ABCD]$/i.test(value.trim())) cleaned[id] = value.trim().toUpperCase();
+    } else if (q.part === 'II') {
+      if (Array.isArray(value) && value.length <= 4 && value.every(item => item === null || typeof item === 'boolean')) {
+        cleaned[id] = [0, 1, 2, 3].map(index => value[index] === true ? true : value[index] === false ? false : null);
+      }
+    } else if (q.part === 'III') {
+      if (typeof value === 'string' && value.length <= 200) cleaned[id] = value;
+    }
+  }
+  return cleaned;
+}
