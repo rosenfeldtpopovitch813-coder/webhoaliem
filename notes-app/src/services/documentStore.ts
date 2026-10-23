@@ -1,0 +1,12 @@
+
+import {BoardDocument,BoardItem,initialDocument} from '../types/board';
+const KEY='muc-classroom-v1';
+export interface DocumentStore{load():Promise<BoardDocument>;save(doc:BoardDocument):Promise<void>}
+function migrate(doc:BoardDocument):BoardDocument{const page=doc.pages?.[0];if(doc.title==='Bài giảng Hóa học 12'&&doc.pages.length===1&&page?.items.length===12&&page.items[0]?.kind==='text'&&page.items[0].text.startsWith('HÓA HỌC 12'))return initialDocument();if(doc.paperFormat==='A4')return doc;const scale=794/1120;const resize=(item:BoardItem):BoardItem=>item.kind==='stroke'?{...item,points:item.points.map(p=>({...p,x:p.x*scale,y:p.y*scale})),width:item.width*scale}:item.kind==='text'?{...item,x:item.x*scale,y:item.y*scale,fontSize:item.fontSize*scale}:{...item,x:item.x*scale,y:item.y*scale,w:item.w*scale,h:item.h*scale};return {...doc,paperFormat:'A4',pages:doc.pages.map(p=>({...p,items:p.items.map(resize)}))}}
+function openDatabase():Promise<IDBDatabase>{return new Promise((resolve,reject)=>{const request=indexedDB.open('muc-classroom',1);request.onupgradeneeded=()=>request.result.createObjectStore('documents');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+async function read():Promise<BoardDocument|undefined>{const db=await openDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readonly');const req=tx.objectStore('documents').get(KEY);req.onsuccess=()=>resolve(req.result as BoardDocument|undefined);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close()})}
+async function write(doc:BoardDocument):Promise<void>{const db=await openDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite');tx.objectStore('documents').put(doc,KEY);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
+export const localDocumentStore:DocumentStore={
+ async load(){try{return migrate(await read()||initialDocument())}catch{try{const raw=localStorage.getItem(KEY);return raw?migrate(JSON.parse(raw) as BoardDocument):initialDocument()}catch{return initialDocument()}}},
+ async save(doc){try{await write(doc)}catch{localStorage.setItem(KEY,JSON.stringify(doc))}}
+};
