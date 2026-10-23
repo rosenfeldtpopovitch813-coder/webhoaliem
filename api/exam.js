@@ -1,16 +1,19 @@
 import { db, identity, fail, assert, newId } from '../lib/exam-server.js';
 import { validateQuestions, publicQuestions, gradeExam, sanitizeDraftAnswers, sanitizeFlaggedQuestions } from '../shared/exam-grading.js';
-const MAX_BODY = 350000;
+import { resolveResourceLink } from '../shared/resource-links.js';
+const MAX_BODY = 4 * 1024 * 1024;
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store, private');
   if (!['GET','POST'].includes(req.method)) return res.status(405).json({error:'Method not allowed'});
   try {
-    assert(Number(req.headers['content-length'] || 0) <= MAX_BODY,'Nội dung quá lớn.',413);
+    const bodyBytes = req.method === 'POST' ? Buffer.byteLength(JSON.stringify(req.body || {}), 'utf8') : 0;
+    assert(Number(req.headers['content-length'] || 0) <= MAX_BODY && bodyBytes <= MAX_BODY,'Nội dung yêu cầu quá lớn. Hãy nén ảnh trong đề rồi thử lại.',413);
     const user = await identity(req); const database=db(); const action = req.method === 'GET' ? req.query.action : req.body?.action;
     assert(typeof action === 'string', 'Thiếu action.');
     if (action === 'list') {
-      const snap = await database.ref('exams_meta').orderByChild('createdAt').limitToLast(70).get();
-      const list = Object.values(snap.val() || {}).filter(x=>x.status === 'published' || x.owner === user.uid).map(({id,title,durationMinutes,createdAt,status,owner,counts})=>({id,title,durationMinutes,createdAt,status,isOwner:owner===user.uid,counts})).reverse();
+      // Sort in Node so deployment does not depend on a manually-published Realtime Database index.
+      const snap = await database.ref('exams_meta').get();
+      const list = Object.values(snap.val() || {}).filter(x=>x && (x.status === 'published' || x.owner === user.uid)).sort((a,b)=>(Number(b.createdAt)||0)-(Number(a.createdAt)||0)).slice(0,70).map(({id,title,durationMinutes,createdAt,status,owner,counts,sourceUrl})=>({id,title,durationMinutes,createdAt,status,isOwner:owner===user.uid,counts,hasSourceDocument:Boolean(sourceUrl)}));
       return res.json({exams:list});
     }
     if (action === 'create') {
@@ -19,8 +22,18 @@ export default async function handler(req,res) {
       const title = String(req.body.title || '').trim(); assert(title.length>=3 && title.length<=140,'Tên đề từ 3–140 ký tự.');
       const durationMinutes=Number(req.body.durationMinutes); assert(Number.isInteger(durationMinutes) && durationMinutes>=5 && durationMinutes<=240,'Thời gian 5–240 phút.');
       const questions=validateQuestions(req.body.questions); const id=newId(); const createdAt=Date.now();
+      let sourceUrl = '', sourceOpenUrl = '';
+      if (req.body.sourceUrl) {
+        const resource = resolveResourceLink(req.body.sourceUrl);
+        assert(resource.type === 'drive', 'Phòng thi chỉ nhận liên kết tài liệu Google Drive/Docs/Slides/Sheets.', 400);
+        sourceUrl = resource.embedUrl;
+        if (req.body.sourceOpenUrl) {
+          try { const openResource = resolveResourceLink(req.body.sourceOpenUrl); if (openResource.type === 'drive' && openResource.embedUrl === sourceUrl) sourceOpenUrl = openResource.openUrl; } catch {}
+        }
+        sourceOpenUrl ||= resource.openUrl;
+      }
       const counts={I:questions.filter(q=>q.part==='I').length, II:questions.filter(q=>q.part==='II').length,III:questions.filter(q=>q.part==='III').length};
-      const meta={id,title,durationMinutes,createdAt,status:'published',owner:user.uid,counts};
+      const meta={id,title,durationMinutes,createdAt,status:'published',owner:user.uid,counts,...(sourceUrl ? {sourceUrl,sourceOpenUrl} : {})};
       await database.ref().update({[`exams_meta/${id}`]:meta,[`exams_private/${id}`]:questions,[`exams_public/${id}`]:publicQuestions(questions)});
       return res.status(201).json({exam:meta});
     }
@@ -28,7 +41,7 @@ export default async function handler(req,res) {
       const id=String(req.query.id || '').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
       const snap=await database.ref(`exams_meta/${id}`).get(); assert(snap.exists(),'Không tìm thấy đề.',404);
       const meta=snap.val(); assert(meta.status==='published' || meta.owner===user.uid,'Đề chưa được phát hành.',403);
-      return res.json({exam:{id:meta.id,title:meta.title,durationMinutes:meta.durationMinutes,counts:meta.counts,status:meta.status}});
+      return res.json({exam:{id:meta.id,title:meta.title,durationMinutes:meta.durationMinutes,counts:meta.counts,status:meta.status,hasSourceDocument:Boolean(meta.sourceUrl)}});
     }
     if (action==='start') {
       assert(req.method==='POST','POST bắt buộc.'); const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
@@ -38,7 +51,7 @@ export default async function handler(req,res) {
       const tx=await sessionRef.transaction(current => current || {startedAt:now,endsAt:now+meta.durationMinutes*60000,status:'active',name:user.name},undefined,false);
       const session=tx.snapshot.val(); assert(session,'Không khởi tạo được phiên thi.',500);
       const questions=(await database.ref(`exams_public/${id}`).get()).val();
-      return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status,draftAnswers:session.draftAnswers||{},draftUpdatedAt:session.draftUpdatedAt||0,flaggedQuestions:session.flaggedQuestions||[]},serverNow:Date.now(),result:session.status==='submitted'?session.result:null});
+      return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes,sourceUrl:meta.sourceUrl || null,sourceOpenUrl:meta.sourceOpenUrl || meta.sourceUrl || null},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status,draftAnswers:session.draftAnswers||{},draftUpdatedAt:session.draftUpdatedAt||0,flaggedQuestions:session.flaggedQuestions||[]},serverNow:Date.now(),result:session.status==='submitted'?session.result:null});
     }
     if (action==='save-draft') {
       assert(req.method==='POST','POST bắt buộc.');
@@ -56,8 +69,9 @@ export default async function handler(req,res) {
     }
     if (action==='history') {
       assert(req.method==='GET','GET bắt buộc.');
-      const metaSnap=await database.ref('exams_meta').orderByChild('createdAt').limitToLast(100).get();
-      const metas=Object.values(metaSnap.val()||{});
+      // Keep history independent of a manually configured Realtime Database index.
+      const metaSnap=await database.ref('exams_meta').get();
+      const metas=Object.values(metaSnap.val()||{}).filter(x=>x && x.id).sort((a,b)=>(Number(b.createdAt)||0)-(Number(a.createdAt)||0)).slice(0,100);
       const records=await Promise.all(metas.map(async meta=>{
         if(!meta?.id) return null;
         const attemptSnap=await database.ref(`exam_sessions/${meta.id}/${user.uid}`).get();
