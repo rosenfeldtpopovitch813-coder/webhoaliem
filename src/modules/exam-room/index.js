@@ -1,7 +1,53 @@
 import { element, button } from '../../core/dom.js';
 import { AppStore } from '../../core/store.js';
 import { auth } from '../../core/firebase.js';
+import katex from 'katex';
 const E = element;
+function escapeHTML(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+// Render only explicit math delimiters; every surrounding string is HTML-escaped.
+function richMathHTML(value) {
+  const source = String(value ?? '');
+  const pattern = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)/g;
+  let html = '', cursor = 0, match;
+  while ((match = pattern.exec(source))) {
+    html += escapeHTML(source.slice(cursor, match.index)).replace(/\n/g, '<br>');
+    const tex = match[1] ?? match[2] ?? match[3] ?? match[4] ?? '';
+    const displayMode = match[1] !== undefined || match[2] !== undefined;
+    try { html += katex.renderToString(tex, { displayMode, throwOnError: false, trust: false, strict: 'ignore' }); }
+    catch { html += escapeHTML(match[0]); }
+    cursor = match.index + match[0].length;
+  }
+  html += escapeHTML(source.slice(cursor)).replace(/\n/g, '<br>');
+  return html;
+}
+function setRichText(node, value) { node.innerHTML = richMathHTML(value); }
+function renderDedicatedLatex(value) {
+  if (!String(value || '').trim()) return '';
+  try { return katex.renderToString(String(value), { displayMode: true, throwOnError: false, trust: false, strict: 'ignore' }); }
+  catch { return escapeHTML(value); }
+}
+function exportExamPDF({ title, durationMinutes, questions }, includeAnswers) {
+  if (!questions.length) throw Error('Thêm ít nhất một câu trước khi xuất PDF.');
+  const pageTitle = escapeHTML(title || 'Đề thi');
+  const styles = [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => `<link rel="stylesheet" href="${escapeHTML(link.href)}">`).join('');
+  const blocks = questions.map((q, index) => {
+    const prompt = richMathHTML(q.prompt);
+    const formula = q.latex ? `<div class="question-latex">${renderDedicatedLatex(q.latex)}</div>` : '';
+    let extra = '';
+    if (q.part === 'I' || q.part === 'II') extra = `<ol class="options" type="${q.part === 'I' ? 'A' : 'a'}">${(q.options || []).map(option => `<li>${richMathHTML(option)}</li>`).join('')}</ol>`;
+    return `<article class="question"><h3>Câu ${index + 1}. <small>Phần ${escapeHTML(q.part)}</small></h3><div class="prompt">${prompt}</div>${formula}${extra}</article>`;
+  }).join('');
+  const answerKey = includeAnswers ? `<section class="answer-key"><h2>ĐÁP ÁN</h2><ol>${questions.map(q => `<li>${q.part === 'II' ? (q.answer || []).map(v => v ? 'Đ' : 'S').join(' – ') : escapeHTML(Array.isArray(q.answer) ? q.answer.join(', ') : q.answer)}</li>`).join('')}</ol></section>` : '';
+  const win = window.open('', '_blank');
+  if (!win) throw Error('Trình duyệt đang chặn cửa sổ xuất PDF. Hãy cho phép popup của website rồi thử lại.');
+  win.document.open();
+  win.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}<title>${pageTitle}</title><style>
+    @page{size:A4;margin:17mm 16mm 18mm}*{box-sizing:border-box}body{font-family:Arial,"DejaVu Sans",sans-serif;color:#171b23;font-size:11pt;line-height:1.55;margin:0}.paper-head{text-align:center;margin:0 0 24px;padding-bottom:15px;border-bottom:1px solid #aab2bf}.paper-head .eyebrow{font-size:9pt;letter-spacing:.12em;color:#596579;font-weight:700}.paper-head h1{font-size:18pt;margin:8px 0}.paper-head p{margin:4px 0;color:#4d5867}.question{break-inside:avoid;page-break-inside:avoid;margin:0 0 19px}.question h3{font-size:11pt;margin:0 0 6px}.question h3 small{font-weight:400;color:#596579}.prompt{white-space:normal;overflow-wrap:anywhere}.question-latex{margin:8px 0 12px;overflow-x:auto}.options{margin:8px 0 0 28px;padding-left:10px}.options li{margin:4px 0;padding-left:4px}.answer-key{break-before:page;page-break-before:always;border-top:2px solid #536071;padding-top:14px}.answer-key h2{text-align:center}.answer-key li{margin:7px 0}.katex-display{overflow-x:auto;overflow-y:hidden}@media screen{body{max-width:800px;margin:30px auto;padding:24px;border:1px solid #dbe1e8;border-radius:12px}.print-tip{background:#eef5ff;padding:10px;border-radius:8px;margin:15px 0;color:#24496b}}@media print{.print-tip{display:none}}
+  </style></head><body><header class="paper-head"><div class="eyebrow">HTVVM STUDIO · PHÒNG THI</div><h1>${pageTitle}</h1><p>Thời gian làm bài: ${escapeHTML(durationMinutes)} phút</p><p>Họ và tên: ............................................................. Lớp: ....................</p></header><div class="print-tip">Chọn “Save as PDF / Lưu dưới dạng PDF” trong hộp thoại in để tải file PDF.</div>${blocks}${answerKey}<script>window.addEventListener('load',()=>setTimeout(()=>{window.focus();window.print()},650));</script></body></html>`);
+  win.document.close();
+}
 let ticker = null, autosaveTicker = null, draftSaveTimer = null;
 let current = null, answers = {}, currentExamId = null;
 function clearTimer() {
@@ -23,7 +69,7 @@ function label(text) { return E('label', 'exam-label', text); }
 function field(type, placeholder, value = '') { const el = E(type === 'textarea' ? 'textarea' : 'input', 'exam-input'); if (type !== 'textarea') el.type = type; el.placeholder = placeholder; el.value = value; return el; }
 function panel(title) { const d = E('section', 'exam-panel'); d.append(E('h3', 'exam-heading', title)); return d; }
 function showError(host, error) { host.replaceChildren(E('p', 'exam-error', error.message || String(error))); }
-function requireLogin(host) { if (!AppStore.get('roleVerified')) { host.replaceChildren(E('p', 'exam-message', 'Đăng nhập và xác minh quyền Firebase để vào phòng thi.')); return false; } return true; }
+function requireLogin(host) { if (!AppStore.get('user')) { host.replaceChildren(E('p', 'exam-message', 'Đăng nhập Google để vào phòng thi, lưu bài và xem lịch sử.')); return false; } return true; }
 function scopeUid() { return auth?.currentUser?.uid || AppStore.get('user')?.uid || 'guest'; }
 function draftKey(uid, id) { return `htvvm-exam-draft-v1:${encodeURIComponent(uid)}:${encodeURIComponent(id)}`; }
 function cloneAnswers(value) { try { return JSON.parse(JSON.stringify(value || {})); } catch { return {}; } }
@@ -104,7 +150,7 @@ export function renderExam() {
     ['Lịch sử & thống kê', showHistory],
     ['Sổ tay câu sai', showMistakes]
   ];
-  if (['teacher', 'admin'].includes(AppStore.get('role'))) actions.push(['Creator Studio', showCreator]);
+  actions.push(['Tạo đề thi', showCreator]);
   for (const [name, action] of actions) {
     bar.append(button(name, 'exam-tab', () => {
       clearTimer();
@@ -122,7 +168,7 @@ async function showList(host) {
   try {
     const data = await api('list', {}, 'GET');
     const section = panel('Đề thi đang mở'), grid = E('div', 'exam-grid');
-    if (!data.exams.length) grid.append(E('p', 'exam-message', 'Chưa có đề thi. Giáo viên có thể tạo đề tại Creator Studio.'));
+    if (!data.exams.length) grid.append(E('p', 'exam-message', 'Chưa có đề thi. Hãy dùng mục “Tạo đề thi” để tạo đề đầu tiên.'));
     for (const x of data.exams) {
       const card = E('article', 'exam-card');
       card.append(E('strong', '', x.title), E('span', '', `Mã ${x.id} • ${x.durationMinutes} phút • ${x.counts.I + x.counts.II + x.counts.III} câu`), button('Vào phòng →', 'primary-btn', () => begin(host, x.id)));
@@ -248,7 +294,9 @@ async function begin(host, id) {
       const flagButton = button(flaggedQuestions.has(q.id) ? '★ Đã đánh dấu' : '☆ Đánh dấu', 'exam-flag-btn', () => toggleFlag(q.id));
       flagButtons.set(q.id, flagButton);
       top.append(flagButton);
-      item.append(top, E('p', 'exam-question-prompt', q.prompt));
+      const promptNode = E('p', 'exam-question-prompt'); setRichText(promptNode, q.prompt);
+      item.append(top, promptNode);
+      if (q.latex) { const formulaNode = E('div', 'exam-question-latex'); formulaNode.innerHTML = renderDedicatedLatex(q.latex); item.append(formulaNode); }
 
       const jump = button(String(index + 1), 'exam-question-jump', () => item.scrollIntoView({ behavior: 'smooth', block: 'center' }));
       jump.title = `Đi đến câu ${index + 1}`;
@@ -257,17 +305,17 @@ async function begin(host, id) {
       if (q.part === 'I') {
         const options = E('div', 'exam-options');
         q.options.forEach((opt, i) => {
-          const choice = 'ABCD'[i], b = button(`${choice}. ${opt}`, 'exam-option', () => {
+          const choice = 'ABCD'[i], b = button('', 'exam-option', () => {
             answers[q.id] = choice;
             for (const child of options.children) child.classList.toggle('selected', child === b);
             queueDraftSave(); updateProgress();
           });
-          b.classList.toggle('selected', answers[q.id] === choice); options.append(b);
+          setRichText(b, `${choice}. ${opt}`); b.classList.toggle('selected', answers[q.id] === choice); options.append(b);
         });
         item.append(options);
       } else if (q.part === 'II') {
         q.options.forEach((opt, i) => {
-          const row = E('div', 'exam-tf'); row.append(E('span', '', `${'abcd'[i]}) ${opt}`));
+          const row = E('div', 'exam-tf'); const statement = E('span', ''); setRichText(statement, `${'abcd'[i]}) ${opt}`); row.append(statement);
           const select = E('select', 'exam-input');
           for (const [val, text] of [['', 'Chưa chọn'], ['true', 'Đúng'], ['false', 'Sai']]) { const option = E('option', '', text); option.value = val; select.append(option); }
           const previous = Array.isArray(answers[q.id]) ? answers[q.id][i] : null;
@@ -378,16 +426,93 @@ async function showMistakes(host) {
   } catch (e) { showError(host, e); }
 }
 
-function showCreator(host){if(!['teacher','admin'].includes(AppStore.get('role')) || !AppStore.get('roleVerified'))return showError(host,Error('Cần quyền Giáo viên/Admin.'));
- const p=panel('Creator Studio • Biên soạn đề'),title=field('text','Ví dụ: Đề luyện thi Hóa 12 - số 01'),duration=field('number','Thời gian (phút)','50'),questions=E('div','exam-editor');let data=[];
- const renderEditors=()=>{questions.replaceChildren();data.forEach((q,idx)=>{const card=E('div','exam-question');card.append(E('strong','',`Câu ${idx+1} · Phần ${q.part}`));const prompt=field('textarea','Nội dung câu hỏi',q.prompt);prompt.oninput=()=>q.prompt=prompt.value;card.append(prompt);
- if(q.part==='I'||q.part==='II'){for(let i=0;i<4;i++){const text=field('text',`Lựa chọn/nhận định ${'ABCD'[i]}`,q.options[i]);text.oninput=()=>q.options[i]=text.value;card.append(text);}}
- if(q.part==='I'){const answer=E('select','exam-input');for(const c of 'ABCD'){const op=E('option','',`Đáp án ${c}`);op.value=c;answer.append(op);}answer.value=q.answer;answer.onchange=()=>q.answer=answer.value;card.append(answer);}
- else if(q.part==='II'){for(let i=0;i<4;i++){const row=E('div','exam-tf');row.append(E('span','',`Ý ${'abcd'[i]}`));const sel=E('select','exam-input');for(const [v,name] of [['true','Đúng'],['false','Sai']]){const op=E('option','',name);op.value=v;sel.append(op);}sel.value=String(q.answer[i]);sel.onchange=()=>q.answer[i]=sel.value==='true';row.append(sel);card.append(row);}}
- else{const answer=field('text','Đáp án số',q.answer);answer.oninput=()=>q.answer=answer.value;card.append(answer);}
- card.append(button('Xóa câu','exam-tab',()=>{data.splice(idx,1);renderEditors();}));questions.append(card);});};
- const buttons=E('div','exam-tabs');for(const part of ['I','II','III'])buttons.append(button(`+ Câu phần ${part}`,'exam-tab',()=>{data.push({part,prompt:'',...(part==='III'?{answer:''}:{options:['','','',''],answer:part==='I'?'A':[true,true,true,true]})});renderEditors();}));
- const importArea=field('textarea','Dán JSON: [{"part":"I","prompt":"...","options":["..."],"answer":"A"}]');
- p.append(label('Tên đề thi'),title,label('Thời gian (phút)'),duration,buttons,questions,E('h4','','Nhập nhanh câu hỏi bằng JSON'),importArea,button('Nạp JSON','exam-tab',()=>{try{const imported=JSON.parse(importArea.value);if(!Array.isArray(imported))throw Error('Cần mảng JSON.');data=imported;renderEditors();}catch(e){alert(e.message);}}));
- const message=E('p','exam-message');p.append(button('Xuất bản đề thi','primary-btn',async()=>{message.textContent='Đang lưu đề...';try{const response=await api('create',{title:title.value,durationMinutes:Number(duration.value),questions:data});message.textContent=`Đã tạo đề! Mã phòng: ${response.exam.id}`;const link=E('a','exam-link',`Sao chép mã / vào phòng: ${response.exam.id}`);link.href='/exam';link.onclick=event=>{event.preventDefault();begin(host,response.exam.id);};p.append(link);}catch(e){message.textContent=e.message;}}),message);host.replaceChildren(p);
+function showCreator(host) {
+  if (!AppStore.get('user')) return showError(host, Error('Đăng nhập Google để lưu đề thi vào kho dùng chung.'));
+  const p = panel('Creator Studio · Biên soạn đề bằng LaTeX');
+  const title = field('text', 'Ví dụ: Đề luyện thi Hóa 12 - số 01');
+  const duration = field('number', 'Thời gian (phút)', '50'); duration.min = '5'; duration.max = '240'; duration.step = '1';
+  const questions = E('div', 'exam-editor'); let data = [];
+  const keyLabel = E('label', 'exam-pdf-key-label'); const includeAnswers = document.createElement('input'); includeAnswers.type = 'checkbox';
+  keyLabel.append(includeAnswers, document.createTextNode(' Kèm đáp án ở trang cuối của PDF'));
+  const help = E('p', 'exam-message', 'Nhập LaTeX trực tiếp trong nội dung: $\\frac{a}{b}$, \\(x^2\\), hoặc $$\\int_a^b f(x)\\,dx$$. Có thể dùng ô LaTeX riêng để hiển thị công thức lớn.');
+  const previewNote = E('p', 'exam-message', 'Xem trước được dựng bằng KaTeX. Xuất PDF sẽ mở hộp thoại in của trình duyệt; chọn “Lưu dưới dạng PDF”.');
+  const renderEditors = () => {
+    questions.replaceChildren();
+    data.forEach((q, idx) => {
+      q.options = Array.isArray(q.options) ? q.options : ['', '', '', ''];
+      const card = E('div', 'exam-question');
+      card.append(E('strong', '', `Câu ${idx + 1} · Phần ${q.part}`));
+      const prompt = field('textarea', 'Nội dung câu hỏi — dùng $...$ hoặc \\(...\\) cho công thức', q.prompt || ''); prompt.classList.add('exam-latex-field');
+      const promptPreview = E('div', 'exam-latex-preview');
+      const formulaLabel = label('Công thức LaTeX riêng (không bắt buộc)');
+      const formula = field('textarea', 'Ví dụ: \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}', q.latex || ''); formula.classList.add('exam-latex-field');
+      const formulaPreview = E('div', 'exam-latex-preview display');
+      const updatePromptPreview = () => { promptPreview.innerHTML = richMathHTML(prompt.value || 'Nội dung xem trước sẽ hiện tại đây.'); };
+      const updateFormulaPreview = () => { formulaPreview.innerHTML = formula.value.trim() ? renderDedicatedLatex(formula.value) : '<span class="exam-message">Công thức lớn sẽ hiện tại đây.</span>'; };
+      prompt.oninput = () => { q.prompt = prompt.value; updatePromptPreview(); };
+      formula.oninput = () => { q.latex = formula.value; updateFormulaPreview(); };
+      updatePromptPreview(); updateFormulaPreview();
+      card.append(label('Nội dung câu hỏi'), prompt, promptPreview, formulaLabel, formula, formulaPreview);
+      if (q.part === 'I' || q.part === 'II') {
+        for (let i = 0; i < 4; i++) {
+          const text = field('text', `${q.part === 'I' ? 'Lựa chọn' : 'Nhận định'} ${'ABCD'[i]} (có thể dùng $...$)`, q.options[i] || '');
+          text.oninput = () => q.options[i] = text.value;
+          card.append(text);
+        }
+      }
+      if (q.part === 'I') {
+        const answer = E('select', 'exam-input');
+        for (const c of 'ABCD') { const op = E('option', '', `Đáp án ${c}`); op.value = c; answer.append(op); }
+        answer.value = q.answer || 'A'; answer.onchange = () => q.answer = answer.value; card.append(label('Đáp án đúng'), answer);
+      } else if (q.part === 'II') {
+        for (let i = 0; i < 4; i++) {
+          const row = E('div', 'exam-tf'); row.append(E('span', '', `Ý ${'abcd'[i]}`));
+          const sel = E('select', 'exam-input');
+          for (const [v, name] of [['true', 'Đúng'], ['false', 'Sai']]) { const op = E('option', '', name); op.value = v; sel.append(op); }
+          sel.value = String(Array.isArray(q.answer) ? q.answer[i] : true); sel.onchange = () => { q.answer[i] = sel.value === 'true'; }; row.append(sel); card.append(row);
+        }
+      } else {
+        const answer = field('text', 'Đáp án số', q.answer ?? ''); answer.oninput = () => q.answer = answer.value; card.append(label('Đáp án số'), answer);
+        const tolerance = field('number', 'Sai số cho phép (mặc định 0,0001)', String(q.tolerance ?? 0.0001)); tolerance.step = 'any'; tolerance.min = '0'; tolerance.max = '1'; tolerance.oninput = () => q.tolerance = Number(tolerance.value); card.append(label('Sai số cho phép'), tolerance);
+      }
+      const deleteButton = button('Xóa câu', 'exam-tab', () => { data.splice(idx, 1); renderEditors(); });
+      card.append(deleteButton); questions.append(card);
+    });
+  };
+  const buttons = E('div', 'exam-tabs');
+  for (const part of ['I', 'II', 'III']) buttons.append(button(`+ Câu phần ${part}`, 'exam-tab', () => {
+    data.push({ part, prompt: '', latex: '', ...(part === 'III' ? { answer: '', tolerance: 0.0001 } : { options: ['', '', '', ''], answer: part === 'I' ? 'A' : [true, true, true, true] }) }); renderEditors();
+  }));
+  const importArea = field('textarea', 'Dán JSON: [{"part":"I","prompt":"Cho $x^2=4$...","latex":"\\frac{a}{b}","options":["..."],"answer":"A"}]');
+  const importButton = button('Nạp JSON', 'exam-tab', () => {
+    try {
+      const imported = JSON.parse(importArea.value);
+      if (!Array.isArray(imported)) throw Error('Cần mảng JSON.');
+      data = imported.map(q => ({ ...q, latex: typeof q.latex === 'string' ? q.latex : '', options: Array.isArray(q.options) ? q.options : ['', '', '', ''] })); renderEditors();
+    } catch (e) { alert(e.message); }
+  });
+  p.append(label('Tên đề thi'), title, label('Thời gian làm bài (5–240 phút)'), duration, help, buttons, questions,
+    E('h4', '', 'Nhập nhanh câu hỏi bằng JSON'), importArea, importButton, keyLabel, previewNote);
+  const message = E('p', 'exam-message');
+  const bottomActions = E('div', 'exam-tabs');
+  bottomActions.append(button('Xuất PDF / In đề', 'exam-tab', () => {
+    try {
+      if (data.length < 1) throw Error('Thêm ít nhất một câu trước khi xuất PDF.');
+      if (!title.value.trim()) throw Error('Nhập tên đề trước khi xuất PDF.');
+      const minutes = Number(duration.value);
+      if (!Number.isInteger(minutes) || minutes < 5 || minutes > 240) throw Error('Thời gian phải từ 5 đến 240 phút.');
+      exportExamPDF({ title: title.value.trim(), durationMinutes: minutes, questions: data }, includeAnswers.checked);
+      message.textContent = 'Đã mở bản in. Trong hộp thoại, chọn “Lưu dưới dạng PDF”.';
+    } catch (e) { message.textContent = e.message || String(e); }
+  }));
+  bottomActions.append(button('Xuất bản đề thi', 'primary-btn', async () => {
+    message.textContent = 'Đang lưu đề...';
+    try {
+      const response = await api('create', { title: title.value, durationMinutes: Number(duration.value), questions: data });
+      message.textContent = `Đã tạo đề! Mã phòng: ${response.exam.id}`;
+      const link = E('a', 'exam-link', `Vào phòng thi: ${response.exam.id}`); link.href = '/exam';
+      link.onclick = event => { event.preventDefault(); begin(host, response.exam.id); }; p.append(link);
+    } catch (e) { message.textContent = e.message; }
+  }));
+  p.append(bottomActions, message); host.replaceChildren(p);
 }
