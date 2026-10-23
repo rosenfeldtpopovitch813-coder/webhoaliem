@@ -1,4 +1,3 @@
-
 import {BoardDocument,BoardItem,initialDocument} from '../types/board';
 const KEY='muc-classroom-v1';
 export interface DocumentStore{load():Promise<BoardDocument>;save(doc:BoardDocument):Promise<void>}
