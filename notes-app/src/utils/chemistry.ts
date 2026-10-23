@@ -1,0 +1,3 @@
+const subs:Record<string,string>={'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋'};
+const sups:Record<string,string>={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','n':'ⁿ'};
+export function formatFormula(input:string){return input.replace(/_\{([^}]+)\}|_([0-9+-]+)/g,(_,a,b)=>[...(a||b)].map(c=>subs[c]||c).join('')).replace(/\^\{([^}]+)\}|\^([0-9+n-]+)/g,(_,a,b)=>[...(a||b)].map(c=>sups[c]||c).join('')).replace(/\\rightarrow|\\to/g,'→').replace(/\\leftrightarrow/g,'⇌').replace(/\\sqrt\{([^}]+)\}/g,'√($1)').replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g,'($1)/($2)').replace(/\\sum/g,'∑').replace(/\\int/g,'∫').replace(/\\vec\{([^}]+)\}/g,'$1⃗')}
