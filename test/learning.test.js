@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {compileExpression,sampleGraph} from '../shared/graph-math.js';
+import {ELEMENTS,ELEMENT_RECORDS,IR_BANDS,estimateShells,shellsFromConfiguration} from '../shared/chem-data.js';
+import {resolveRoute} from '../src/core/router.js';
+test('safe formula precedence and variables',()=>{assert.equal(compileExpression('2+3*4')(0),14);assert.equal(compileExpression('x^2')(3),9);assert.equal(compileExpression('-2^2')(0),-4);assert.ok(Math.abs(compileExpression('sin(pi/2)')(0)-1)<1e-10)});
+test('graph parser supports implicit multiplication and common functions',()=>{assert.equal(compileExpression('2x')(3),6);assert.equal(compileExpression('x(x-1)')(3),6);assert.equal(compileExpression('2sin(pi/2)')(0),2);assert.equal(compileExpression('max(x,2)')(1),2);assert.equal(compileExpression('sqrt(9)+ln(e)')(0),4)});
+test('reject JavaScript injection and malformed math',()=>{for(const source of ['globalThis.alert(1)','x;alert(1)','constructor','2+','sin(x','x**2','window.location'])assert.throws(()=>compileExpression(source))});
+test('graph finite parabolic curve',()=>{const segments=sampleGraph(compileExpression('x^2'),{minX:-2,maxX:2,minY:-1,maxY:5});assert.ok(segments.length>=1);assert.ok(segments.flat().every(([x,y])=>Number.isFinite(x)&&Number.isFinite(y)))});
+test('split graph on pole',()=>{const segments=sampleGraph(compileExpression('1/(x-1)'),{minX:-3,maxX:5,minY:-10,maxY:10});assert.ok(segments.length>=2)});
+test('periodic table contains all 118 unique elements and positions',()=>{assert.equal(ELEMENTS.length,118);assert.equal(ELEMENT_RECORDS.length,118);assert.equal(new Set(ELEMENTS.map(x=>x[0])).size,118);assert.equal(ELEMENTS.find(x=>x[1]==='Fe')[0],26);assert.equal(ELEMENTS.find(x=>x[1]==='Og')[0],118);assert.ok(ELEMENT_RECORDS.every(e=>e.row>=1&&e.row<=9&&e.col>=1&&e.col<=18));assert.ok(ELEMENT_RECORDS.some(e=>e.row===8)&&ELEMENT_RECORDS.some(e=>e.row===9));assert.ok(IR_BANDS.length>=10)});
+test('shell distribution and configuration parser conserve electron count',()=>{for(let z=1;z<=118;z++)assert.equal(estimateShells(z).reduce((a,b)=>a+b,0),z);assert.deepEqual(shellsFromConfiguration('1s2 2s2 2p6 3s1',11),[2,8,1]);});
+test('ChemMaker and handbook are available without role-based separation',()=>{assert.equal(resolveRoute('/chemmaker','student',false).status,200);assert.equal(resolveRoute('/chemmaker','teacher',true).status,200);assert.equal(resolveRoute('/handbook','student',false).status,200);assert.equal(resolveRoute('/library').module,'library')});
