@@ -7,8 +7,9 @@ export function renderHandbook() {
   hero.append(element('div', 'eyebrow', 'SỔ TAY HỌC TẬP'), element('h1', 'hero-title', 'Sổ tay khoa học & Máy vẽ đồ thị'), element('p', 'hero-subtitle', 'Tra cứu đủ 118 nguyên tố, xem mô hình nguyên tử và ảnh mẫu thực tế, tra phổ hồng ngoại IR và vẽ nhiều hàm số với trục tuỳ chỉnh.'));
   const tabs = element('div', 'exam-tabs'), panel = element('section', 'exam-panel'); root.append(hero, tabs, panel);
   const names = [['element', 'Bảng tuần hoàn'], ['ir', 'Phổ hồng ngoại IR'], ['graph', 'Máy vẽ đồ thị']];
+  let elementModal = null;
   for (const [id, name] of names) tabs.append(button(name, 'exam-tab', () => show(id)));
-  function show(name) { panel.replaceChildren(); if (name === 'element') elementTab(); if (name === 'ir') irTab(); if (name === 'graph') graphTab(); for (const b of tabs.children) b.classList.toggle('selected', b.textContent === names.find(x => x[0] === name)[1]); }
+  function show(name) { if (elementModal) { elementModal.remove(); elementModal = null; } panel.replaceChildren(); if (name === 'element') elementTab(); if (name === 'ir') irTab(); if (name === 'graph') graphTab(); for (const b of tabs.children) b.classList.toggle('selected', b.textContent === names.find(x => x[0] === name)[1]); }
 
   function elementTab() {
     panel.append(element('h2', 'exam-heading', 'Bảng tuần hoàn 118 nguyên tố'));
@@ -18,18 +19,26 @@ export function renderHandbook() {
     const sourceNote = element('p', 'exam-message', 'Dữ liệu nguyên tố: StaticData / Periodic-Table-JSON. Ảnh mẫu và ảnh minh hoạ được lấy từ Wikimedia Commons hoặc trang Wikipedia tương ứng khi có mạng.');
     const dataSource = document.createElement('a'); dataSource.href = 'https://staticdata.dev/datasets/periodic-table/'; dataSource.target = '_blank'; dataSource.rel = 'noopener noreferrer'; dataSource.textContent = 'Nguồn bộ dữ liệu 118 nguyên tố ↗'; dataSource.className = 'element-source-link';
     panel.append(toolbar, grid, selectedLine, sourceNote, dataSource);
-    const detail = element('section', 'element-detail element-detail-empty', 'Thông tin nguyên tố sẽ hiện ở đây.'); panel.append(detail);
+    const modal = element('div', 'element-modal-backdrop'); modal.hidden = true;
+    const dialog = element('section', 'element-modal-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', 'Chi tiết nguyên tố'); dialog.tabIndex = -1;
+    const modalTop = element('div', 'element-modal-top'); modalTop.append(element('span', '', 'CHI TIẾT NGUYÊN TỐ'));
+    const closeModal = () => { modal.hidden = true; };
+    modalTop.append(button('Đóng ✕', 'element-modal-close', closeModal));
+    const detail = element('section', 'element-detail element-detail-empty', 'Thông tin nguyên tố sẽ hiện ở đây.');
+    dialog.append(modalTop, detail); modal.append(dialog); root.append(modal); elementModal = modal;
+    modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+    dialog.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
     const tiles = [];
     for (const row of ELEMENT_RECORDS) {
-      const b = button('', `element-tile category-${row.category.replace(/[^a-z0-9]+/gi, '-')}`, () => selectElement(row, detail));
+      const b = button('', `element-tile category-${row.category.replace(/[^a-z0-9]+/gi, '-')}`, () => { selectElement(row, detail, grid, modal); modal.hidden = false; dialog.focus(); });
       b.style.gridColumn = String(row.col); b.style.gridRow = String(row.row); b.dataset.search = `${row.z} ${row.symbol} ${row.name} ${row.category}`.toLowerCase();
       b.append(element('small', '', String(row.z)), element('strong', '', row.symbol), element('small', 'element-tile-name', row.name)); grid.append(b); tiles.push(b);
     }
     filter.addEventListener('input', () => { const query = filter.value.trim().toLowerCase(); let shown = 0; for (const tile of tiles) { const visible = tile.dataset.search.includes(query); tile.hidden = !visible; if (visible) shown++; } count.textContent = `${shown}/118 nguyên tố`; });
   }
 
-  async function selectElement(row, detail) {
-    for (const tile of detail.parentElement.querySelectorAll('.element-tile')) tile.classList.toggle('chosen', Number(tile.querySelector('small')?.textContent) === row.z);
+  async function selectElement(row, detail, grid, modal) {
+    for (const tile of grid.querySelectorAll('.element-tile')) tile.classList.toggle('chosen', Number(tile.querySelector('small')?.textContent) === row.z);
     detail.classList.remove('element-detail-empty'); detail.replaceChildren();
     const headline = element('div', 'element-detail-head'), number = element('span', 'element-number', `Z = ${row.z}`), nameBox = element('div', 'element-detail-name'), title = element('h3', '', `${row.name} (${row.symbol})`), subtitle = element('p', '', `${row.category} · Trạng thái chuẩn: ${row.phase}`);
     nameBox.append(title, subtitle); headline.append(number, nameBox); detail.append(headline);
