@@ -15,7 +15,7 @@ export default async function handler(req,res) {
     }
     if (action === 'create') {
       assert(req.method==='POST','POST bắt buộc.');
-      assert(['teacher','admin'].includes(user.role), 'Chỉ Giáo viên/Admin được tạo đề.',403);
+      // Any authenticated HTVVM user may create a practice exam; no role tiers are used in this build.
       const title = String(req.body.title || '').trim(); assert(title.length>=3 && title.length<=140,'Tên đề từ 3–140 ký tự.');
       const durationMinutes=Number(req.body.durationMinutes); assert(Number.isInteger(durationMinutes) && durationMinutes>=5 && durationMinutes<=240,'Thời gian 5–240 phút.');
       const questions=validateQuestions(req.body.questions); const id=newId(); const createdAt=Date.now();

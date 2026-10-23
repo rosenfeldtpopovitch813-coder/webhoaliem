@@ -10,8 +10,7 @@ export default async function handler(req, res) {
   if (!match) return res.status(401).json({ error: 'AUTH_REQUIRED' });
   try {
     const decoded = await adminAuth().verifyIdToken(match[1], true);
-    const role = decoded.admin === true ? 'admin' : decoded.teacher === true ? 'teacher' : 'student';
-    return res.status(200).json({ uid: decoded.uid, role, emailVerified: decoded.email_verified === true });
+    return res.status(200).json({ uid: decoded.uid, role: 'user', emailVerified: decoded.email_verified === true });
   } catch (err) {
     console.error('Token validation failed:', err.code || 'UNKNOWN');
     return res.status(401).json({ error: 'INVALID_TOKEN' });
