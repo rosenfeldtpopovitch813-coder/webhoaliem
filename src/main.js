@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css';
 import './css/input.css';
 import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
@@ -9,7 +10,7 @@ import { element, button } from './core/dom.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/chemmaker', '◈', 'ChemMaker'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/admissions', '⌁', 'Nguyện vọng'], ['/admin', '⚙', 'Quản trị'] ];
+const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/chemmaker', '◈', 'ChemMaker'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'] ];
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
@@ -54,7 +55,8 @@ function createShell() {
     installApp.hidden = true;
   });
   installApp.hidden = true; installApp.id = 'install-app-btn';
-  right.append(status, installApp, select, account); topbar.append(left, right);
+  const diagnosticsButton = makeButton('Chẩn đoán Firebase', 'firebase-diagnostics-btn', () => runFirebaseDiagnostics());
+  right.append(status, diagnosticsButton, installApp, select, account); topbar.append(left, right);
   const notice = element('div', 'notice'); notice.id = 'notice'; notice.hidden = true;
   const main = element('main', 'main-content'); main.id = 'main-content';
   content.append(topbar, notice, main); shell.append(sidebar, content); root.append(shell);
@@ -108,9 +110,46 @@ function drawEntryScreen() {
   root.append(screen);
 }
 
+async function runFirebaseDiagnostics() {
+  const overlay = element('div', 'firebase-diagnostic-backdrop');
+  const dialog = element('section', 'firebase-diagnostic-dialog');
+  dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-labelledby', 'firebase-diagnostic-title'); dialog.tabIndex = -1;
+  const heading = element('div', 'firebase-diagnostic-heading');
+  heading.append(element('h2', '', 'Chẩn đoán Firebase'), makeButton('Đóng', 'firebase-diagnostic-close', () => overlay.remove()));
+  const summary = element('p', 'firebase-diagnostic-summary', 'Đang kiểm tra cấu hình phía máy chủ…');
+  const results = element('div', 'firebase-diagnostic-results');
+  const steps = element('ol', 'firebase-diagnostic-steps');
+  dialog.append(heading, summary, results, steps); overlay.append(dialog);
+  overlay.addEventListener('click', event => { if (event.target === overlay) overlay.remove(); });
+  dialog.addEventListener('keydown', event => { if (event.key === 'Escape') overlay.remove(); });
+  root.append(overlay); dialog.focus();
+  try {
+    const response = await fetch('/api/diagnostics/firebase', { cache: 'no-store' });
+    const data = await response.json();
+    summary.textContent = data.ok ? 'Kết nối Realtime Database đã được xác minh.' : `Chẩn đoán chưa đạt. HTTP ${response.status}.`;
+    summary.classList.toggle('is-ok', Boolean(data.ok));
+    if (data.checks) {
+      for (const [key, check] of Object.entries(data.checks)) {
+        const line = element('div', `firebase-diagnostic-row ${(check?.ok === false) ? 'is-fail' : 'is-ok'}`);
+        const labelText = ({databaseUrl:'URL Realtime Database',adminCredentials:'Thông tin xác thực Firebase Admin',projectIds:'Project ID frontend/backend',databaseConnection:'Kết nối Realtime Database',authenticationAdmin:'Firebase Admin Authentication',frontend:'Biến Firebase frontend'})[key] || key;
+        line.append(element('strong', '', `${check?.ok === false ? '✕' : '✓'} ${labelText}`));
+        const detail = Object.entries(check || {}).filter(([field]) => !['ok'].includes(field)).map(([field, value]) => `${field}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join(' · ');
+        if (detail) line.append(element('small', '', detail));
+        results.append(line);
+      }
+    }
+    if (data.rootCauseHint) results.append(element('p', 'firebase-diagnostic-hint', data.rootCauseHint));
+    for (const text of (data.nextSteps || [])) steps.append(element('li', '', text));
+    if (!response.ok) AppStore.set('notice', 'Firebase cần được sửa cấu hình. Mở “Chẩn đoán Firebase” để xem chính xác biến nào thiếu hoặc sai.');
+  } catch (error) {
+    summary.textContent = `Không gọi được API chẩn đoán: ${error.message || 'Lỗi mạng'}`;
+    results.append(element('p', 'firebase-diagnostic-hint', 'Kiểm tra deployment có chứa api/diagnostics/firebase.js không; mở Vercel → Deployments → Functions Logs để xem lỗi serverless.'));
+  }
+}
+
 function updateSidebar() { frame.sidebar.classList.toggle('open', sidebarOpen); }
 function drawAccount() {
-  const { user, role, roleVerified, authLoading } = AppStore.getState();
+  const { user, authLoading } = AppStore.getState();
   frame.account.replaceChildren();
   if (authLoading) { frame.account.append(element('span', 'account-loading', 'Đang xác thực…')); return; }
   if (!firebaseReady) { frame.account.append(element('span', 'setup-pill', 'Chưa cấu hình Firebase')); return; }
@@ -123,14 +162,14 @@ function drawAccount() {
   if (user.photoURL?.startsWith('https://')) {
     const avatar = document.createElement('img'); avatar.src = user.photoURL; avatar.alt = ''; avatar.referrerPolicy = 'no-referrer'; badge.append(avatar);
   } else { badge.append(element('span', 'avatar-fallback', (user.displayName || 'H').slice(0, 1).toUpperCase())); }
-  const texts = element('div', 'user-meta'); texts.append(element('strong', '', user.displayName || 'Người học'), element('small', '', roleVerified ? ({ student: 'Học sinh', teacher: 'Giáo viên', admin: 'Quản trị viên' }[role]) : 'Chưa xác minh quyền'));
+  const texts = element('div', 'user-meta'); texts.append(element('strong', '', user.displayName || 'Người học'), element('small', '', 'Tài khoản Google'));
   badge.append(texts);
   frame.account.append(badge, makeButton('Thoát', 'logout-btn', () => signOutUser().catch((error) => AppStore.set('notice', error.message))));
 }
 async function drawRoute() {
   const id = ++renderId;
   const state = AppStore.getState();
-  const route = resolveRoute(state.route, state.role, state.roleVerified);
+  const route = resolveRoute(state.route);
   document.getElementById('page-title').textContent = route.title;
   for (const link of frame.links.children) {
     const active = link.dataset.path === route.path;
@@ -168,7 +207,7 @@ AppStore.subscribe('user', drawEntryScreen);
 AppStore.subscribe('authLoading', drawEntryScreen);
 AppStore.subscribe('notice', updateNotice);
 if (!firebaseReady) AppStore.set('notice', 'Chế độ xem thử: thêm các biến VITE_FIREBASE_* để bật đăng nhập.');
-else if (!databaseReady) AppStore.set('notice', 'Thiếu VITE_FIREBASE_DATABASE_URL: đăng nhập vẫn dùng được, nhưng đồng bộ dữ liệu cần URL Realtime Database.');
+else if (!databaseReady) AppStore.set('notice', 'Chưa cấu hình URL Realtime Database hợp lệ. Bấm “Chẩn đoán Firebase” để xem biến còn thiếu hoặc URL sai.');
 window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); window.__htvvmInstallPrompt = event; if (frame?.installApp) frame.installApp.hidden = false; });
 window.addEventListener('appinstalled', () => { window.__htvvmInstallPrompt = null; if (frame?.installApp) frame.installApp.hidden = true; });
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('PWA worker registration failed:', error));
