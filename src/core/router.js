@@ -3,18 +3,17 @@ export const ROUTES = Object.freeze({
   '/': { title: 'Tổng quan', module: 'home' },
   '/exam': { title: 'Phòng thi', module: 'exam-room' },
   '/arena': { title: 'Chem Arena', module: 'chem-arena' },
-  '/chemmaker': { title: 'ChemMaker', module: 'chemmaker', roles: ['teacher', 'admin'] },
+  '/chemmaker': { title: 'ChemMaker', module: 'chemmaker' },
   '/handbook': { title: 'Sổ tay', module: 'handbook' },
   '/focus': { title: 'Góc tập trung', module: 'focus-zone' },
   '/community': { title: 'Trợ lý AI', module: 'community-ai' },
   '/admissions': { title: 'Nguyện vọng', module: 'admissions' },
-  '/admin': { title: 'Quản trị', module: 'placeholder', roles: ['admin'] }
+  '/library': { title: 'Thư viện học liệu', module: 'library' }
 });
-export function resolveRoute(pathname, role = 'student', verified = false) {
+export function resolveRoute(pathname) {
   const normalized = (pathname.replace(/\/+$/, '') || '/');
   const route = ROUTES[normalized];
   if (!route) return { status: 404, path: normalized, title: 'Không tìm thấy', module: 'placeholder' };
-  if (route.roles && (!verified || !route.roles.includes(role))) return { status: 403, path: normalized, title: 'Không có quyền truy cập', module: 'placeholder' };
   return { ...route, path: normalized, status: 200 };
 }
 export function navigate(path) {
@@ -44,6 +43,7 @@ export async function loadRouteView(route) {
   if (route.module === 'handbook') { const mod = await import('../modules/handbook/index.js'); return mod.renderHandbook(); }
   if (route.module === 'admissions') { const mod = await import('../modules/admissions/index.js'); return mod.renderAdmissions(); }
   if (route.module === 'community-ai') { const mod = await import('../modules/community-ai/index.js'); return mod.renderCommunityAI(); }
+  if (route.module === 'library') { const mod = await import('../modules/library/index.js'); return mod.renderLibrary(); }
   const mod = await import('../modules/placeholder/index.js');
   return mod.renderPlaceholder(route);
 }

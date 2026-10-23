@@ -11,12 +11,17 @@ export const config = {
   appId: env.VITE_FIREBASE_APP_ID
 };
 export const firebaseReady = Boolean(config.apiKey && config.authDomain && config.projectId && config.appId);
-export const databaseReady = Boolean(firebaseReady && config.databaseURL);
-const appConfig = { ...config };
-if (!appConfig.databaseURL) delete appConfig.databaseURL;
-const app = firebaseReady ? (getApps()[0] || initializeApp(appConfig)) : null;
+function normalizeDatabaseUrl(value) {
+  try { const url = new URL(String(value || '').trim()); return ['https:', 'http:'].includes(url.protocol) ? url.href.replace(/\/$/, '') : ''; }
+  catch { return ''; }
+}
+export const normalizedDatabaseURL = normalizeDatabaseUrl(config.databaseURL);
+export const databaseReady = Boolean(firebaseReady && normalizedDatabaseURL);
+const appConfig = { apiKey: config.apiKey, authDomain: config.authDomain, projectId: config.projectId, appId: config.appId };
+if (normalizedDatabaseURL) appConfig.databaseURL = normalizedDatabaseURL;
+const app = firebaseReady ? (getApps().find(item => item.name === '[DEFAULT]') || initializeApp(appConfig)) : null;
 export const auth = app ? getAuth(app) : null;
-export const database = app && databaseReady ? getDatabase(app, config.databaseURL) : null;
+export const database = app && databaseReady ? getDatabase(app, normalizedDatabaseURL) : null;
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
