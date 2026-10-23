@@ -1,0 +1,15 @@
+PATCH NÂNG CẤP HTVVM — DÀNH CHO REPOSITORY ĐANG Ở BẢN HTVVM-x-HoaLiem-One-Exam-Room
+
+MỤC ĐÍCH
+Đưa repository lên các cập nhật Firebase/Thư viện CSV trong bản Firebase Diagnostics Library Fix, sau đó thêm LaTeX/xuất PDF, Lớp học Mực trong Góc tập trung và timer tùy chỉnh. Đây là PATCH, không phải source đầy đủ.
+
+CÁCH DÙNG
+1. Sao lưu repository hiện tại.
+2. Giải nén toàn bộ nội dung ZIP này vào THƯ MỤC GỐC repository, cho phép ghi đè. Không tạo thư mục lồng patch.
+3. Commit/push, giữ nguyên Environment Variables.
+4. Vercel: npm run build, output dist.
+
+Bản này chứa các thay đổi runtime cần để nhận cập nhật Firebase diagnostics + CSV library + tính năng mới. Không chứa README, test và .env.example vì không cần để build production.
+
+KHÔNG CẦN UPLOAD node_modules/ hoặc dist/.
+LƯU Ý: chưa xác nhận production build từ môi trường tạo ZIP; kiểm tra Vercel Build Logs sau khi deploy.
