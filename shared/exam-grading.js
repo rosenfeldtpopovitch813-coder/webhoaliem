@@ -12,7 +12,9 @@ export function validateQuestions(questions) {
   let counts = { I: 0, II: 0, III: 0 };
   const cleaned = questions.map((q, i) => {
     if (!q || !['I','II','III'].includes(q.part) || typeof q.prompt !== 'string' || !q.prompt.trim() || q.prompt.length > 5000) throw Error(`Câu ${i+1}: nội dung hoặc phần không hợp lệ.`);
-    const base = { id: `q${i+1}`, part: q.part, prompt: q.prompt.trim() }; counts[q.part]++;
+    const latex = q.latex == null ? '' : q.latex;
+    if (typeof latex !== 'string' || latex.length > 4000) throw Error(`Câu ${i+1}: LaTeX phải là văn bản không quá 4000 ký tự.`);
+    const base = { id: `q${i+1}`, part: q.part, prompt: q.prompt.trim(), ...(latex.trim() ? { latex: latex.trim() } : {}) }; counts[q.part]++;
     if (q.part === 'I') {
       if (!Array.isArray(q.options) || q.options.length !== 4 || q.options.some(o=>typeof o !== 'string' || !o.trim() || o.length > 1200) || !normalizeChoice(q.answer)) throw Error(`Câu ${i+1}: cần 4 lựa chọn và đáp án A/B/C/D.`);
       return { ...base, options: q.options.map(x=>x.trim()), answer: normalizeChoice(q.answer) };
