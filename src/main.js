@@ -182,7 +182,16 @@ async function drawRoute() {
     if (id === renderId) frame.main.replaceChildren(view);
   } catch (error) {
     console.error('Route failed:', error);
-    if (id === renderId) frame.main.replaceChildren(element('p', 'error-text', 'Không tải được phân hệ. Hãy thử tải lại trang.'));
+    if (id === renderId) {
+      const problem = element('section', 'route-error-panel');
+      problem.append(element('h2', '', `Không mở được ${route.title.toLowerCase()}`));
+      problem.append(element('p', '', 'Hãy tải lại trang bằng Ctrl + F5 để cập nhật mã nguồn. Nếu lỗi vẫn còn, mở phần Chi tiết kỹ thuật bên dưới để biết nguyên nhân.'));
+      const details = document.createElement('details'); details.className = 'route-error-details';
+      details.append(element('summary', '', 'Chi tiết kỹ thuật'));
+      details.append(element('code', '', `${error?.name || 'Error'}: ${error?.message || String(error)}`));
+      problem.append(details);
+      frame.main.replaceChildren(problem);
+    }
   }
 }
 function updateNotice() {
