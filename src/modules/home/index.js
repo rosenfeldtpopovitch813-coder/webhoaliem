@@ -36,7 +36,16 @@ export function renderHome() {
   const unsubscribeUser = AppStore.subscribe('user', () => { if (alive) loadBoard(); });
   const watcher = new MutationObserver(() => { if (!wrap.isConnected) { alive = false; unsubscribeUser(); watcher.disconnect(); } });
   watcher.observe(document.getElementById('main-content') || document.body, { childList: true });
-  wrap.append(boardPanel, element('h3', 'section-heading', 'Không gian học tập'));
+  const examProgress = element('section', 'home-exam-stats-panel');
+  const examProgressHeader = element('div', 'home-exam-stats-header');
+  const examProgressTitle = element('div', '');
+  examProgressTitle.append(element('h3', 'section-heading', 'Tiến trình luyện thi'), element('p', 'home-board-subtitle', 'Tổng hợp các lượt thi đã nộp trên máy chủ.'));
+  const examOpen = button('Mở phòng thi →', 'primary-btn', () => navigate('/exam'));
+  examProgressHeader.append(examProgressTitle, examOpen);
+  const examProgressBody = element('div', 'home-exam-stats-body');
+  examProgress.append(examProgressHeader, examProgressBody);
+  wrap.append(boardPanel, examProgress, element('h3', 'section-heading', 'Không gian học tập'));
+
   const grid = element('div', 'module-grid');
   for (const [glyph, title, description, path] of modules) {
     const card = element('button', 'module-card'); card.type = 'button';
@@ -77,6 +86,38 @@ export function renderHome() {
       if (alive) board.replaceChildren(element('p', 'home-board-empty', error.message || 'Không tải được bảng xếp hạng.'));
     } finally { if (alive) { refresh.disabled = false; refresh.textContent = 'Làm mới'; } }
   }
+  async function loadExamProgress() {
+    if (!alive) return;
+    examProgressBody.replaceChildren(element('p', 'home-board-empty', 'Đang tải thống kê luyện thi…'));
+    const user = auth?.currentUser;
+    if (!user) {
+      examProgressBody.replaceChildren(element('p', 'home-board-empty', 'Đăng nhập Google để lưu và xem lịch sử thi đồng bộ.'));
+      return;
+    }
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/exam?action=history', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!alive) return;
+      if (!response.ok) throw new Error(data.error || 'Không tải được tiến trình luyện thi.');
+      const stats = data.summary || {}, history = data.history || [];
+      const cards = element('div', 'home-exam-stats-cards');
+      for (const [label, value] of [['Lượt thi', stats.total ?? history.length], ['Điểm TB', `${Number(stats.averageScore || 0).toFixed(2)}/10`], ['Cao nhất', `${Number(stats.bestScore || 0).toFixed(2)}/10`]]) {
+        const card = element('article', 'home-exam-stat'); card.append(element('small', '', label), element('strong', '', String(value))); cards.append(card);
+      }
+      examProgressBody.replaceChildren(cards);
+      if (!history.length) examProgressBody.append(element('p', 'home-board-empty', 'Chưa có bài thi nào được nộp. Vào Phòng thi để bắt đầu.'));
+      for (const record of history.slice(0, 3)) {
+        const row = element('div', 'home-exam-recent');
+        const info = element('div', 'home-exam-recent-info');
+        info.append(element('strong', '', record.examTitle || record.examId), element('small', '', record.submittedAt ? new Date(record.submittedAt).toLocaleDateString('vi-VN') : ''));
+        row.append(info, element('strong', 'home-exam-recent-score', `${Number(record.score || 0).toFixed(2)}/10`)); examProgressBody.append(row);
+      }
+    } catch (error) {
+      if (alive) examProgressBody.replaceChildren(element('p', 'home-board-empty', error.message || 'Không tải được tiến trình luyện thi.'));
+    }
+  }
   loadBoard();
+  loadExamProgress();
   return wrap;
 }
