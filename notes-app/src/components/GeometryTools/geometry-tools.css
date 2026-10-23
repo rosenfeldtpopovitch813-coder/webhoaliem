@@ -1,0 +1,483 @@
+/* Lớp dụng cụ hình học bán trong suốt nằm trực tiếp trên trang giấy A4 theo phong cách Scrble Ink */
+.scrble-geometry-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+  overflow: visible;
+  user-select: none;
+  touch-action: none;
+}
+
+.scrble-stencil-body {
+  fill: rgba(232, 246, 255, 0.74);
+  stroke: #0284c7;
+  stroke-width: 1.8px;
+  filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.16));
+  transition: stroke 0.12s ease;
+}
+
+.scrble-stencil-body.square-body {
+  fill: rgba(226, 250, 242, 0.74);
+  stroke: #0d9488;
+}
+
+.scrble-stencil-body.protractor-body {
+  fill: rgba(230, 246, 255, 0.75);
+  stroke: #0284c7;
+}
+
+.scrble-grip-zone {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.scrble-grip-zone:active {
+  cursor: grabbing;
+}
+
+.scrble-grid-guide {
+  stroke: rgba(2, 132, 199, 0.22);
+  stroke-width: 0.9px;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+.scrble-grid-guide.center {
+  stroke: rgba(2, 132, 199, 0.42);
+  stroke-dasharray: none;
+}
+
+.scrble-tick {
+  stroke: #0f3f5c;
+  stroke-linecap: round;
+}
+
+.scrble-tick.major {
+  stroke-width: 1.45px;
+}
+
+.scrble-tick.medium {
+  stroke-width: 1.05px;
+  stroke: #155e75;
+}
+
+.scrble-tick.minor {
+  stroke-width: 0.72px;
+  stroke: rgba(15, 63, 92, 0.72);
+}
+
+.scrble-scale-text {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  fill: #0c4a6e;
+  user-select: none;
+}
+
+.scrble-protractor-num {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 7.6px;
+  font-weight: 700;
+  fill: #0c4a6e;
+}
+
+.scrble-protractor-num.inner {
+  font-size: 6.8px;
+  font-weight: 600;
+  fill: #0369a1;
+  opacity: 0.86;
+}
+
+.scrble-right-angle-mark {
+  stroke: #0f766e;
+  stroke-width: 1.6px;
+}
+
+.scrble-corner-badge {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  fill: #0f766e;
+}
+
+.scrble-rotate-ring {
+  pointer-events: auto;
+  fill: rgba(2, 132, 199, 0.12);
+  stroke: #0284c7;
+  stroke-width: 2.2px;
+  stroke-dasharray: 4 2.5;
+  cursor: grab;
+}
+
+.scrble-rotate-ring:hover {
+  fill: rgba(2, 132, 199, 0.24);
+  stroke: #0369a1;
+}
+
+.scrble-rotate-ring:active {
+  cursor: grabbing;
+}
+
+.scrble-dial-core {
+  pointer-events: auto;
+  fill: rgba(255, 255, 255, 0.94);
+  stroke: #0284c7;
+  stroke-width: 1.5px;
+  cursor: move;
+}
+
+.scrble-dial-text {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 10.5px;
+  font-weight: 800;
+  fill: #0c4a6e;
+}
+
+.scrble-origin-bullseye {
+  pointer-events: auto;
+  fill: rgba(255, 255, 255, 0.88);
+  stroke: #0284c7;
+  stroke-width: 1.6px;
+  cursor: move;
+}
+
+.scrble-resize-handle {
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.scrble-resize-handle rect,
+.scrble-resize-handle circle {
+  fill: rgba(255, 255, 255, 0.94);
+  stroke: #0284c7;
+  stroke-width: 1.5px;
+}
+
+.scrble-resize-handle:hover rect,
+.scrble-resize-handle:hover circle {
+  fill: #e0f2fe;
+}
+
+.scrble-resize-handle line {
+  stroke: #0284c7;
+  stroke-width: 1.3px;
+}
+
+.scrble-ray-handle {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.scrble-ray-handle circle:first-of-type {
+  fill: #0284c7;
+  stroke: #fff;
+  stroke-width: 2px;
+}
+
+.scrble-ray-label {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 10.5px;
+  font-weight: 800;
+  fill: #0369a1;
+}
+
+.scrble-snap-edge-glow {
+  stroke: #0ea5e9;
+  stroke-width: 4.5px;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(14, 165, 233, 0.85));
+  pointer-events: none;
+}
+
+.scrble-compass-guide-circle {
+  fill: none;
+  stroke: rgba(2, 132, 199, 0.45);
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 4;
+}
+
+.scrble-compass-guide-circle.active {
+  stroke: #0ea5e9;
+  stroke-width: 2.4px;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65));
+}
+
+.scrble-compass-radius-line {
+  stroke: rgba(2, 132, 199, 0.55);
+  stroke-width: 1.3px;
+  stroke-dasharray: 4 3;
+}
+
+.scrble-compass-badge {
+  fill: rgba(255, 255, 255, 0.92);
+  stroke: #0284c7;
+  stroke-width: 1.2px;
+}
+
+.scrble-compass-badge-text {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  fill: #0c4a6e;
+}
+
+.scrble-compass-pivot-handle {
+  pointer-events: auto;
+  cursor: move;
+}
+
+.scrble-compass-pivot-label {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 9.5px;
+  font-weight: 800;
+  fill: #b91c1c;
+}
+
+.scrble-compass-hinge-handle {
+  pointer-events: auto;
+  cursor: move;
+}
+
+.scrble-compass-spinner-handle,
+.scrble-compass-pencil-handle {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.scrble-compass-pencil-handle:hover circle:first-of-type {
+  fill: rgba(2, 132, 199, 0.34);
+}
+
+.scrble-geo-hud {
+  position: fixed;
+  left: 50%;
+  top: 118px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid #b8d0e2;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  color: #1e293b;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  font-size: 12px;
+  user-select: none;
+}
+
+.app.dark .scrble-geo-hud {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+.scrble-geo-hud-grip {
+  cursor: grab;
+  padding: 4px 5px;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: -1px;
+  touch-action: none;
+}
+
+.scrble-geo-hud-grip:active {
+  cursor: grabbing;
+}
+
+.scrble-geo-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scrble-geo-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app.dark .scrble-geo-tab {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.scrble-geo-tab:hover {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.scrble-geo-tab.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0369a1;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.28);
+}
+
+.scrble-geo-sep {
+  width: 1px;
+  height: 22px;
+  background: #cbd5e1;
+  margin: 0 2px;
+}
+
+.app.dark .scrble-geo-sep {
+  background: #475569;
+}
+
+.scrble-geo-chip {
+  padding: 5px 9px;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app.dark .scrble-geo-chip {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.scrble-geo-chip.on {
+  background: #e0f2fe;
+  border-color: #0284c7;
+  color: #0369a1;
+}
+
+.app.dark .scrble-geo-chip.on {
+  background: #0c4a6e;
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+
+.scrble-geo-angles {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.scrble-geo-angles button {
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app.dark .scrble-geo-angles button {
+  background: #1e293b;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
+.scrble-geo-angles button.on {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #fff;
+}
+
+.scrble-geo-inline-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.scrble-geo-inline-input input {
+  width: 52px;
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.app.dark .scrble-geo-inline-input input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+.scrble-geo-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scrble-geo-action-btn {
+  padding: 5px 9px;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app.dark .scrble-geo-action-btn {
+  background: #334155;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+.scrble-geo-action-btn.primary {
+  background: #0284c7;
+  border-color: #0369a1;
+  color: #ffffff;
+}
+
+.scrble-geo-action-btn.primary:hover {
+  background: #0369a1;
+}
+
+.scrble-geo-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.app.dark .scrble-geo-icon-btn {
+  background: #334155;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+.scrble-geo-icon-btn.close:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
