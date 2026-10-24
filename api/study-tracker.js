@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { db, identity, fail, assert } from '../lib/exam-server.js';
-import { applyHeartbeat, titleFor } from '../shared/study-core.js';
+import { applyHeartbeat, resumeHeartbeat, titleFor } from '../shared/study-core.js';
 import { getVNDayIndex } from '../shared/time-utils.js';
 const summarize=(s={},now=Date.now())=>({totalSeconds:Math.floor((s.totalMs||0)/1000),todaySeconds:s.dayIndex===getVNDayIndex(now)?Math.floor((s.dailyMs||0)/1000):0,streak:s.lastStudyDay>=getVNDayIndex(now)-1?s.streak||0:0,title:titleFor(Math.floor((s.totalMs||0)/1000)),sharing:!!s.sharing});
 export default async function handler(req,res){res.setHeader('Cache-Control','no-store');try{
@@ -16,6 +16,15 @@ export default async function handler(req,res){res.setHeader('Cache-Control','no
    },undefined,false);
    assert(result.committed,busy?'Một tab khác đang ghi nhận thời gian. Hãy kết thúc phiên cũ hoặc chờ phiên hết hạn.':'Không thể bắt đầu.',409);
    return res.json({sessionId,stats:summarize(result.snapshot.val(),now)});
+ }
+ if(action==='resume'){
+   const id=String(body.sessionId||'');assert(/^[0-9a-f-]{36}$/i.test(id),'Phiên không hợp lệ.');
+   const now=Date.now();let reason='';result=await ref.transaction(cur=>{
+     const resumed=resumeHeartbeat(cur,now,id,user.name);if(!resumed.accepted){reason='Phiên học không còn tồn tại hoặc đã được thay thế.';return;}
+     return resumed.state;
+   },undefined,false);
+   assert(result.committed,reason||'Không thể khôi phục phiên học.',409);
+   return res.json({sessionId:id,stats:summarize(result.snapshot.val(),now),resumed:true});
  }
  if(action==='ping'||action==='stop'){
    const id=String(body.sessionId||'');assert(/^[0-9a-f-]{36}$/i.test(id),'Phiên không hợp lệ.');
