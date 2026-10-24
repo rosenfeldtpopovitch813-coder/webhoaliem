@@ -1,6 +1,6 @@
 import { getVNDayIndex } from './time-utils.js';
 export const HEARTBEAT_MS = 15000;
-export const MAX_GAP_MS = 35000;
+export const MAX_GAP_MS = 45000;
 export const SESSION_TTL_MS = 90000;
 export const TITLES = Object.freeze([{seconds:0,label:'Nước tinh khiết'},{seconds:3600,label:'Caffein'},{seconds:7200,label:'Dopamine'},{seconds:10800,label:'Adrenaline'},{seconds:14400,label:'Serotonin'},{seconds:18000,label:'Cortisol'}]);
 export function titleFor(seconds){ return [...TITLES].reverse().find(x=>seconds>=x.seconds)?.label||TITLES[0].label; }
@@ -15,4 +15,13 @@ export function applyHeartbeat(current,now,sessionId,name){const day=getVNDayInd
  const totalMs=(state.totalMs||0)+added;
  const streak=added>0?streakNext(state.lastStudyDay,state.streak||0,now):state.streak||0;
  return {state:{...state,displayName:name,dayIndex:day,dailyMs,totalMs,streak,lastStudyDay:added>0?day:state.lastStudyDay??null,session:{id:sessionId,lastPing:now}},accepted:true,added};
+}
+
+/** Resume an existing session for the same authenticated user without crediting a long offline gap. */
+export function resumeHeartbeat(current, now, sessionId, name) {
+ const state = current && typeof current === 'object' ? current : {};
+ if (!state.session || state.session.id !== sessionId) {
+   return { state, accepted: false, reason: 'session-not-found', added: 0 };
+ }
+ return applyHeartbeat(state, now, sessionId, name);
 }
