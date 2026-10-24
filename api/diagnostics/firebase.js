@@ -32,11 +32,13 @@ export default async function handler(req, res) {
 
   if (checks.databaseUrl.ok && checks.adminCredentials.ok && checks.projectIds.ok) {
     try {
-      // Read only Firebase's reserved server-info node; no student data is accessed or returned.
+      // Probe a harmless, ordinary RTDB path. The .info namespace belongs to client SDK
+      // server-info listeners and is rejected as a normal path by the Admin SDK.
+      // This path is read-only; we never create or return student data.
       const database = adminDatabase();
       let timeoutId;
       const result = await Promise.race([
-        database.ref('.info/serverTimeOffset').get(),
+        database.ref('__htvvm_diagnostics_probe__').get(),
         new Promise((_, reject) => { timeoutId = setTimeout(() => reject(Object.assign(Error('Database probe timeout'), { code: 'FIREBASE_DATABASE_TIMEOUT' })), 8000); })
       ]).finally(() => clearTimeout(timeoutId));
       checks.databaseConnection = { ok: true, code: 'OK', message: 'Truy vấn kiểm tra tới Realtime Database hoàn tất thành công.' };
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
   return send(res, overall ? 200 : 503, {
     ok: overall,
     checkedAt: new Date().toISOString(),
-    rootCauseHint: checks.databaseConnection?.ok ? 'Không phát hiện lỗi cấu hình Realtime Database ở phía máy chủ.' : 'Lỗi “Can’t determine Firebase Database URL” thường xảy ra khi Firebase Admin được khởi tạo trước khi có databaseURL hoặc khởi tạo database bằng sai API. Bản sửa dùng databaseURL trong initializeApp() và getDatabase(app).',
+    rootCauseHint: checks.databaseConnection?.ok ? 'Kết nối Realtime Database phía máy chủ hoạt động. Phép thử chỉ đọc một nút kiểm tra riêng, không đọc dữ liệu học sinh.' : (checks.databaseConnection?.message === 'Invalid token in path' ? 'Lỗi đến từ đường dẫn kiểm tra dành riêng cho .info trong probe chẩn đoán, không phải bằng chứng rằng URL database sai. Bản cập nhật dùng một đường dẫn kiểm tra hợp lệ của Firebase Admin SDK.' : 'Nếu URL và thông tin xác thực đều hợp lệ nhưng kết nối vẫn thất bại, kiểm tra thông báo lỗi kết nối chi tiết. Không mở công khai Database Rules chỉ để bỏ lỗi.'),
     checks,
     nextSteps: [
       'Vercel → Settings → Environment Variables: đặt FIREBASE_DATABASE_URL bằng URL trong Firebase Console → Realtime Database → Data.',
