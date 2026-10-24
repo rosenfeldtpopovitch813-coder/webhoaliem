@@ -1,4 +1,6 @@
 export const PART2_WEIGHTS = Object.freeze([0, 10, 25, 50, 100]);
+// A practical safety ceiling, not the former 60-question restriction. Supports full 120-question tests.
+export const MAX_EXAM_QUESTIONS = 1000;
 export function normalizeShort(value) {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const s = String(value).trim().replace(/\s/g, '').replace(',', '.');
@@ -8,7 +10,7 @@ export function normalizeShort(value) {
 export function normalizeChoice(value) { return typeof value === 'string' && /^[ABCD]$/i.test(value.trim()) ? value.trim().toUpperCase() : null; }
 export function normalizeTF(value) { return value === true || value === false ? value : null; }
 export function validateQuestions(questions) {
-  if (!Array.isArray(questions) || questions.length < 1 || questions.length > 60) throw Error('Đề phải có từ 1 đến 60 câu.');
+  if (!Array.isArray(questions) || questions.length < 1 || questions.length > MAX_EXAM_QUESTIONS) throw Error(`Đề phải có từ 1 đến ${MAX_EXAM_QUESTIONS} câu.`);
   let counts = { I: 0, II: 0, III: 0 };
   const cleaned = questions.map((q, i) => {
     if (!q || !['I','II','III'].includes(q.part) || typeof q.prompt !== 'string' || !q.prompt.trim() || q.prompt.length > 5000) throw Error(`Câu ${i+1}: nội dung hoặc phần không hợp lệ.`);
@@ -60,12 +62,12 @@ export function sanitizeFlaggedQuestions(questions, flaggedQuestions) {
   if (!Array.isArray(questions)) throw Error('Không tìm thấy cấu trúc đề thi.');
   if (!Array.isArray(flaggedQuestions)) return [];
   const validIds = new Set(questions.map(q => q?.id).filter(id => typeof id === 'string'));
-  return [...new Set(flaggedQuestions.filter(id => typeof id === 'string' && validIds.has(id)))].slice(0, 60);
+  return [...new Set(flaggedQuestions.filter(id => typeof id === 'string' && validIds.has(id)))].slice(0, MAX_EXAM_QUESTIONS);
 }
 
 export function sanitizeDraftAnswers(questions, answers) {
   if (!Array.isArray(questions)) throw Error('Không tìm thấy cấu trúc đề thi.');
-  if (!answers || typeof answers !== 'object' || Array.isArray(answers) || Object.keys(answers).length > 60) throw Error('Bản nháp không hợp lệ.');
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers) || Object.keys(answers).length > MAX_EXAM_QUESTIONS) throw Error('Bản nháp không hợp lệ hoặc vượt quá giới hạn an toàn.');
   const byId = new Map(questions.map(q => [q.id, q]));
   const cleaned = {};
   for (const [id, value] of Object.entries(answers)) {
