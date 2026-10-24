@@ -1,5 +1,5 @@
 import { db, identity, fail, assert, newId } from '../lib/exam-server.js';
-import { validateQuestions, publicQuestions, gradeExam, sanitizeDraftAnswers, sanitizeFlaggedQuestions } from '../shared/exam-grading.js';
+import { validateQuestions, publicQuestions, gradeExam, sanitizeDraftAnswers, sanitizeFlaggedQuestions, MAX_EXAM_QUESTIONS } from '../shared/exam-grading.js';
 import { resolveResourceLink } from '../shared/resource-links.js';
 const MAX_BODY = 4 * 1024 * 1024;
 export default async function handler(req,res) {
@@ -86,7 +86,7 @@ export default async function handler(req,res) {
     }
     if (action==='submit') {
       assert(req.method==='POST','POST bắt buộc.'); const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
-      const answers=req.body.answers; assert(answers && typeof answers==='object' && !Array.isArray(answers) && Object.keys(answers).length <= 60,'Bài làm không hợp lệ.');
+      const answers=req.body.answers; assert(answers && typeof answers==='object' && !Array.isArray(answers) && Object.keys(answers).length <= MAX_EXAM_QUESTIONS,'Bài làm không hợp lệ.');
       const questions=(await database.ref(`exams_private/${id}`).get()).val(); assert(Array.isArray(questions),'Không tìm thấy bộ đáp án.',404);
       const sessionRef=database.ref(`exam_sessions/${id}/${user.uid}`); const before=await sessionRef.get(); assert(before.exists(),'Bạn chưa bắt đầu thi.',403);
       const attempt=before.val();
