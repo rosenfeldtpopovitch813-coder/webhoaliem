@@ -3,6 +3,7 @@ import { AppStore } from '../../core/store.js';
 import { auth } from '../../core/firebase.js';
 import katex from 'katex';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
+import { MAX_EXAM_QUESTIONS } from '../../../shared/exam-grading.js';
 const E = element;
 function escapeHTML(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -157,7 +158,7 @@ function readLocalDraft(uid, id) {
   } catch { return null; }
 }
 function writeLocalDraft(uid, id, draftAnswers, flaggedQuestions = []) {
-  try { localStorage.setItem(draftKey(uid, id), JSON.stringify({ id, answers: cloneAnswers(draftAnswers), flaggedQuestions: Array.isArray(flaggedQuestions) ? [...new Set(flaggedQuestions.filter(x => typeof x === 'string'))].slice(0, 60) : [], savedAt: Date.now() })); return true; }
+  try { localStorage.setItem(draftKey(uid, id), JSON.stringify({ id, answers: cloneAnswers(draftAnswers), flaggedQuestions: Array.isArray(flaggedQuestions) ? [...new Set(flaggedQuestions.filter(x => typeof x === 'string'))].slice(0, MAX_EXAM_QUESTIONS) : [], savedAt: Date.now() })); return true; }
   catch { return false; }
 }
 function removeLocalDraft(uid, id) { try { localStorage.removeItem(draftKey(uid, id)); } catch {} }
@@ -704,12 +705,18 @@ function showCreator(host) {
   function renderRoomCreator() {
     content.replaceChildren();
     const intro = E('div', 'exam-creator-intro');
-    intro.append(E('h4', '', 'Tạo phòng thi từ tài liệu'), E('p', '', 'Dán liên kết Google Drive/Docs/Slides/Sheets. Xem trước tài liệu, thiết lập phiếu đáp án; thí sinh sẽ thấy đề ở bên trái và phiếu trả lời ở bên phải.'));
+    intro.append(
+      E('h4', '', 'Tạo phòng thi từ tài liệu'),
+      E('p', '', 'Dán liên kết Google Drive/Docs/Slides/Sheets. Xem trước tài liệu, thiết lập đủ ba phần của phiếu trả lời. Thí sinh sẽ thấy đề ở bên trái và phiếu trả lời ở bên phải.')
+    );
     const sourceInput = field('url', 'Dán liên kết Google Drive được chia sẻ…');
     const previewButton = button('Xem trước tài liệu', 'exam-tab', showDocumentPreview);
-    const openDocument = E('a', 'exam-link', 'Mở tài liệu ở tab mới ↗'); openDocument.hidden = true; openDocument.target = '_blank'; openDocument.rel = 'noopener noreferrer';
+    const openDocument = E('a', 'exam-link', 'Mở tài liệu ở tab mới ↗');
+    openDocument.hidden = true; openDocument.target = '_blank'; openDocument.rel = 'noopener noreferrer';
     const sourceMessage = E('p', 'exam-message', 'Tài liệu phải được chia sẻ quyền xem cho người có liên kết.');
-    const previewFrame = document.createElement('iframe'); previewFrame.className = 'exam-teacher-document-preview'; previewFrame.title = 'Bản xem trước tài liệu đề thi'; previewFrame.loading = 'lazy'; previewFrame.referrerPolicy = 'strict-origin-when-cross-origin'; previewFrame.hidden = true;
+    const previewFrame = document.createElement('iframe');
+    previewFrame.className = 'exam-teacher-document-preview'; previewFrame.title = 'Bản xem trước tài liệu đề thi';
+    previewFrame.loading = 'lazy'; previewFrame.referrerPolicy = 'strict-origin-when-cross-origin'; previewFrame.hidden = true;
     function showDocumentPreview() {
       try {
         const resource = resolveResourceLink(sourceInput.value);
@@ -717,80 +724,141 @@ function showCreator(host) {
         sourceEmbedUrl = resource.embedUrl; sourceOpenUrl = resource.openUrl;
         previewFrame.src = resource.embedUrl; previewFrame.hidden = false;
         openDocument.href = resource.openUrl; openDocument.hidden = false;
-        sourceMessage.textContent = 'Đã tải bản xem trước. Hãy kiểm tra tài liệu và hoàn tất phiếu đáp án ở bên dưới.';
-      } catch (error) { sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true; sourceMessage.textContent = error.message || String(error); }
+        sourceMessage.textContent = 'Đã nạp đường dẫn xem trước. Hãy kiểm tra tài liệu và điền đáp án cho từng phần bên dưới.';
+      } catch (error) {
+        sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true;
+        sourceMessage.textContent = error.message || String(error);
+      }
     }
     sourceInput.addEventListener('input', () => { sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true; });
     sourceInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); showDocumentPreview(); } });
     const sourceActions = E('div', 'exam-tabs'); sourceActions.append(previewButton, openDocument);
-    const previewPanel = E('section', 'exam-panel exam-teacher-source-panel'); previewPanel.append(label('Liên kết tài liệu đề thi'), sourceInput, sourceActions, sourceMessage, previewFrame);
+    const previewPanel = E('section', 'exam-panel exam-teacher-source-panel');
+    previewPanel.append(label('Liên kết tài liệu đề thi'), sourceInput, sourceActions, sourceMessage, previewFrame);
 
     const setup = E('section', 'exam-panel exam-answer-setup');
-    setup.append(E('h4', '', 'Thiết lập phiếu trả lời'), E('p', 'exam-message', 'Chọn dạng câu hỏi và số lượng câu. Sau đó đặt đáp án chuẩn để hệ thống chấm tự động.'));
-    const answerType = E('select', 'exam-input');
-    for (const [value, text] of [['single', 'Trắc nghiệm 4 lựa chọn (A–D)'], ['tf', 'Đúng / Sai (4 ý mỗi câu)'], ['short', 'Trả lời ngắn (đáp án số)']]) { const opt = E('option', '', text); opt.value = value; answerType.append(opt); }
-    const count = field('number', 'Số câu hỏi', String(Math.max(1, Math.min(60, data.length || 10)))); count.min = '1'; count.max = '60'; count.step = '1';
-    const typeCount = E('div', 'exam-answer-setup-fields'); typeCount.append(label('Dạng trả lời'), answerType, label('Số câu hỏi (tối đa 60)'), count);
-    const keyList = E('div', 'exam-room-key-list');
-    const renderKeys = (reset = false) => {
-      const amount = Number(count.value);
-      if (!Number.isInteger(amount) || amount < 1 || amount > 60) { keyList.replaceChildren(E('p', 'exam-error', 'Số câu phải từ 1 đến 60.')); return; }
-      const old = roomKeys;
-      roomKeys = Array.from({ length: amount }, (_, i) => !reset && old[i] ? old[i] : (answerMode === 'tf' ? { values: ['', '', '', ''] } : { value: '' }));
-      keyList.replaceChildren();
-      roomKeys.forEach((key, index) => {
-        const row = E('div', 'exam-room-key-row');
-        row.append(E('strong', '', `Câu ${index + 1}`));
-        if (answerMode === 'single') {
-          const select = E('select', 'exam-input');
-          for (const [value, text] of [['', 'Chọn đáp án…'], ...[...'ABCD'].map(c => [c, c])]) { const opt = E('option', '', text); opt.value = value; select.append(opt); }
-          select.value = key.value || ''; select.addEventListener('change', () => key.value = select.value); row.append(select);
-        } else if (answerMode === 'tf') {
-          const grid = E('div', 'exam-room-tf-keys');
-          for (let i = 0; i < 4; i++) {
-            const select = E('select', 'exam-input');
-            for (const [value, text] of [['', `${'abcd'[i]}: chọn`], ['true', 'Đúng'], ['false', 'Sai']]) { const opt = E('option', '', text); opt.value = value; select.append(opt); }
-            select.value = key.values?.[i] ?? ''; select.addEventListener('change', () => { key.values[i] = select.value; }); grid.append(select);
-          }
-          row.append(grid);
-        } else {
-          const input = field('text', 'Đáp án số', key.value || ''); input.addEventListener('input', () => key.value = input.value); row.append(input);
-        }
-        keyList.append(row);
-      });
-    };
-    answerType.addEventListener('change', () => { answerMode = answerType.value; renderKeys(true); });
-    count.addEventListener('change', () => renderKeys(false));
-    renderKeys(true);
+    setup.append(
+      E('h4', '', 'Phiếu trả lời gồm ba phần'),
+      E('p', 'exam-message', 'Tùy chỉnh số câu ở từng phần. Hỗ trợ đề ĐGNL 120 câu và đề dài hơn; giới hạn kỹ thuật hiện tại là 1.000 câu cho toàn đề.')
+    );
+    const maxPerSection = MAX_EXAM_QUESTIONS;
+    const existingCounts = Object.fromEntries(['I', 'II', 'III'].map(part => [part, data.filter(q => q.part === part).length]));
+    const hasExistingQuestions = data.length > 0;
+    const sectionDefs = [
+      { part: 'I', title: 'Phần I · Trắc nghiệm A–D', description: 'Mỗi câu có một đáp án đúng trong A, B, C, D.', makeKey: () => ({ value: '' }) },
+      { part: 'II', title: 'Phần II · Đúng / Sai', description: 'Mỗi câu gồm bốn ý a, b, c, d.', makeKey: () => ({ values: ['', '', '', ''] }) },
+      { part: 'III', title: 'Phần III · Trả lời ngắn', description: 'Nhập đáp án số; chấm tự động theo sai số 0,0001.', makeKey: () => ({ value: '' }) }
+    ];
+    const sectionState = {};
+    const sectionPanels = E('div', 'exam-answer-sections');
+    const totalLabel = E('p', 'exam-answer-total', 'Tổng số câu: 120 / 1.000');
+    const totalError = E('p', 'exam-error');
+    const createFromDrive = button('Tạo phòng thi từ tài liệu', 'primary-btn', createDriveRoom);
+    const createFromDraft = button('Tạo phòng từ đề đã biên soạn', 'exam-tab', createFromAuthorQuestions);
 
-    const createFromDrive = button('Tạo phòng thi từ tài liệu', 'primary-btn', async () => {
+    for (const section of sectionDefs) {
+      const panel = E('section', 'exam-answer-section');
+      panel.append(E('h5', '', section.title), E('p', 'exam-message', section.description));
+      const count = field('number', `Số câu Phần ${section.part}`, String(hasExistingQuestions ? Math.max(1, existingCounts[section.part]) : 40));
+      count.min = '1'; count.max = String(maxPerSection); count.step = '1';
+      const keyList = E('div', 'exam-room-key-list');
+      panel.append(label('Số câu'), count, keyList);
+      const oldState = { keys: [] };
+      sectionState[section.part] = { ...section, panel, count, keyList, state: oldState };
+      const renderKeys = () => {
+        const amount = Number(count.value);
+        if (!Number.isInteger(amount) || amount < 1 || amount > maxPerSection) {
+          keyList.replaceChildren(E('p', 'exam-error', `Mỗi phần phải có từ 1 đến ${maxPerSection} câu.`));
+          refreshTotal(); return;
+        }
+        const previous = oldState.keys;
+        oldState.keys = Array.from({ length: amount }, (_, i) => previous[i] || section.makeKey());
+        keyList.replaceChildren();
+        const fragment = document.createDocumentFragment();
+        oldState.keys.forEach((key, index) => {
+          const row = E('div', 'exam-room-key-row');
+          row.append(E('strong', '', `${section.part}.${index + 1}`));
+          if (section.part === 'I') {
+            const select = E('select', 'exam-input');
+            for (const [value, text] of [['', 'Chọn đáp án…'], ...[...'ABCD'].map(choice => [choice, choice])]) {
+              const option = E('option', '', text); option.value = value; select.append(option);
+            }
+            select.value = key.value || ''; select.addEventListener('change', () => { key.value = select.value; }); row.append(select);
+          } else if (section.part === 'II') {
+            const grid = E('div', 'exam-room-tf-keys');
+            for (let i = 0; i < 4; i++) {
+              const select = E('select', 'exam-input');
+              for (const [value, text] of [['', `${'abcd'[i]}: Chọn`], ['true', 'Đúng'], ['false', 'Sai']]) {
+                const option = E('option', '', text); option.value = value; select.append(option);
+              }
+              select.value = key.values?.[i] ?? '';
+              select.addEventListener('change', () => { key.values[i] = select.value; }); grid.append(select);
+            }
+            row.append(grid);
+          } else {
+            const input = field('text', 'Đáp án số', key.value || '');
+            input.addEventListener('input', () => { key.value = input.value; }); row.append(input);
+          }
+          fragment.append(row);
+        });
+        keyList.append(fragment); refreshTotal();
+      };
+      sectionState[section.part].renderKeys = renderKeys;
+      count.addEventListener('change', renderKeys);
+      count.addEventListener('input', refreshTotal);
+      sectionPanels.append(panel);
+    }
+    for (const section of sectionDefs) sectionState[section.part].renderKeys();
+    function selectedCounts() {
+      return Object.fromEntries(sectionDefs.map(({ part }) => [part, Number(sectionState[part].count.value)]));
+    }
+    function refreshTotal() {
+      const counts = selectedCounts();
+      const validEach = Object.values(counts).every(value => Number.isInteger(value) && value >= 1 && value <= maxPerSection);
+      const sum = validEach ? Object.values(counts).reduce((a, b) => a + b, 0) : 0;
+      totalLabel.textContent = `Tổng số câu: ${sum.toLocaleString('vi-VN')} / ${maxPerSection.toLocaleString('vi-VN')}`;
+      totalError.textContent = !validEach ? `Mỗi phần phải là số nguyên từ 1 đến ${maxPerSection}.` : sum > maxPerSection ? `Tổng số câu không được vượt quá ${maxPerSection}.` : sum < 1 ? 'Hãy chọn ít nhất một câu ở một trong ba phần.' : '';
+      createFromDrive.disabled = Boolean(totalError.textContent);
+      createFromDraft.disabled = Boolean(totalError.textContent);
+    }
+    function collectDriveQuestions() {
+      const counts = selectedCounts();
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      if (Object.values(counts).some(value => !Number.isInteger(value) || value < 1 || value > maxPerSection)) throw Error(`Mỗi phần phải từ 1 đến ${maxPerSection} câu.`);
+      if (total < 1) throw Error('Hãy chọn ít nhất một câu.');
+      if (total > maxPerSection) throw Error(`Tổng số câu tối đa là ${maxPerSection}.`);
+      const questions = []; let ordinal = 1;
+      const partI = sectionState.I.state.keys.slice(0, counts.I);
+      if (partI.some(key => !/^[ABCD]$/.test(key.value || ''))) throw Error('Phần I: hãy chọn đáp án A–D cho tất cả câu.');
+      for (const key of partI) questions.push({ part: 'I', prompt: `Câu ${ordinal++}`, options: ['A', 'B', 'C', 'D'], answer: key.value });
+      const partII = sectionState.II.state.keys.slice(0, counts.II);
+      if (partII.some(key => !Array.isArray(key.values) || key.values.some(value => value !== 'true' && value !== 'false'))) throw Error('Phần II: hãy chọn Đúng/Sai đủ bốn ý của tất cả câu.');
+      for (const key of partII) questions.push({ part: 'II', prompt: `Câu ${ordinal++}`, options: ['a', 'b', 'c', 'd'], answer: key.values.map(value => value === 'true') });
+      const partIII = sectionState.III.state.keys.slice(0, counts.III);
+      if (partIII.some(key => !String(key.value || '').trim())) throw Error('Phần III: hãy nhập đáp án cho tất cả câu.');
+      for (const key of partIII) questions.push({ part: 'III', prompt: `Câu ${ordinal++}`, answer: String(key.value).trim(), tolerance: 0.0001 });
+      return questions;
+    }
+    async function createDriveRoom() {
       try {
         if (!sourceEmbedUrl) showDocumentPreview();
         if (!sourceEmbedUrl) throw Error('Hãy nhập và xem trước tài liệu Drive trước khi tạo phòng.');
-        const amount = Number(count.value);
-        if (!Number.isInteger(amount) || amount < 1 || amount > 60) throw Error('Số câu phải từ 1 đến 60.');
-        let questions;
-        if (answerMode === 'single') {
-          if (roomKeys.slice(0, amount).some(x => !/^[ABCD]$/.test(x.value || ''))) throw Error('Hãy chọn đáp án A–D cho tất cả các câu.');
-          questions = roomKeys.slice(0, amount).map((x, i) => ({ part: 'I', prompt: `Câu ${i + 1}`, options: ['A', 'B', 'C', 'D'], answer: x.value }));
-        } else if (answerMode === 'tf') {
-          if (roomKeys.slice(0, amount).some(x => !Array.isArray(x.values) || x.values.some(v => v !== 'true' && v !== 'false'))) throw Error('Hãy chọn Đúng/Sai cho đủ bốn ý của tất cả các câu.');
-          questions = roomKeys.slice(0, amount).map((x, i) => ({ part: 'II', prompt: `Câu ${i + 1}`, options: ['a', 'b', 'c', 'd'], answer: x.values.map(v => v === 'true') }));
-        } else {
-          if (roomKeys.slice(0, amount).some(x => !String(x.value || '').trim())) throw Error('Hãy nhập đáp án số cho tất cả các câu.');
-          questions = roomKeys.slice(0, amount).map((x, i) => ({ part: 'III', prompt: `Câu ${i + 1}`, answer: String(x.value), tolerance: 0.0001 }));
-        }
-        await publishExam(questions, sourceEmbedUrl, sourceOpenUrl);
+        await publishExam(collectDriveQuestions(), sourceEmbedUrl, sourceOpenUrl);
       } catch (error) { message.textContent = error.message || String(error); }
-    });
-    const alternative = E('div', 'exam-room-alternative');
-    alternative.append(E('p', 'exam-message', 'Không dùng tài liệu Drive? Bạn có thể tạo phòng từ bộ câu hỏi đã biên soạn ở thẻ “Biên soạn đề”.'));
-    alternative.append(button('Dùng câu hỏi đã biên soạn', 'exam-tab', async () => {
-      try { await publishExam(data, ''); }
-      catch (error) { message.textContent = error.message || String(error); }
-    }));
-    setup.append(typeCount, keyList, createFromDrive, alternative);
+    }
+    async function createFromAuthorQuestions() {
+      try {
+        const counts = selectedCounts();
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        if (!data.length) throw Error('Hãy biên soạn câu hỏi trước.');
+        const actualCounts = Object.fromEntries(['I', 'II', 'III'].map(part => [part, data.filter(question => question.part === part).length]));
+        if (total !== data.length || ['I', 'II', 'III'].some(part => actualCounts[part] !== counts[part])) throw Error(`Phiếu đang chọn ${counts.I}/${counts.II}/${counts.III} câu nhưng đề biên soạn có ${actualCounts.I}/${actualCounts.II}/${actualCounts.III}. Hãy chỉnh số lượng cho khớp hoặc quay lại Biên soạn đề.`);
+        await publishExam(data, '');
+      } catch (error) { message.textContent = error.message || String(error); }
+    }
+    setup.append(sectionPanels, totalLabel, totalError, createFromDrive, createFromDraft);
     content.append(intro, previewPanel, setup);
+    refreshTotal();
   }
   switchMode('author');
 }
