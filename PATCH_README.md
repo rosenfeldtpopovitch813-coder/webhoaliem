@@ -1,36 +1,31 @@
-# HTVVM Studio — Firebase probe & 120+ answer-sheet patch
+# HTVVM — Sửa đồng hồ Pomodoro và ghi nhận thời gian học
 
-This is an overlay for the current HTVVM source after the Firebase/library updates, the One Exam Room integration, and the Exam Authoring / Drive Room patch. It is not a standalone application.
+## File bắt buộc cập nhật (4 file)
+- `src/modules/focus-zone/index.js`
+- `api/study-tracker.js`
+- `shared/study-core.js`
+- `shared/focus-timer.js` (mới, bắt buộc vì Focus Zone import file này)
 
-## What changed
+## File kiểm thử (không bắt buộc để website chạy)
+- `test/study.test.js`
+- `test/focus-timer.test.js` (mới)
+- `test/integrations.test.js`
 
-- Firebase diagnostics now probes the harmless ordinary node `__htvvm_diagnostics_probe__` instead of `.info/serverTimeOffset`. The `.info` namespace is intended for client SDK server-info listeners; calling it as a normal Admin SDK reference caused the observed `Invalid token in path` message. This probe only reads and does not write or return student data.
-- Leave the existing Firebase URL and service-account values alone for the first retest. Deploy this patch, open “Chẩn đoán Firebase” again, and check the new result. If it reports a different error, diagnose that exact new code/message. Do not make Realtime Database Rules public to bypass it.
-- Replaces the old 60-question cap with `MAX_EXAM_QUESTIONS = 1000` for question validation, submitted answers, draft answers and flags.
-- The Drive room creator shows three distinct answer-key sections together: Part I multiple-choice A–D, Part II true/false with four sub-items, and Part III short numeric answers. The teacher sets the count of each part independently. The default template is 40 + 40 + 40 = 120 questions. Each part must contain at least one question; total questions are capped at 1,000 for payload/performance safety.
-- Increments the service-worker cache key to `htvvm-studio-clean-ui-7` so old code is not kept cached after deployment.
+## Những thay đổi chính
+- Bắt đầu đồng hồ ở chế độ Tập trung sẽ tự bắt đầu phiên ghi nhận giờ học; giờ học hiển thị tăng ngay theo giây, không phải đợi heartbeat đầu tiên.
+- Tạm dừng, hết giờ, đặt lại hoặc đổi preset sẽ lưu/dừng phiên ghi nhận tương ứng.
+- Đồng hồ dùng `performance.now()` để tính thời lượng, lưu số giây còn lại vào localStorage và mở lại ở trạng thái tạm dừng.
+- Khi tab bị ẩn hoặc rời Góc tập trung, timer và ghi nhận thời gian học sẽ dừng, tránh tính giờ khi không xem trang.
+- Ping mỗi 15 giây được đối soát với số liệu server; tăng cửa sổ chấp nhận heartbeat lên 45 giây để chịu được một nhịp trễ thông thường.
+- Có thể khôi phục phiên thủ công sau reload; các khoảng mất kết nối dài không được tính thành giờ học.
+- Nếu yêu cầu dừng phiên gặp lỗi mạng, lưu dấu chờ dừng để thử lại thay vì bỏ mất ID phiên.
+- Giữ nút ghi nhận thủ công cho thời gian học không dùng Pomodoro.
 
-## Runtime files (6)
+## Cách cập nhật
+1. Giải nén ZIP ở thư mục gốc repository HTVVM.
+2. Chép các đường dẫn giữ nguyên cấu trúc, ghi đè 3 file cũ và thêm `shared/focus-timer.js`.
+3. Nếu muốn giữ kiểm thử, chép cả thư mục `test/`. Không cần sửa `package.json`, biến môi trường, hoặc Firebase Rules.
+4. Commit/push GitHub và Redeploy Vercel.
+5. Trên website: mở Góc tập trung, bấm `Tập trung · 25′` → `Bắt đầu`. Sau khoảng 1 giây, `Hôm nay` và `Tổng giờ` sẽ tăng; tạm dừng hoặc kết thúc để gửi lần lưu cuối lên server.
 
-- `api/diagnostics/firebase.js`
-- `api/exam.js`
-- `shared/exam-grading.js`
-- `src/modules/exam-room/index.js`
-- `src/css/input.css`
-- `public/sw.js`
-
-The three `test/` files are included for regression checks. They are not needed for serving the website, but are useful to keep in GitHub and run with `npm test`.
-
-## Apply
-
-1. Back up the repository.
-2. Extract this ZIP and copy its contents into the repository root, preserving folder paths and allowing the six runtime files to overwrite older versions.
-3. Commit and push; let Vercel redeploy. This patch doesn't change `package.json` or Firebase environment variables.
-4. After deployment, force-refresh the site (`Ctrl+F5`) and run “Chẩn đoán Firebase” again.
-5. Go to “Phòng thi” → “Tạo phòng thi” and verify all three answer-key sections. The default is 120 questions (40/40/40); change the counts for your exam format.
-
-## Verification
-
-- Full test suite: 84 tests passed, 0 failed.
-- Syntax checks passed for the modified runtime JavaScript.
-- Production Vite build has not been verified in this environment because dependencies are not installed (`vite: not found`). Confirm the Vercel Build Logs after redeploy.
+Ghi chú: các số liệu tăng theo thời gian thực là tạm tính phía giao diện giữa các heartbeat. API/Firebase vẫn là nguồn số liệu đã lưu chính thức. Nếu kết nối đứt, UI dừng cộng giờ cho tới khi kết nối lại.
