@@ -1,7 +1,7 @@
 import { element, button } from '../../core/dom.js';
 import { auth } from '../../core/firebase.js';
 import { HEARTBEAT_MS, titleFor } from '../../../shared/study-core.js';
-import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, remainingFocusSeconds, validFocusDuration } from '../../../shared/focus-timer.js';
+import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, remainingToDeadline, validFocusDuration } from '../../../shared/focus-timer.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
 const fmt=s=>`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 function field(type, placeholder, value = '') { const el = element(type === 'textarea' ? 'textarea' : 'input', 'exam-input'); if (type !== 'textarea') el.type = type; el.placeholder = placeholder; el.value = value; return el; }
@@ -15,18 +15,24 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  const initialDuration=readDuration();
  const restoredTimer=(()=>{try{const s=JSON.parse(localStorage.getItem('htvvm-focus-timer-state-v2')||'null');if(s&&s.duration===initialDuration&&validFocusDuration(s.duration)&&Number.isFinite(s.remaining))return s;}catch{}return null;})();
  let duration=initialDuration;
- let seconds=restoredTimer?normalizeRemaining(restoredTimer.remaining,duration):duration;
+ let deadlineAt=Number.isFinite(restoredTimer?.deadlineAt)?restoredTimer.deadlineAt:0;
+ let running=Boolean(restoredTimer?.running && deadlineAt > Date.now());
+ let seconds=running?remainingToDeadline(deadlineAt):(restoredTimer?normalizeRemaining(restoredTimer.remaining,duration):duration);
+ if(running&&seconds===0){running=false;deadlineAt=0;}
  let selectedMode=(()=>{try{const mode=restoredTimer?.mode||localStorage.getItem('htvvm-focus-mode-v1');return mode==='break'?'break':'focus'}catch{return 'focus'}})();
- let running=false,started=0,remainingAtStart=seconds;
  let modeButtons=[],minutesInput=null,secondsInput=null,customStatus=null;
  const digits=element('div','focus-time',fmt(seconds));
- function saveTimerState(){try{localStorage.setItem('htvvm-focus-duration-v1',String(duration));localStorage.setItem('htvvm-focus-mode-v1',selectedMode);localStorage.setItem('htvvm-focus-timer-state-v2',JSON.stringify({duration,remaining:seconds,mode:selectedMode,savedAt:Date.now()}));}catch{}}
+ const currentRemaining=(now=Date.now())=>running?remainingToDeadline(deadlineAt,now):seconds;
+ function renderTimer(now=Date.now()){seconds=currentRemaining(now);digits.textContent=fmt(seconds);return seconds;}
+ function saveTimerState(){try{const remaining=currentRemaining();localStorage.setItem('htvvm-focus-duration-v1',String(duration));localStorage.setItem('htvvm-focus-mode-v1',selectedMode);localStorage.setItem('htvvm-focus-timer-state-v2',JSON.stringify({duration,remaining,mode:selectedMode,running,deadlineAt:running?deadlineAt:0,savedAt:Date.now()}));}catch{}}
  function updateControls(){toggle.textContent=running?'Tạm dừng':'Bắt đầu';toggle.setAttribute('aria-pressed',String(running));}
+ function pauseTimer(){if(!running)return;seconds=currentRemaining();running=false;deadlineAt=0;digits.textContent=fmt(seconds);saveTimerState();updateControls();}
+ function startTimer(){if(seconds<=0)seconds=duration;deadlineAt=Date.now()+seconds*1000;running=true;saveTimerState();updateControls();}
  function syncModeButtons(){modeButtons.forEach((b,i)=>b.classList.toggle('selected',(i===0&&duration===1500&&selectedMode==='focus')||(i===1&&duration===300&&selectedMode==='break')||(i===2&&duration===900&&selectedMode==='break')));}
  async function selectPreset(s,mode){
-   if(running){seconds=remainingFocusSeconds(remainingAtStart,started,performance.now());running=false;}
+   if(running)pauseTimer();
    if(sessionOrigin==='pomodoro')await stopSession('Đã dừng phiên ghi nhận theo đồng hồ.');
-   duration=s;seconds=s;selectedMode=mode;remainingAtStart=seconds;digits.textContent=fmt(seconds);
+   duration=s;seconds=s;deadlineAt=0;selectedMode=mode;digits.textContent=fmt(seconds);
    if(minutesInput)minutesInput.value=String(Math.floor(s/60));if(secondsInput)secondsInput.value=String(s%60);
    if(customStatus)customStatus.textContent=`Đang dùng ${Math.floor(s/60)} phút ${s%60} giây.`;
    syncModeButtons();saveTimerState();updateControls();
@@ -38,18 +44,18 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  const controls=element('div','focus-actions');
  const toggle=button('Bắt đầu','focus-btn primary',async()=>{
    if(running){
-     seconds=remainingFocusSeconds(remainingAtStart,started,performance.now());running=false;digits.textContent=fmt(seconds);saveTimerState();updateControls();
+     pauseTimer();
      if(sessionOrigin==='pomodoro')await stopSession('Đã tạm dừng đồng hồ; thời gian học đã được lưu.');
      else status.textContent='Đồng hồ đã tạm dừng.';
      return;
    }
    if(seconds<=0)seconds=duration;
    if(selectedMode==='focus'&&!sessionId){const ok=await startSession('pomodoro');if(!ok)return;}
-   running=true;started=performance.now();remainingAtStart=seconds;lastTimerPersist=0;saveTimerState();updateControls();
+   startTimer();lastTimerPersist=Date.now();
    if(selectedMode==='break'&&!sessionId)status.textContent='Đồng hồ nghỉ đang chạy; thời gian nghỉ không cộng vào giờ học.';
  });
  const reset=button('Đặt lại','focus-btn',async()=>{
-   running=false;seconds=duration;digits.textContent=fmt(seconds);saveTimerState();updateControls();
+   running=false;deadlineAt=0;seconds=duration;digits.textContent=fmt(seconds);saveTimerState();updateControls();
    if(sessionOrigin==='pomodoro')await stopSession('Đã đặt lại đồng hồ và lưu phiên học.');
  });
  controls.append(toggle,reset);
@@ -61,20 +67,21 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  const applyDuration=button('Áp dụng thời lượng','focus-btn primary',async()=>{
    const next=durationFromFields(Number(minutesInput.value),Number(secondsInput.value));
    if(next===null){customStatus.textContent='Nhập thời lượng từ 1 giây đến 240 phút.';return;}
-   running=false;if(sessionOrigin==='pomodoro')await stopSession('Đã thay thời lượng và lưu phiên học trước đó.');
-   duration=next;seconds=next;selectedMode='focus';digits.textContent=fmt(seconds);remainingAtStart=seconds;
+   if(running)pauseTimer();
+   if(sessionOrigin==='pomodoro')await stopSession('Đã thay thời lượng và lưu phiên học trước đó.');
+   duration=next;seconds=next;deadlineAt=0;selectedMode='focus';digits.textContent=fmt(seconds);
    modeButtons.forEach(x=>x.classList.remove('selected'));customStatus.textContent=`Đã đặt ${Math.floor(next/60)} phút ${next%60} giây.`;
    saveTimerState();updateControls();
  });
  durationEditor.append(durationFields,applyDuration,customStatus);
- timerBox.append(modes,durationEditor,digits,controls,element('p','focus-muted','Bắt đầu đồng hồ tập trung sẽ tự ghi nhận giờ học. Đồng hồ tự dừng khi chuyển tab hoặc rời Góc tập trung.'));
+ timerBox.append(modes,durationEditor,digits,controls,element('p','focus-muted','Đồng hồ đếm ngược theo mốc thời gian thực, kể cả khi tab chạy nền. Phần ghi nhận giờ học sẽ tạm dừng khi tab bị ẩn hoặc rời Góc tập trung.'));
  left.append(timerBox);
  const statsBox=element('section','focus-card');statsBox.append(element('h3','','Tiến độ học tập'));
  const stateLine=element('p','focus-muted','Bắt đầu đồng hồ tập trung để tự ghi nhận thời gian học.');
  const stats=element('div','focus-stats');const status=element('p','focus-muted','Sẵn sàng ghi nhận giờ học.');
  const actions=element('div','focus-actions');
  const begin=button('Bắt đầu ghi nhận giờ học','focus-btn primary',()=>startSession('manual'));
- const end=button('Kết thúc phiên','focus-btn',async()=>{if(running){seconds=remainingFocusSeconds(remainingAtStart,started,performance.now());running=false;digits.textContent=fmt(seconds);saveTimerState();updateControls();}await stopSession('Đã lưu và kết thúc phiên học.');});end.disabled=true;actions.append(begin,end);
+ const end=button('Kết thúc phiên','focus-btn',async()=>{if(running)pauseTimer();await stopSession('Đã lưu và kết thúc phiên học.');});end.disabled=true;actions.append(begin,end);
  const shareLabel=element('label','focus-share');const shareInput=document.createElement('input');shareInput.type='checkbox';shareLabel.append(shareInput,document.createTextNode(' Hiện tôi trên bảng xếp hạng (tự nguyện)'));
  statsBox.append(stateLine,stats,status,actions,shareLabel);left.append(statsBox);
  const resources=element('section','focus-card');resources.append(element('h3','','Tài liệu & YouTube'));const resourceStatus=element('p','focus-muted','Hai khung tài nguyên độc lập: video bên trái, tài liệu bên phải.');
@@ -214,28 +221,34 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  shareInput.addEventListener('change',async()=>{try{const data=await request('/api/study-tracker','POST',{action:'sharing',enabled:shareInput.checked});showStats(data.stats,false);status.textContent=shareInput.checked?'Bạn đã bật chia sẻ trên bảng xếp hạng.':'Bạn đã tắt chia sẻ trên bảng xếp hạng.';}catch(e){status.textContent=e.message;shareInput.checked=!shareInput.checked;}});
  let lastUiTick=performance.now();
  const timerInterval=setInterval(()=>{
-   const now=performance.now();
-   // Bounded monotonic delta prevents long throttled timer callbacks from inventing study time.
-   const delta=Math.max(0,Math.min(1000,now-lastUiTick));lastUiTick=now;
+   const perfNow=performance.now(),wallNow=Date.now();
+   // Study-time deltas are intentionally bounded; the countdown itself is deadline-based.
+   const delta=Math.max(0,Math.min(1000,perfNow-lastUiTick));lastUiTick=perfNow;
    if(sessionId&&trackingConnected&&!document.hidden)pendingMs+=delta;
    if(running){
-     seconds=remainingFocusSeconds(remainingAtStart,started,now);digits.textContent=fmt(seconds);
-     if(now-lastTimerPersist>=1000){saveTimerState();lastTimerPersist=now;}
-     if(seconds===0){running=false;saveTimerState();updateControls();if(sessionOrigin==='pomodoro')stopSession('Hết giờ tập trung. Phiên học đã được lưu.');else status.textContent='Đã hết giờ.';}
+     renderTimer(wallNow);
+     if(wallNow-lastTimerPersist>=1000){saveTimerState();lastTimerPersist=wallNow;}
+     if(seconds===0){running=false;deadlineAt=0;saveTimerState();updateControls();if(sessionOrigin==='pomodoro')stopSession('Hết giờ tập trung. Phiên học đã được lưu.');else status.textContent='Đã hết giờ.';}
    }
-   if(now-lastStatsRenderPerf>=1000){drawStats();lastStatsRenderPerf=now;}
+   if(perfNow-lastStatsRenderPerf>=1000){drawStats();lastStatsRenderPerf=perfNow;}
  },250);
  const heartbeat=setInterval(ping,HEARTBEAT_MS);
  const onVisibility=()=>{
    if(document.hidden){
-     if(running){seconds=remainingFocusSeconds(remainingAtStart,started,performance.now());running=false;digits.textContent=fmt(seconds);saveTimerState();updateControls();}
-     if(sessionId)stopSession('Đã tạm dừng ghi nhận vì trang không còn hiển thị. Bấm Bắt đầu để tiếp tục.');
-   }else if(!sessionId&&!sessionStopping&&!sessionStarting){loadStatus();}
+     // The countdown keeps its absolute deadline when the browser throttles background timers.
+     // Study tracking stops separately, so hidden-tab time is never added to the leaderboard.
+     renderTimer();saveTimerState();
+     if(sessionId)stopSession('Đã tạm dừng ghi nhận vì trang không còn hiển thị. Đồng hồ vẫn đếm ngược; bấm Bắt đầu để ghi nhận phiên mới.');
+   }else{
+     renderTimer();
+     if(running&&seconds===0){running=false;deadlineAt=0;saveTimerState();updateControls();if(sessionOrigin==='pomodoro')stopSession('Hết giờ tập trung. Phiên học đã được lưu.');else status.textContent='Đã hết giờ.';}
+     if(!sessionId&&!sessionStopping&&!sessionStarting)loadStatus();
+   }
  };
  document.addEventListener('visibilitychange',onVisibility);
  const watcher=new MutationObserver(()=>{if(!root.isConnected)cleanup();});watcher.observe(document.getElementById('main-content')||document.body,{childList:true});
  cleanup=()=>{
-   if(!alive)return;alive=false;if(running){seconds=remainingFocusSeconds(remainingAtStart,started,performance.now());running=false;saveTimerState();}clearInterval(timerInterval);clearInterval(heartbeat);document.removeEventListener('visibilitychange',onVisibility);watcher.disconnect();
+   if(!alive)return;alive=false;if(running){pauseTimer();}clearInterval(timerInterval);clearInterval(heartbeat);document.removeEventListener('visibilitychange',onVisibility);watcher.disconnect();
    if(pdfURL)URL.revokeObjectURL(pdfURL);if(audioURL)URL.revokeObjectURL(audioURL);
    if(sessionId){const id=sessionId;sessionId=null;saveSession(id,'stopping');request('/api/study-tracker','POST',{action:'stop',sessionId:id},{keepalive:true}).then(()=>clearSavedSession()).catch(()=>{});}
  };
