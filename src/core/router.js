@@ -2,6 +2,8 @@ import { AppStore } from './store.js';
 export const ROUTES = Object.freeze({
   '/': { title: 'Tổng quan', module: 'home' },
   '/exam': { title: 'Phòng thi', module: 'exam-room' },
+  '/exam-author': { title: 'Soạn đề', module: 'exam-author' },
+  '/exam-room': { title: 'Tạo phòng thi', module: 'exam-room-setup' },
   '/arena': { title: 'Chem Arena', module: 'chem-arena' },
   '/chemmaker': { title: 'ChemMaker', module: 'chemmaker' },
   '/handbook': { title: 'Sổ tay', module: 'handbook' },
@@ -38,6 +40,8 @@ export async function loadRouteView(route) {
   }
   if (route.module === 'chem-arena') { const mod = await import('../modules/chem-arena/index.js'); return mod.renderArena(); }
   if (route.module === 'exam-room') { const mod = await import('../modules/exam-room/index.js'); return mod.renderExam(); }
+  if (route.module === 'exam-author') { const mod = await import('../modules/exam-room/index.js'); return mod.renderExamAuthor(); }
+  if (route.module === 'exam-room-setup') { const mod = await import('../modules/exam-room/index.js'); return mod.renderExamRoomCreator(); }
   if (route.module === 'chemmaker') { const mod = await import('../modules/chemmaker/index.js'); return mod.renderChemMaker(); }
   if (route.module === 'focus-zone') { const mod = await import('../modules/focus-zone/index.js'); return mod.renderFocus(); }
   if (route.module === 'handbook') { const mod = await import('../modules/handbook/index.js'); return mod.renderHandbook(); }
