@@ -1,10 +1,12 @@
 import { element, button } from '../../core/dom.js';
 import { AppStore } from '../../core/store.js';
 import { auth } from '../../core/firebase.js';
+import { navigate } from '../../core/router.js';
 import katex from 'katex';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
 import { MAX_EXAM_QUESTIONS } from '../../../shared/exam-grading.js';
 const E = element;
+const AUTHOR_DRAFT_KEY = 'htvvm.exam-author-draft.v1';
 function escapeHTML(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
@@ -165,6 +167,44 @@ function removeLocalDraft(uid, id) { try { localStorage.removeItem(draftKey(uid,
 function answeredCount(value) {
   return Object.values(value || {}).filter(answer => answer !== null && answer !== undefined && answer !== '' && !(Array.isArray(answer) && answer.every(x => x === null || x === undefined))).length;
 }
+function readAuthorDraft() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUTHOR_DRAFT_KEY) || 'null');
+    const questions = Array.isArray(saved?.questions) ? saved.questions.slice(0, MAX_EXAM_QUESTIONS).map((question) => {
+      const part = ['I', 'II', 'III'].includes(question?.part) ? question.part : 'I';
+      return {
+        part,
+        prompt: String(question?.prompt || '').slice(0, 30000),
+        options: Array.isArray(question?.options) ? question.options.slice(0, 4).map(value => String(value ?? '').slice(0, 12000)) : ['', '', '', ''],
+        answer: part === 'II'
+          ? Array.from({ length: 4 }, (_, index) => typeof question?.answer?.[index] === 'boolean' ? question.answer[index] : null)
+          : String(question?.answer ?? '').slice(0, 200),
+        tolerance: Number.isFinite(Number(question?.tolerance)) ? Math.max(0, Math.min(1, Number(question.tolerance))) : 0.0001,
+        image: imageDataURL(question?.image),
+        latex: String(question?.latex || '').slice(0, 4000)
+      };
+    }) : [];
+    const duration = Number(saved?.durationMinutes);
+    return {
+      title: typeof saved?.title === 'string' ? saved.title.slice(0, 140) : '',
+      durationMinutes: Number.isInteger(duration) && duration >= 5 && duration <= 240 ? duration : 50,
+      questions
+    };
+  } catch {
+    return { title: '', durationMinutes: 50, questions: [] };
+  }
+}
+function writeAuthorDraft(draft) {
+  try {
+    localStorage.setItem(AUTHOR_DRAFT_KEY, JSON.stringify({
+      title: String(draft.title || '').slice(0, 140),
+      durationMinutes: Number(draft.durationMinutes) || 50,
+      questions: Array.isArray(draft.questions) ? draft.questions.slice(0, MAX_EXAM_QUESTIONS) : [],
+      updatedAt: Date.now()
+    }));
+    return true;
+  } catch { return false; }
+}
 export function renderExam() {
   clearTimer();
   const wrap = E('div', 'exam-root');
@@ -175,7 +215,7 @@ export function renderExam() {
   copy.append(
     E('div', 'exam-showcase-eyebrow', 'HTVVM STUDIO · PHÒNG THI'),
     E('h2', 'exam-showcase-title', 'Một phòng thi. Mọi kết quả tập trung.'),
-    E('p', 'exam-showcase-subtitle', 'Soạn đề bằng Markdown, thêm hình ảnh, tạo phòng thi từ tài liệu Drive và quản lý kết quả tại một nơi.'),
+    E('p', 'exam-showcase-subtitle', 'Luyện thi, vào phòng bằng mã, theo dõi kết quả. Soạn đề và tạo phòng thi đã được tách thành hai không gian riêng.'),
   );
   const trust = E('div', 'exam-showcase-trust');
   for (const [symbol, text] of [
@@ -203,6 +243,8 @@ export function renderExam() {
   const ctas = E('div', 'exam-showcase-actions');
   ctas.append(
     button('Mở kho đề thi →', 'primary-btn', openList),
+    button('Soạn đề', 'exam-showcase-secondary', () => navigate('/exam-author')),
+    button('Tạo phòng thi', 'exam-showcase-secondary', () => navigate('/exam-room')),
     button('Xem lịch sử & thống kê', 'exam-showcase-secondary', openHistory)
   );
   copy.append(ctas);
@@ -214,7 +256,6 @@ export function renderExam() {
     ['Lịch sử & thống kê', showHistory],
     ['Sổ tay câu sai', showMistakes]
   ];
-  actions.push(['Tạo đề thi', showCreator]);
   for (const [name, action] of actions) {
     bar.append(button(name, 'exam-tab', () => {
       clearTimer();
@@ -226,13 +267,33 @@ export function renderExam() {
   showList(body);
   return wrap;
 }
+function renderCreatorWorkspace(mode) {
+  clearTimer();
+  const wrap = E('div', 'exam-root');
+  const hero = E('section', 'hero exam-hero');
+  const authoring = mode === 'author';
+  hero.append(
+    E('div', 'eyebrow', authoring ? 'HTVVM STUDIO · BIÊN SOẠN' : 'HTVVM STUDIO · TỔ CHỨC THI'),
+    E('h1', 'hero-title', authoring ? 'Soạn đề độc lập.' : 'Tạo phòng thi độc lập.'),
+    E('p', 'hero-subtitle', authoring
+      ? 'Soạn câu hỏi, công thức, hình minh họa và bản in. Bản nháp được lưu trên thiết bị để có thể chuyển sang bước tạo phòng sau.'
+      : 'Tạo phòng từ bản đề đã soạn hoặc từ tài liệu Google Drive. Thiết lập đáp án và thời lượng trước khi phát mã phòng.')
+  );
+  const host = E('div', 'exam-author-host');
+  wrap.append(hero, host);
+  showCreator(host, mode, true);
+  return wrap;
+}
+export function renderExamAuthor() { return renderCreatorWorkspace('author'); }
+export function renderExamRoomCreator() { return renderCreatorWorkspace('room'); }
+
 async function showList(host) {
   host.replaceChildren(E('p', 'exam-message', 'Đang tải danh sách đề...'));
   if (!requireLogin(host)) return;
   try {
     const data = await api('list', {}, 'GET');
     const section = panel('Đề thi đang mở'), grid = E('div', 'exam-grid');
-    if (!data.exams.length) grid.append(E('p', 'exam-message', 'Chưa có đề thi. Hãy dùng mục “Tạo đề thi” để tạo đề đầu tiên.'));
+    if (!data.exams.length) grid.append(E('p', 'exam-message', 'Chưa có đề thi. Hãy mở mục “Soạn đề” hoặc “Tạo phòng thi” để bắt đầu.'));
     for (const x of data.exams) {
       const card = E('article', 'exam-card');
       card.append(E('strong', '', x.title), E('span', '', `Mã ${x.id} • ${x.durationMinutes} phút • ${x.counts.I + x.counts.II + x.counts.III} câu`), button('Vào phòng →', 'primary-btn', () => begin(host, x.id)));
@@ -512,12 +573,13 @@ async function showMistakes(host) {
   } catch (e) { showError(host, e); }
 }
 
-function showCreator(host) {
+function showCreator(host, initialMode = 'author', standalone = false) {
   if (!AppStore.get('user')) return showError(host, Error('Đăng nhập Google để tạo và lưu đề thi vào kho dùng chung.'));
 
-  const p = panel('Tạo đề thi');
-  const title = field('text', 'Tên đề, ví dụ: Ôn tập Hóa học 12');
-  const duration = field('number', 'Thời gian (phút)', '50');
+  const savedDraft = readAuthorDraft();
+  const p = panel(initialMode === 'author' ? 'Biên soạn đề' : 'Thiết lập phòng thi');
+  const title = field('text', 'Tên đề, ví dụ: Ôn tập Hóa học 12', savedDraft.title);
+  const duration = field('number', 'Thời gian (phút)', String(savedDraft.durationMinutes));
   duration.min = '5'; duration.max = '240'; duration.step = '1';
   const common = E('div', 'exam-creator-common');
   common.append(label('Tên đề thi'), title, label('Thời gian làm bài (5–240 phút)'), duration);
@@ -527,11 +589,24 @@ function showCreator(host) {
   tabs.append(authorTab, roomTab);
   const content = E('div', 'exam-creator-content');
   const message = E('p', 'exam-message');
-  p.append(common, tabs, content, message);
+  p.append(common);
+  if (!standalone) p.append(tabs);
+  p.append(content, message);
   host.replaceChildren(p);
 
-  let data = [];
-  let mode = 'author';
+  let data = savedDraft.questions;
+  let mode = initialMode;
+  let draftSaveTimeout = null;
+  const persistDraftSoon = () => {
+    if (mode !== 'author') return;
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = setTimeout(() => {
+      const ok = writeAuthorDraft({ title: title.value, durationMinutes: Number(duration.value), questions: data });
+      message.textContent = ok ? 'Bản nháp đã được lưu trên thiết bị này.' : 'Không thể lưu bản nháp. Hãy xuất PDF hoặc JSON để sao lưu.';
+    }, 220);
+  };
+  title.addEventListener('input', persistDraftSoon);
+  duration.addEventListener('input', persistDraftSoon);
   let roomKeys = [];
   let answerMode = 'single';
   let sourceEmbedUrl = '';
@@ -578,7 +653,7 @@ function showCreator(host) {
     const addButtons = E('div', 'exam-tabs');
     const addQuestion = part => {
       const base = { part, prompt: '', image: '', latex: '', ...(part === 'I' ? { options: ['', '', '', ''], answer: '' } : part === 'II' ? { options: ['', '', '', ''], answer: [null, null, null, null] } : { answer: '', tolerance: 0.0001 }) };
-      data.push(base); renderQuestionEditors();
+      data.push(base); persistDraftSoon(); renderQuestionEditors();
     };
     for (const [part, text] of [['I', '+ Trắc nghiệm A–D'], ['II', '+ Đúng / Sai'], ['III', '+ Trả lời ngắn']]) addButtons.append(button(text, 'exam-tab', () => addQuestion(part)));
 
@@ -594,7 +669,7 @@ function showCreator(host) {
         const card = E('article', 'exam-question exam-author-question');
         const heading = E('div', 'exam-question-top');
         heading.append(E('h4', '', `Câu ${idx + 1} · ${q.part === 'I' ? 'Trắc nghiệm' : q.part === 'II' ? 'Đúng / Sai' : 'Trả lời ngắn'}`));
-        heading.append(button('Xóa câu', 'exam-tab', () => { data.splice(idx, 1); renderQuestionEditors(); }));
+        heading.append(button('Xóa câu', 'exam-tab', () => { data.splice(idx, 1); persistDraftSoon(); renderQuestionEditors(); }));
         card.append(heading);
 
         const editing = E('div', 'exam-authoring-grid');
@@ -606,7 +681,7 @@ function showCreator(host) {
           const start = prompt.selectionStart ?? prompt.value.length, end = prompt.selectionEnd ?? start;
           const selected = prompt.value.slice(start, end) || 'nội dung';
           prompt.setRangeText(`${prefix}${selected}${suffix}`, start, end, 'select');
-          q.prompt = prompt.value; prompt.dispatchEvent(new Event('input', { bubbles: true }));
+          q.prompt = prompt.value; persistDraftSoon(); prompt.dispatchEvent(new Event('input', { bubbles: true }));
         };
         toolbar.append(
           button('Đậm', 'exam-mini-tool', () => wrapSelection('**')), button('Nghiêng', 'exam-mini-tool', () => wrapSelection('*')),
@@ -631,7 +706,7 @@ function showCreator(host) {
           const imgUrl = imageDataURL(q.image);
           if (imgUrl) { const img = document.createElement('img'); img.src = imgUrl; img.alt = `Ảnh minh họa câu ${idx + 1}`; img.className = 'exam-markdown-uploaded-image'; preview.append(img); }
         };
-        prompt.addEventListener('input', () => { q.prompt = prompt.value; updatePreview(); });
+        prompt.addEventListener('input', () => { q.prompt = prompt.value; persistDraftSoon(); updatePreview(); });
         editPane.append(label('Nội dung câu hỏi'), toolbar, prompt, imageInput, imageStatus);
         const previewPane = E('div', 'exam-authoring-preview'); previewPane.append(label('Xem trước'), preview);
         editing.append(editPane, previewPane); card.append(editing);
@@ -641,7 +716,7 @@ function showCreator(host) {
           for (let i = 0; i < 4; i++) {
             const optionField = field('textarea', q.part === 'I' ? `Lựa chọn ${'ABCD'[i]}` : `Nhận định ${'abcd'[i]}`, q.options[i] || '');
             optionField.rows = 2;
-            optionField.addEventListener('input', () => { q.options[i] = optionField.value; });
+            optionField.addEventListener('input', () => { q.options[i] = optionField.value; persistDraftSoon(); });
             optionsGrid.append(optionField);
           }
           card.append(label(q.part === 'I' ? 'Các lựa chọn' : 'Bốn nhận định'), optionsGrid);
@@ -650,19 +725,19 @@ function showCreator(host) {
           const answer = E('select', 'exam-input');
           const blank = E('option', '', 'Chọn đáp án đúng…'); blank.value = ''; answer.append(blank);
           for (const choice of 'ABCD') { const opt = E('option', '', choice); opt.value = choice; answer.append(opt); }
-          answer.value = q.answer || ''; answer.addEventListener('change', () => q.answer = answer.value); card.append(label('Đáp án đúng'), answer);
+          answer.value = q.answer || ''; answer.addEventListener('change', () => { q.answer = answer.value; persistDraftSoon(); }); card.append(label('Đáp án đúng'), answer);
         } else if (q.part === 'II') {
           const keyGrid = E('div', 'exam-author-options');
           for (let i = 0; i < 4; i++) {
             const sel = E('select', 'exam-input');
             for (const [value, text] of [['', `Ý ${'abcd'[i]} · Chọn`], ['true', 'Đúng'], ['false', 'Sai']]) { const opt = E('option', '', text); opt.value = value; sel.append(opt); }
             sel.value = q.answer[i] === true ? 'true' : q.answer[i] === false ? 'false' : '';
-            sel.addEventListener('change', () => q.answer[i] = sel.value === '' ? null : sel.value === 'true'); keyGrid.append(sel);
+            sel.addEventListener('change', () => { q.answer[i] = sel.value === '' ? null : sel.value === 'true'; persistDraftSoon(); }); keyGrid.append(sel);
           }
           card.append(label('Đáp án đúng / sai'), keyGrid);
         } else {
-          const answer = field('text', 'Đáp án số, ví dụ 12,5', q.answer ?? ''); answer.addEventListener('input', () => q.answer = answer.value);
-          const tolerance = field('number', 'Sai số cho phép', String(q.tolerance ?? 0.0001)); tolerance.step = 'any'; tolerance.min = '0'; tolerance.max = '1'; tolerance.addEventListener('input', () => q.tolerance = Number(tolerance.value));
+          const answer = field('text', 'Đáp án số, ví dụ 12,5', q.answer ?? ''); answer.addEventListener('input', () => { q.answer = answer.value; persistDraftSoon(); });
+          const tolerance = field('number', 'Sai số cho phép', String(q.tolerance ?? 0.0001)); tolerance.step = 'any'; tolerance.min = '0'; tolerance.max = '1'; tolerance.addEventListener('input', () => { q.tolerance = Number(tolerance.value); persistDraftSoon(); });
           const shortRow = E('div', 'exam-author-options'); shortRow.append(answer, tolerance); card.append(label('Đáp án và sai số cho phép'), shortRow);
         }
         updatePreview(); questions.append(card);
@@ -676,7 +751,7 @@ function showCreator(host) {
         const summary = E('summary', '', 'Nhập nâng cao từ JSON');
         const area = field('textarea', 'Dán mảng câu hỏi JSON…'); area.rows = 6;
         const importBtn = button('Nạp JSON', 'exam-tab', () => {
-          try { const imported = JSON.parse(area.value); if (!Array.isArray(imported)) throw Error('Dữ liệu phải là một mảng JSON.'); data = imported.map(q => ({ ...q, image: imageDataURL(q.image), latex: typeof q.latex === 'string' ? q.latex : '', options: Array.isArray(q.options) ? q.options : ['', '', '', ''] })); renderQuestionEditors(); message.textContent = 'Đã nạp câu hỏi. Hãy kiểm tra đáp án và bản xem trước.'; }
+          try { const imported = JSON.parse(area.value); if (!Array.isArray(imported)) throw Error('Dữ liệu phải là một mảng JSON.'); data = imported.map(q => ({ ...q, image: imageDataURL(q.image), latex: typeof q.latex === 'string' ? q.latex : '', options: Array.isArray(q.options) ? q.options : ['', '', '', ''] })); persistDraftSoon(); renderQuestionEditors(); message.textContent = 'Đã nạp câu hỏi. Hãy kiểm tra đáp án và bản xem trước.'; }
           catch (error) { message.textContent = error.message || String(error); }
         }); details.append(summary, area, importBtn); content.insertBefore(details, questions);
       }
@@ -692,11 +767,20 @@ function showCreator(host) {
           message.textContent = 'Bản in đã mở. Chọn “Lưu dưới dạng PDF” để tải đề.';
         } catch (error) { message.textContent = error.message || String(error); }
       }),
-      button('Lưu đề vào kho', 'primary-btn', async () => {
+      button('Lưu bản nháp', 'exam-tab', () => {
+        clearTimeout(draftSaveTimeout);
+        const ok = writeAuthorDraft({ title: title.value, durationMinutes: Number(duration.value), questions: data });
+        message.textContent = ok ? 'Đã lưu bản nháp trên thiết bị. Bạn có thể sang Tạo phòng thi bất cứ lúc nào.' : 'Không thể lưu bản nháp. Hãy xuất PDF/JSON để sao lưu.';
+      }),
+      button('Tạo phòng từ bản đề này →', 'primary-btn', () => {
+        clearTimeout(draftSaveTimeout);
+        writeAuthorDraft({ title: title.value, durationMinutes: Number(duration.value), questions: data });
+        navigate('/exam-room');
+      }),
+      button('Xuất bản đề vào kho', 'exam-tab', async () => {
         try { await publishExam(data, ''); }
         catch (error) { message.textContent = error.message || String(error); }
-      }),
-      button('Tiếp theo: Tạo phòng thi →', 'exam-tab', () => switchMode('room'))
+      })
     );
     content.append(intro, addButtons, questions, includeKeyRow, actions);
     renderQuestionEditors();
@@ -739,7 +823,7 @@ function showCreator(host) {
     const setup = E('section', 'exam-panel exam-answer-setup');
     setup.append(
       E('h4', '', 'Phiếu trả lời gồm ba phần'),
-      E('p', 'exam-message', 'Tùy chỉnh số câu ở từng phần. Hỗ trợ đề ĐGNL 120 câu và đề dài hơn; giới hạn kỹ thuật hiện tại là 1.000 câu cho toàn đề.')
+      E('p', 'exam-message', 'Tùy chỉnh số câu ở từng phần; có thể để 0 nếu đề không sử dụng phần đó. Hỗ trợ đề ĐGNL 120 câu và đề dài hơn; giới hạn kỹ thuật hiện tại là 1.000 câu cho toàn đề.')
     );
     const maxPerSection = MAX_EXAM_QUESTIONS;
     const existingCounts = Object.fromEntries(['I', 'II', 'III'].map(part => [part, data.filter(q => q.part === part).length]));
@@ -759,16 +843,16 @@ function showCreator(host) {
     for (const section of sectionDefs) {
       const panel = E('section', 'exam-answer-section');
       panel.append(E('h5', '', section.title), E('p', 'exam-message', section.description));
-      const count = field('number', `Số câu Phần ${section.part}`, String(hasExistingQuestions ? Math.max(1, existingCounts[section.part]) : 40));
-      count.min = '1'; count.max = String(maxPerSection); count.step = '1';
+      const count = field('number', `Số câu Phần ${section.part}`, String(hasExistingQuestions ? existingCounts[section.part] : 40));
+      count.min = '0'; count.max = String(maxPerSection); count.step = '1';
       const keyList = E('div', 'exam-room-key-list');
       panel.append(label('Số câu'), count, keyList);
       const oldState = { keys: [] };
       sectionState[section.part] = { ...section, panel, count, keyList, state: oldState };
       const renderKeys = () => {
         const amount = Number(count.value);
-        if (!Number.isInteger(amount) || amount < 1 || amount > maxPerSection) {
-          keyList.replaceChildren(E('p', 'exam-error', `Mỗi phần phải có từ 1 đến ${maxPerSection} câu.`));
+        if (!Number.isInteger(amount) || amount < 0 || amount > maxPerSection) {
+          keyList.replaceChildren(E('p', 'exam-error', `Mỗi phần phải có từ 0 đến ${maxPerSection} câu.`));
           refreshTotal(); return;
         }
         const previous = oldState.keys;
@@ -814,17 +898,17 @@ function showCreator(host) {
     }
     function refreshTotal() {
       const counts = selectedCounts();
-      const validEach = Object.values(counts).every(value => Number.isInteger(value) && value >= 1 && value <= maxPerSection);
+      const validEach = Object.values(counts).every(value => Number.isInteger(value) && value >= 0 && value <= maxPerSection);
       const sum = validEach ? Object.values(counts).reduce((a, b) => a + b, 0) : 0;
       totalLabel.textContent = `Tổng số câu: ${sum.toLocaleString('vi-VN')} / ${maxPerSection.toLocaleString('vi-VN')}`;
-      totalError.textContent = !validEach ? `Mỗi phần phải là số nguyên từ 1 đến ${maxPerSection}.` : sum > maxPerSection ? `Tổng số câu không được vượt quá ${maxPerSection}.` : sum < 1 ? 'Hãy chọn ít nhất một câu ở một trong ba phần.' : '';
+      totalError.textContent = !validEach ? `Mỗi phần phải là số nguyên từ 0 đến ${maxPerSection}.` : sum > maxPerSection ? `Tổng số câu không được vượt quá ${maxPerSection}.` : sum < 1 ? 'Hãy chọn ít nhất một câu ở một trong ba phần.' : '';
       createFromDrive.disabled = Boolean(totalError.textContent);
       createFromDraft.disabled = Boolean(totalError.textContent);
     }
     function collectDriveQuestions() {
       const counts = selectedCounts();
       const total = Object.values(counts).reduce((a, b) => a + b, 0);
-      if (Object.values(counts).some(value => !Number.isInteger(value) || value < 1 || value > maxPerSection)) throw Error(`Mỗi phần phải từ 1 đến ${maxPerSection} câu.`);
+      if (Object.values(counts).some(value => !Number.isInteger(value) || value < 0 || value > maxPerSection)) throw Error(`Mỗi phần phải từ 0 đến ${maxPerSection} câu.`);
       if (total < 1) throw Error('Hãy chọn ít nhất một câu.');
       if (total > maxPerSection) throw Error(`Tổng số câu tối đa là ${maxPerSection}.`);
       const questions = []; let ordinal = 1;
@@ -860,5 +944,5 @@ function showCreator(host) {
     content.append(intro, previewPanel, setup);
     refreshTotal();
   }
-  switchMode('author');
+  switchMode(initialMode);
 }
