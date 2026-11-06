@@ -1,4 +1,3 @@
-import 'katex/dist/katex.min.css';
 import './css/input.css';
 import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
@@ -10,7 +9,7 @@ import { element, button } from './core/dom.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/exam-author', '✎', 'Soạn đề'], ['/exam-room', '↗', 'Tạo phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/chemmaker', '◈', 'ChemMaker'], ['/handbook', '▦', 'Sổ tay đa môn'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'] ];
+const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/exam-author', '✎', 'Soạn đề'], ['/exam-room', '↗', 'Tạo phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/handbook', '▦', 'Sổ tay đa môn'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'] ];
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
@@ -39,7 +38,7 @@ function createShell() {
   const topbar = element('header', 'topbar');
   const left = element('div', 'top-left');
   left.append(makeButton('☰', 'mobile-menu', () => { sidebarOpen = !sidebarOpen; updateSidebar(); }), element('div', 'page-title', 'Tổng quan'));
-  left.lastChild.id = 'page-title';
+  left.lastChild.id = 'page-title'; left.lastChild.setAttribute('aria-live', 'polite');
   const right = element('div', 'top-right');
   const status = element('span', 'server-status', '◌ Đang đồng bộ giờ'); status.id = 'server-status';
   const select = element('select', 'theme-select'); select.id = 'theme-select'; select.setAttribute('aria-label', 'Chọn giao diện');
@@ -57,7 +56,7 @@ function createShell() {
   installApp.hidden = true; installApp.id = 'install-app-btn';
   const diagnosticsButton = makeButton('Chẩn đoán Firebase', 'firebase-diagnostics-btn', () => runFirebaseDiagnostics());
   right.append(status, diagnosticsButton, installApp, select, account); topbar.append(left, right);
-  const notice = element('div', 'notice'); notice.id = 'notice'; notice.hidden = true;
+  const notice = element('div', 'notice'); notice.id = 'notice'; notice.setAttribute('role', 'status'); notice.hidden = true;
   const main = element('main', 'main-content'); main.id = 'main-content';
   content.append(topbar, notice, main); shell.append(sidebar, content); root.append(shell);
   frame = { sidebar, links, select, account, main, notice, status, installApp };
