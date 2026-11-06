@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css';
 import { element, button } from '../../core/dom.js';
 import { AppStore } from '../../core/store.js';
 import { auth } from '../../core/firebase.js';
@@ -144,6 +145,16 @@ async function api(action, payload = {}, method = 'POST') {
   if (!response.ok) throw Error(data.error || `HTTP ${response.status}`);
   return data;
 }
+
+// Shared publishing bridge used by the standalone A4 authoring workspace.
+export async function publishExamFromAuthor(title, durationMinutes, questions) {
+  const cleanTitle = String(title || '').trim();
+  const minutes = Number(durationMinutes);
+  if (cleanTitle.length < 3 || cleanTitle.length > 140) throw Error('Tên đề phải từ 3 đến 140 ký tự.');
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 240) throw Error('Thời gian làm bài phải từ 5 đến 240 phút.');
+  if (!Array.isArray(questions) || !questions.length || questions.length > MAX_EXAM_QUESTIONS) throw Error(`Đề phải có từ 1 đến ${MAX_EXAM_QUESTIONS} câu.`);
+  return api('create', { title: cleanTitle, durationMinutes: minutes, questions });
+}
 function label(text) { return E('label', 'exam-label', text); }
 function field(type, placeholder, value = '') { const el = E(type === 'textarea' ? 'textarea' : 'input', 'exam-input'); if (type !== 'textarea') el.type = type; el.placeholder = placeholder; el.value = value; return el; }
 function panel(title) { const d = E('section', 'exam-panel'); d.append(E('h3', 'exam-heading', title)); return d; }
@@ -169,7 +180,11 @@ function answeredCount(value) {
 }
 function readAuthorDraft() {
   try {
-    const saved = JSON.parse(localStorage.getItem(AUTHOR_DRAFT_KEY) || 'null');
+    let saved = JSON.parse(localStorage.getItem(AUTHOR_DRAFT_KEY) || 'null');
+    if (saved?.draftId) {
+      const entries = JSON.parse(localStorage.getItem('htvvm.exam-author-drafts.v1') || '[]');
+      saved = Array.isArray(entries) ? entries.find(item => item?.id === saved.draftId) || null : null;
+    }
     const questions = Array.isArray(saved?.questions) ? saved.questions.slice(0, MAX_EXAM_QUESTIONS).map((question) => {
       const part = ['I', 'II', 'III'].includes(question?.part) ? question.part : 'I';
       return {
