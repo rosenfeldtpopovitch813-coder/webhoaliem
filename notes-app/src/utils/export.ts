@@ -56,6 +56,12 @@ async function waitImages(page:BoardPage){
   await Promise.all(srcs.map(src=>new Promise<void>(resolve=>{const img=new Image();img.onload=()=>resolve();img.onerror=()=>resolve();img.src=src;if(img.complete)resolve()})));
 }
 
+/** Render the current board page (or a selected-item subset) as a reusable PNG data URL. */
+export async function pageToDataURL(page:BoardPage,scale=1.5):Promise<string>{
+  await waitImages(page);
+  return canvasFor(page,Math.max(.5,Math.min(3,scale))).toDataURL('image/png');
+}
+
 export async function exportPages(pages:BoardPage[],format:'png'|'jpg'|'pdf'|'svg',title:string){
   const safe=title.replace(/[^\p{L}\p{N}-]+/gu,'-').replace(/^-|-$/g,'')||'bai-giang';
   if(format==='pdf'){
