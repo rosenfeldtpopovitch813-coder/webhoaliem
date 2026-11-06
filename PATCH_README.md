@@ -29,3 +29,18 @@
 5. Trên website: mở Góc tập trung, bấm `Tập trung · 25′` → `Bắt đầu`. Sau khoảng 1 giây, `Hôm nay` và `Tổng giờ` sẽ tăng; tạm dừng hoặc kết thúc để gửi lần lưu cuối lên server.
 
 Ghi chú: các số liệu tăng theo thời gian thực là tạm tính phía giao diện giữa các heartbeat. API/Firebase vẫn là nguồn số liệu đã lưu chính thức. Nếu kết nối đứt, UI dừng cộng giờ cho tới khi kết nối lại.
+
+---
+
+**Lưu ý phiên bản:** Đây là ghi chú kỹ thuật cho patch Pomodoro cũ, không phải hướng dẫn triển khai source hiện tại. Gói `HTVVM_Studio_ExamEditor_A4.zip` chứa toàn bộ source; giải nén toàn bộ vào thư mục gốc repository theo hướng dẫn trong `README.md`.
+
+
+## Patch update: Remove ChemMaker + unblocked study timer
+
+- `src/main.js`, `src/modules/home/index.js`, and `src/core/router.js`: remove ChemMaker from navigation/home and redirect legacy `/chemmaker` links to `/exam-author`.
+- `src/modules/chemmaker/`: deleted; Chemistry Handbook tools remain intact.
+- `src/modules/focus-zone/index.js`: countdown starts immediately without waiting for API; manual and Pomodoro study sessions have a local fallback.
+- `shared/local-study.js`: offline study ledger persisted in localStorage; `test/local-study.test.js` covers accumulation and normalization.
+- `public/sw.js`: bumped app shell cache version.
+
+Local-only offline study time is saved on the current browser/device and is not included in the cloud leaderboard until a future explicit sync flow is implemented.

@@ -1,15 +1,17 @@
-PATCH NÂNG CẤP HTVVM — DÀNH CHO REPOSITORY ĐANG Ở BẢN HTVVM-x-HoaLiem-One-Exam-Room
+HTVVM Studio follow-up source update
 
-MỤC ĐÍCH
-Đưa repository lên các cập nhật Firebase/Thư viện CSV trong bản Firebase Diagnostics Library Fix, sau đó thêm LaTeX/xuất PDF, Lớp học Mực trong Góc tập trung và timer tùy chỉnh. Đây là PATCH, không phải source đầy đủ.
+Included in this ZIP:
+- ChemMaker removed from navigation, homepage, router, and source module.
+- Old /chemmaker links now redirect to /exam-author (A4 Exam Authoring Studio).
+- Focus Zone Pomodoro countdown now starts independently of Firebase/API.
+- Offline manual/focus study time is persisted in localStorage on the current device when server tracking is unavailable.
+- Existing Chemistry Handbook and Chem Arena remain.
 
-CÁCH DÙNG
-1. Sao lưu repository hiện tại.
-2. Giải nén toàn bộ nội dung ZIP này vào THƯ MỤC GỐC repository, cho phép ghi đè. Không tạo thư mục lồng patch.
-3. Commit/push, giữ nguyên Environment Variables.
-4. Vercel: npm run build, output dist.
+Deploy:
+1. Extract this ZIP.
+2. Replace the contents of the existing GitHub repository with the extracted project files.
+3. Do not upload .env files or node_modules (none are included).
+4. Commit/push. Vercel should build with `npm run build` and output `dist`.
+5. Check Vercel Build Logs and test /focus after deployment.
 
-Bản này chứa các thay đổi runtime cần để nhận cập nhật Firebase diagnostics + CSV library + tính năng mới. Không chứa README, test và .env.example vì không cần để build production.
-
-KHÔNG CẦN UPLOAD node_modules/ hoặc dist/.
-LƯU Ý: chưa xác nhận production build từ môi trường tạo ZIP; kiểm tra Vercel Build Logs sau khi deploy.
+Offline local study hours stay on the same browser/device and are not automatically synced to the cloud leaderboard.

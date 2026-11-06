@@ -68,3 +68,22 @@ Nguyên nhân đã xác định trong mã nguồn trước đây: backend dùng 
 - The provided **Lớp học Mực 1.2.46** browser renderer is built as a second Vite page at `/focus-notes/` and embedded in Focus Zone. Boards and projects are stored in IndexedDB/localStorage in the same browser profile; they do not automatically sync to Firebase or across devices.
 - `npm run build` builds the HTVVM app first, then builds the Lớp học Mực renderer into `dist/focus-notes`. Vercel rewrites and the service worker explicitly bypass this path to preserve its own HTML entry point and assets.
 - Install dependencies using `npm install --no-audit --no-fund` before building. The source must be validated with `npm run build` on a networked build environment; the current editing sandbox timed out while installing dependencies, so production build success has not been confirmed here.
+
+## Update: A4 Exam Authoring Studio
+
+- Open `/exam-author` to create a Word-like A4 exam document. The authoring workspace is separate from `/exam-room`, which remains the room-creation and exam-delivery flow.
+- Start a new draft, reopen one of the locally saved drafts, edit the institution/school/subject/time fields, format text, insert sections/questions, and add formulas through the formula dialog.
+- A–D options can be entered inline and laid out in one, two, or four columns. Click an option letter to set the teacher answer key. True/False statements have per-statement keys; short-answer questions support teacher-only solutions.
+- The **Vẽ hình** panel opens the Lớp học Mực whiteboard beside the A4 page. Select one or more drawing objects and send the image to the exam, or drag the generated preview onto the document. Figures can be resized/aligned; **Sửa hình** reopens the source board.
+- **Tải về** provides editable Word exports for teacher/student versions and print-ready PDF views. Word math is represented using Office Math Markup Language (OMML), not a screenshot. PDF export uses the browser print dialog; choose Save as PDF.
+- From a Lớp học Mực board card, open the `⋯` menu and choose **Soạn đề thi khổ A4**. Once the linked draft has content, the board card displays **Đề thi** and the menu offers **Mở đề thi**.
+- Drafts and board links are stored locally in the same browser profile. They are not automatically synced across devices. Export Word/PDF as a backup, and use the whiteboard's library backup for drawing data.
+
+
+## Update: Consolidated exam authoring and resilient focus timer
+
+- Removed the standalone ChemMaker page because its exam-writing role duplicated the A4 Exam Authoring Studio. The Chemistry Handbook and Chem Arena remain available. Old `/chemmaker` links now route to `/exam-author`.
+- The Focus Zone countdown starts locally and does not wait for Firebase or `/api/study-tracker`. A server-side session is opened in the background when available.
+- When study-tracker APIs are unavailable, Pomodoro focus time and manually started study sessions are persisted in `localStorage` on the current browser/device. Offline local totals are shown separately in the combined progress view and are not automatically uploaded to the leaderboard.
+- Time accounting uses visible-page monotonic deltas; hidden-tab time is not recorded as study time. The countdown itself remains based on an absolute deadline and remains accurate when the browser delays UI ticks.
+- Bumped the PWA shell cache to `htvvm-studio-clean-ui-8` so deployed clients discard the previous app-shell cache.

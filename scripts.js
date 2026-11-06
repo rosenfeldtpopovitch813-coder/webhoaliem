@@ -20,10 +20,6 @@ window.__firebaseReadyPromise = null;
 let examConfig={abcd:0,tf:0,short:0,timeLimit:15,pdfUrl:''},correctAnswers={};
 let currentRoomId='',studentName='',answers={},timerInterval=null,timeRemaining=0,timeSpent=0;
 // DÁN VÀO ĐÂY NÈ NÍ:
-let jsmeApplet = null;
-function jsmeOnLoad() {
-    jsmeApplet = new JSApplet.JSME("jsme_container", "100%", "400px");
-}
 function setActiveNav(navId) {
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600', 'text-orange-600', 'text-purple-600', 'text-emerald-600', 'text-cyan-600');
@@ -34,7 +30,6 @@ function setActiveNav(navId) {
         btn.classList.remove('text-slate-600');
         btn.classList.add('bg-white', 'shadow-sm');
         if (navId === 'nav-teacher') btn.classList.add('text-orange-600');
-        else if (navId === 'nav-chemmaker') btn.classList.add('text-purple-600');
         else if (navId === 'nav-toolkit') btn.classList.add('text-emerald-600');
         else if (navId === 'nav-community') btn.classList.add('text-cyan-600');
         else btn.classList.add('text-blue-600'); 
@@ -598,16 +593,6 @@ function manualSubmit(){ submitExam(); }
 
 // Nộp bài & chấm điểm an toàn
 // Bảng Vinh Danh VIP TOP 10 an toàn tuyệt đối
-// --- SOẠN ĐỀ (CHEMMAKER) ---
-function openChemMaker() { switchSection('sec-chemmaker'); updateChemPreview(); }
-function insertImage(e) { const f = e.target.files[0]; if(!f) return; const reader = new FileReader(); reader.onload = function(ev) { const tag = `\n<img src="${ev.target.result}" style="height: 150px; display: block; margin: 15px auto;" />\n`; const el = document.getElementById('chem-editor'); el.value = el.value.substring(0, el.selectionStart) + tag + el.value.substring(el.selectionStart); updateChemPreview(); }; reader.readAsDataURL(f); e.target.value = ''; }
-function openDrawModal() { document.getElementById('draw-modal').classList.remove('opacity-0', 'pointer-events-none'); }
-function closeDrawModal() { document.getElementById('draw-modal').classList.add('opacity-0', 'pointer-events-none'); }
-function insertChemStruct() { if (!jsmeApplet || typeof jsmeApplet.smiles !== "function") return notifyUser("Trình vẽ phân tử JSME đang tải hoặc chưa sẵn sàng."); const s = jsmeApplet.smiles(); if(!s) return notifyUser("Chưa vẽ!"); const u = `https://cactus.nci.nih.gov/chemical/structure/${encodeURIComponent(s)}/image?width=500`; const tag = `\n<img src="${u}" style="height: 150px; display: block; margin: 15px auto;" />\n`; const el = document.getElementById('chem-editor'); el.value = el.value.substring(0, el.selectionStart) + tag + el.value.substring(el.selectionStart); updateChemPreview(); closeDrawModal(); jsmeApplet.reset(); }
-let chemTimeout = null;
-function updateChemPreview() { clearTimeout(chemTimeout); const rawText = document.getElementById('chem-editor').value.normalize('NFC'); document.getElementById('chem-pdf-content').replaceChildren(HL.sanitizeChem(rawText)); chemTimeout = setTimeout(() => { if (window.MathJax?.typesetPromise) MathJax.typesetPromise([document.getElementById('chem-pdf-content')]); }, 300); }
-function exportChemPDF(e) { if (typeof html2pdf === "undefined") { window.print(); return; } const el = document.getElementById('chem-pdf-content'), btn = e?.currentTarget || e?.target, old = btn ? btn.innerHTML : ""; if (btn) btn.innerHTML = "⏳ Đang tạo PDF..."; html2pdf().set({margin: [0.5, 0.5, 0.5, 0.5], filename: 'De-Thi-Hoa-HTVVM.pdf', image: {type: 'jpeg', quality: 0.98}, html2canvas: {scale: 2, useCORS: true}, jsPDF: {unit: 'in', format: 'A4', orientation: 'portrait'} }).from(el).save().then(() => btn.innerHTML = old); }
-
 // --- CÔNG CỤ (SỔ TAY) ---
 const ptData = [
     { z: 1, sym: 'H', name: 'Hydrogen', mass: '1.008', c: 1, r: 1, type: 'nonmetal', fact: 'Nguyên tố nhẹ nhất và phổ biến nhất vũ trụ (chiếm 75% khối lượng).' },
