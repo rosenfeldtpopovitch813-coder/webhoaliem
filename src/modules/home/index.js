@@ -6,7 +6,6 @@ import { AppStore } from '../../core/store.js';
 const modules = [
   ['✦', 'Khảo thí', 'Luyện thi, chấm điểm và sổ tay câu sai', '/exam'],
   ['⚡', 'Chem Arena', 'Đấu trường Hóa học cùng bạn học', '/arena'],
-  ['◈', 'ChemMaker', 'Soạn đề thi và công thức Hóa học', '/chemmaker'],
   ['▦', 'Sổ tay học tập', 'Tra cứu kiến thức và vẽ đồ thị', '/handbook'],
   ['◷', 'Góc tập trung', 'Pomodoro, tài liệu và nhạc học', '/focus'],
   ['⌁', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển', '/admissions']
