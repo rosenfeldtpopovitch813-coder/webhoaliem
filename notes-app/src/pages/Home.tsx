@@ -5,6 +5,15 @@ import './home.css';
 
 type Props={projects:ProjectSummary[];error:string;notice:string;onOpen:(id:string)=>void;onCreate:(title:string)=>void;onRename:(id:string,title:string)=>void;onDuplicate:(id:string)=>void;onDelete:(id:string)=>void;onExportBackup:()=>void;onImportBackup:(file:File)=>void};
 type Dialog={kind:'create'|'rename'|'delete';id?:string;title?:string}|null;
+type ExamLink={draftId:string;title:string;updatedAt:number;boardTitle?:string};
+const EXAM_LINKS_KEY='htvvm.exam-board-links.v1';
+function readExamLinks():Record<string,ExamLink>{try{const value=JSON.parse(localStorage.getItem(EXAM_LINKS_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,ExamLink>:{};}catch{return {};}}
+function openExamForBoard(project:ProjectSummary,link?:ExamLink){
+  const params=new URLSearchParams({boardId:project.id,boardTitle:project.title});
+  if(link?.draftId)params.set('draftId',link.draftId);else params.set('new','1');
+  const target=`/exam-author?${params.toString()}`;
+  try{const host=window.top&&window.top!==window?window.top:window;host.location.href=target;}catch{window.open(target,'_top','noopener');}
+}
 type LocalProfile={name:string;avatar:string};
 const PROFILE_KEY='lop-hoc-muc.profile.v1';
 const DEFAULT_PROFILE:LocalProfile={name:'Bạn',avatar:''};
@@ -38,6 +47,7 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
   const [query,setQuery]=useState('');const [menu,setMenu]=useState<string|null>(null);
   const [dialog,setDialog]=useState<Dialog>(null);const [name,setName]=useState('');
   const [profile,setProfile]=useState<LocalProfile>(()=>readProfile());
+  const examLinks=useMemo(()=>readExamLinks(),[projects]);
   const [profileOpen,setProfileOpen]=useState(false);const [profileName,setProfileName]=useState(profile.name);const [avatarDraft,setAvatarDraft]=useState(profile.avatar);const [profileError,setProfileError]=useState('');
   const visible=useMemo(()=>projects.filter(p=>p.title.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'))),[projects,query]);
   useEffect(()=>{
@@ -115,14 +125,14 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
         <section className="home-library-section">
           <div className="home-section-heading"><div><span className="home-section-kicker">NƠI Ý TƯỞNG ĐƯỢC LƯU LẠI</span><h2>{query?'Kết quả tìm kiếm':'Bài viết gần đây'}</h2><p>{query?`Đang tìm “${query}”`:'Các bảng viết được lưu trên thiết bị của bạn.'}</p></div><div className="home-count-pill"><FileText size={15}/><span>{visible.length} bài viết</span></div></div>
           <div className="home-library">
-            {visible.length?<div className="home-grid">{visible.map((project,index)=><article className="home-card" key={project.id}>
+            {visible.length?<div className="home-grid">{visible.map((project,index)=>{const examLink=examLinks[project.id];return <article className="home-card" key={project.id}>
               <button className="home-card-open" onClick={()=>onOpen(project.id)} aria-label={`Mở ${project.title}`}>
                 <div className="home-preview-wrap"><div className={'home-paper '+(project.background==='grid'?'grid':project.background==='dotted'?'dotted':project.background==='black'?'black':'lined')}><span className="paper-edge"/><span className="home-paper-index">{String(index+1).padStart(2,'0')}</span><span className="home-paper-mark"/></div><span className="home-open-arrow"><ArrowUpRight size={16}/></span></div>
-                <div className="home-card-info"><strong title={project.title}>{project.title}</strong><div className="home-card-meta"><span><BookOpen size={13}/>{project.pageCount} trang</span><time><Clock3 size={13}/>{date(project.updatedAt)}</time></div></div>
+                <div className="home-card-info"><div className="home-card-title-line"><strong title={project.title}>{project.title}</strong>{examLink&&<span className="home-card-exam-badge"><FileText size={10}/> Đề thi</span>}</div><div className="home-card-meta"><span><BookOpen size={13}/>{project.pageCount} trang</span><time><Clock3 size={13}/>{date(project.updatedAt)}</time></div></div>
               </button>
               <button className="home-card-more" aria-label={`Tùy chọn ${project.title}`} title="Tùy chọn" onClick={()=>setMenu(menu===project.id?null:project.id)}><MoreHorizontal size={19}/></button>
-              {menu===project.id&&<div className="home-card-menu" role="menu"><div className="home-menu-heading">TÙY CHỌN BẢNG</div><button role="menuitem" onClick={()=>{setName(project.title);setDialog({kind:'rename',id:project.id,title:project.title});setMenu(null)}}><PenLine size={15}/> Đổi tên</button><button role="menuitem" onClick={()=>{onDuplicate(project.id);setMenu(null)}}><Copy size={15}/> Nhân đôi</button><button role="menuitem" className="danger" onClick={()=>{setDialog({kind:'delete',id:project.id,title:project.title});setMenu(null)}}><Trash2 size={15}/> Xóa bảng</button></div>}
-            </article>)}</div>:<div className="home-empty"><div className="home-empty-icon"><PenLine size={26}/></div><strong>{query?'Chưa tìm thấy bảng phù hợp':'Sảnh đang còn trống'}</strong><p>{query?'Thử một từ khóa khác.':'Tạo bảng đầu tiên để bắt đầu lưu ghi chú, bài giảng và ý tưởng.'}</p>{query?<button onClick={()=>setQuery('')}>Xóa tìm kiếm</button>:<button onClick={createDialog}><Plus size={16}/> Tạo bảng đầu tiên</button>}</div>}
+              {menu===project.id&&<div className="home-card-menu" role="menu"><div className="home-menu-heading">TÙY CHỌN BẢNG</div><button role="menuitem" onClick={()=>openExamForBoard(project,examLink)}>{examLink?<FileText size={15}/>:<PenLine size={15}/>} {examLink?'Mở đề thi':'Soạn đề thi khổ A4'}</button><button role="menuitem" onClick={()=>{setName(project.title);setDialog({kind:'rename',id:project.id,title:project.title});setMenu(null)}}><PenLine size={15}/> Đổi tên</button><button role="menuitem" onClick={()=>{onDuplicate(project.id);setMenu(null)}}><Copy size={15}/> Nhân đôi</button><button role="menuitem" className="danger" onClick={()=>{setDialog({kind:'delete',id:project.id,title:project.title});setMenu(null)}}><Trash2 size={15}/> Xóa bảng</button></div>}
+            </article>})}</div>:<div className="home-empty"><div className="home-empty-icon"><PenLine size={26}/></div><strong>{query?'Chưa tìm thấy bảng phù hợp':'Sảnh đang còn trống'}</strong><p>{query?'Thử một từ khóa khác.':'Tạo bảng đầu tiên để bắt đầu lưu ghi chú, bài giảng và ý tưởng.'}</p>{query?<button onClick={()=>setQuery('')}>Xóa tìm kiếm</button>:<button onClick={createDialog}><Plus size={16}/> Tạo bảng đầu tiên</button>}</div>}
           </div>
         </section>
         <footer className="home-footer"><span className="home-footer-mark">M</span><span>Lớp học Mực</span><i/> <span>Không gian viết của bạn, theo cách của bạn.</span></footer>
