@@ -3,6 +3,7 @@ import { auth } from '../../core/firebase.js';
 import { HEARTBEAT_MS, titleFor } from '../../../shared/study-core.js';
 import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, remainingToDeadline, validFocusDuration } from '../../../shared/focus-timer.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
+import { addLocalStudySeconds, localStudyDayKey, localStudyTotals, normalizeLocalStudyStats, LOCAL_STUDY_STORAGE_KEY } from '../../../shared/local-study.js';
 const fmt=s=>`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 function field(type, placeholder, value = '') { const el = element(type === 'textarea' ? 'textarea' : 'input', 'exam-input'); if (type !== 'textarea') el.type = type; el.placeholder = placeholder; el.value = value; return el; }
 let cleanup=()=>{};
@@ -50,8 +51,9 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
      return;
    }
    if(seconds<=0)seconds=duration;
-   if(selectedMode==='focus'&&!sessionId){const ok=await startSession('pomodoro');if(!ok)return;}
+   // The countdown is a local UI feature and must never wait for Firebase/API availability.
    startTimer();lastTimerPersist=Date.now();
+   if(selectedMode==='focus'&&!sessionId&&!localManualTracking&&!sessionStarting)void startSession('pomodoro');
    if(selectedMode==='break'&&!sessionId)status.textContent='Đồng hồ nghỉ đang chạy; thời gian nghỉ không cộng vào giờ học.';
  });
  const reset=button('Đặt lại','focus-btn',async()=>{
@@ -74,7 +76,7 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
    saveTimerState();updateControls();
  });
  durationEditor.append(durationFields,applyDuration,customStatus);
- timerBox.append(modes,durationEditor,digits,controls,element('p','focus-muted','Đồng hồ đếm ngược theo mốc thời gian thực, kể cả khi tab chạy nền. Phần ghi nhận giờ học sẽ tạm dừng khi tab bị ẩn hoặc rời Góc tập trung.'));
+ timerBox.append(modes,durationEditor,digits,controls,element('p','focus-muted','Đồng hồ chạy độc lập với kết nối máy chủ. Khi không đồng bộ được, thời gian học vẫn được lưu trên thiết bị này. Tab nền không được cộng vào thời gian học.'));
  left.append(timerBox);
  const statsBox=element('section','focus-card');statsBox.append(element('h3','','Tiến độ học tập'));
  const stateLine=element('p','focus-muted','Bắt đầu đồng hồ tập trung để tự ghi nhận thời gian học.');
@@ -117,7 +119,19 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  const notesFrame=document.createElement('iframe');notesFrame.className='focus-notes-frame';notesFrame.title='Ứng dụng bảng viết Lớp học Mực';notesFrame.hidden=true;notesFrame.loading='lazy';notesFrame.referrerPolicy='strict-origin-when-cross-origin';notesFrame.allow='clipboard-read; clipboard-write; fullscreen';notesFrame.allowFullscreen=true;
  const notesStatus=element('p','focus-muted','Bảng ghi chú chưa mở. Bấm “Mở bảng ghi chú” để tải ứng dụng.');notesFrame.addEventListener('load',()=>{notesStatus.textContent='Đã mở Lớp học Mực. Bảng viết lưu trên thiết bị/trình duyệt hiện tại; chưa tự đồng bộ sang thiết bị khác.';});notesFrame.addEventListener('error',()=>{notesStatus.textContent='Không tải được ứng dụng ghi chú. Hãy kiểm tra đường dẫn /focus-notes/ sau khi deploy.';});notesBox.append(notesActions,notesStatus,notesFrame);right.append(notesBox);
  let sessionId=null,sessionOrigin=null,pingBusy=false,alive=true,trackingConnected=false,sessionStopping=false,sessionStarting=false;
- let statsSnapshot=null,pendingMs=0,lastStatsRenderPerf=performance.now(),lastTimerPersist=0;
+ let localManualTracking=false, localStudyRemainderMs=0;
+ let statsSnapshot={totalSeconds:0,todaySeconds:0,streak:0,sharing:false},pendingMs=0,lastStatsRenderPerf=performance.now(),lastTimerPersist=0;
+ let localStudyState=(()=>{try{return normalizeLocalStudyStats(JSON.parse(localStorage.getItem(LOCAL_STUDY_STORAGE_KEY)||'null'));}catch{return normalizeLocalStudyStats(null);}})();
+ function persistLocalStudy(){try{localStorage.setItem(LOCAL_STUDY_STORAGE_KEY,JSON.stringify(localStudyState));}catch(error){console.warn('Không thể lưu giờ học trên thiết bị:',error);}}
+ function addOfflineStudyTime(milliseconds){
+   localStudyRemainderMs+=Math.max(0,Number(milliseconds)||0);
+   const wholeSeconds=Math.floor(localStudyRemainderMs/1000);
+   if(wholeSeconds<=0)return;
+   localStudyRemainderMs-=wholeSeconds*1000;
+   localStudyState=addLocalStudySeconds(localStudyState,wholeSeconds,localStudyDayKey());
+   persistLocalStudy();
+   drawStats();
+ }
  const SESSION_STORAGE_KEY='htvvm-study-session-v1';
  async function request(path,method='GET',body,options={}){
    const user=auth?.currentUser;if(!user)throw Error('Hãy đăng nhập Google trước để đồng bộ giờ học.');
@@ -132,15 +146,17 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  function clearSavedSession(){try{sessionStorage.removeItem(SESSION_STORAGE_KEY);}catch{}}
  function getSavedSession(){try{const v=JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY)||'null');return v&&typeof v.id==='string'&&['manual','pomodoro','stopping'].includes(v.origin)?v:null;}catch{return null;}}
  function drawStats(){
-   if(!statsSnapshot)return;
    const liveSeconds=sessionId&&trackingConnected&&!document.hidden?Math.floor(pendingMs/1000):0;
-   const totalSeconds=(statsSnapshot.totalSeconds||0)+liveSeconds;
-   const todaySeconds=(statsSnapshot.todaySeconds||0)+liveSeconds;
+   const offline=localStudyTotals(localStudyState,localStudyDayKey());
+   const totalSeconds=(statsSnapshot.totalSeconds||0)+offline.totalSeconds+liveSeconds;
+   const todaySeconds=(statsSnapshot.todaySeconds||0)+offline.todaySeconds+liveSeconds;
    stats.replaceChildren();
    for(const [label,val] of [['Hôm nay',fmt(todaySeconds)],['Tổng giờ',fmt(totalSeconds)],['Streak',`${statsSnapshot.streak||0} ngày`],['Danh hiệu',titleFor(totalSeconds)]]){const item=element('div','focus-stat');item.append(element('small','',label),element('strong','',val));stats.append(item);}
    shareInput.checked=!!statsSnapshot.sharing;
    if(todaySeconds>=18000)stateLine.textContent='Bạn đã học 5 giờ hôm nay. Hãy nghỉ ngơi và vận động một chút nhé!';
    else if(sessionId&&trackingConnected)stateLine.textContent='Đang ghi nhận theo thời gian thực. Chuyển tab hoặc rời trang sẽ tạm dừng ghi nhận.';
+   else if(localManualTracking || (running&&selectedMode==='focus'&&!sessionId))stateLine.textContent='Đang lưu giờ học trên thiết bị này vì máy chủ chưa kết nối.';
+   else if(offline.totalSeconds>0)stateLine.textContent='Giờ học ngoại tuyến đã được lưu trên thiết bị này; dữ liệu này chưa đồng bộ vào bảng xếp hạng.';
    else stateLine.textContent='Bắt đầu đồng hồ tập trung hoặc phiên ghi nhận thủ công để tính giờ học.';
  }
  function showStats(s,reconcile=true){
@@ -149,23 +165,32 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
    else statsSnapshot={...statsSnapshot,sharing:!!s.sharing};
    drawStats();
  }
- function updateSessionButtons(){begin.disabled=!!sessionId||sessionStopping||sessionStarting;end.disabled=!sessionId;}
+ function updateSessionButtons(){begin.disabled=!!sessionId||localManualTracking||sessionStopping||sessionStarting;end.disabled=!sessionId&&!localManualTracking;}
  async function startSession(source='manual'){
    if(sessionStopping){status.textContent='Đang lưu phiên học trước đó; hãy thử lại sau giây lát.';return false;}
    if(sessionStarting){status.textContent='Đang mở phiên học…';return false;}
    if(sessionId){status.textContent='Một phiên học đang được ghi nhận.';return true;}
    sessionStarting=true;updateSessionButtons();
+   const attemptStartedAt=performance.now();
    try{
      const pendingStop=getSavedSession();
      if(pendingStop?.origin==='stopping'){
        try{const previous=await request('/api/study-tracker','POST',{action:'stop',sessionId:pendingStop.id},{keepalive:true});showStats(previous.stats,true);clearSavedSession();}
-       catch(e){if(e.status===409)clearSavedSession();else{status.textContent=`Chưa lưu xong phiên trước: ${e.message}. Kiểm tra kết nối rồi thử lại.`;return false;}}
+       catch(e){if(e.status===409)clearSavedSession();else{if(source==='manual')localManualTracking=true;status.textContent=`Chưa lưu xong phiên trước: ${e.message}. Đang giữ chế độ ghi giờ trên thiết bị.`;drawStats();return false;}}
      }
      const data=await request('/api/study-tracker','POST',{action:'start'});
      if(!alive){request('/api/study-tracker','POST',{action:'stop',sessionId:data.sessionId},{keepalive:true}).catch(()=>{});return false;}
-     sessionId=data.sessionId;sessionOrigin=source;trackingConnected=true;pendingMs=0;saveSession(sessionId,sessionOrigin);updateSessionButtons();
-     showStats(data.stats,true);status.textContent=source==='pomodoro'?'● Đồng hồ đang tự ghi nhận giờ học.':'● Đang ghi nhận giờ học thủ công.';return true;
-   }catch(e){status.textContent=`Chưa ghi nhận được giờ học: ${e.message}`;return false;}
+     sessionId=data.sessionId;sessionOrigin=source;trackingConnected=true;localManualTracking=false;pendingMs=0;saveSession(sessionId,sessionOrigin);updateSessionButtons();
+     showStats(data.stats,true);
+     if(source==='pomodoro'&&(!running||selectedMode!=='focus')){await stopSession('Đồng hồ đã dừng trong lúc kết nối; phiên vừa mở đã được đóng an toàn.');return true;}
+     status.textContent=source==='pomodoro'?'● Đồng hồ đang tự ghi nhận giờ học.':'● Đang ghi nhận giờ học thủ công.';return true;
+   }catch(e){
+     if(source==='manual')localManualTracking=true;
+     if(source==='pomodoro'&&running&&selectedMode==='focus')addOfflineStudyTime(performance.now()-attemptStartedAt);
+     const fallbackMessage=source==='pomodoro'?(running?'Đồng hồ vẫn chạy và giờ học sẽ được lưu trên thiết bị.':'Đồng hồ vẫn dùng được; phiên học chưa đồng bộ với máy chủ.'):'Phiên học đang được ghi nhận ngoại tuyến trên thiết bị này.';
+     status.textContent=`Không kết nối được bộ đồng bộ giờ học (${e.message}). ${fallbackMessage}`;
+     drawStats();return false;
+   }
    finally{sessionStarting=false;updateSessionButtons();}
  }
  async function resumeSavedSession(saved){
@@ -187,7 +212,7 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  }
  async function loadStatus(){
    try{const data=await request('/api/study-tracker');if(!alive)return;showStats(data.stats,true);const saved=getSavedSession();if(saved)await resumeSavedSession(saved);else status.textContent='Sẵn sàng ghi nhận giờ học.';}
-   catch(e){if(alive)status.textContent=`Không tải được tiến độ học tập: ${e.message}`;}
+   catch(e){if(alive){status.textContent=`Chưa tải được dữ liệu đám mây (${e.message}). Đồng hồ và giờ học ngoại tuyến trên thiết bị vẫn hoạt động.`;drawStats();}}
  }
  async function resumeCurrentSession(id){
    try{const data=await request('/api/study-tracker','POST',{action:'resume',sessionId:id});if(!alive)return false;trackingConnected=true;showStats(data.stats,true);saveSession(id,sessionOrigin||'manual');status.textContent='● Đã kết nối lại việc ghi nhận giờ học.';return true;}
@@ -201,7 +226,12 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
    finally{pingBusy=false;}
  }
  async function stopSession(message='Đã lưu phiên học.'){
-   const id=sessionId;if(!id||sessionStopping)return !sessionStopping;
+   const id=sessionId;
+   if(!id){
+     if(localManualTracking){localManualTracking=false;status.textContent=message;updateSessionButtons();drawStats();}
+     return !sessionStopping;
+   }
+   if(sessionStopping)return false;
    sessionStopping=true;sessionId=null;trackingConnected=false;pendingMs=0;saveSession(id,'stopping');updateSessionButtons();drawStats();
    try{
      const data=await request('/api/study-tracker','POST',{action:'stop',sessionId:id},{keepalive:true});
@@ -222,23 +252,26 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
  let lastUiTick=performance.now();
  const timerInterval=setInterval(()=>{
    const perfNow=performance.now(),wallNow=Date.now();
-   // Study-time deltas are intentionally bounded; the countdown itself is deadline-based.
-   const delta=Math.max(0,Math.min(1000,perfNow-lastUiTick));lastUiTick=perfNow;
-   if(sessionId&&trackingConnected&&!document.hidden)pendingMs+=delta;
+   // Measure only visible time. Unlike setInterval tick counts, this remains correct after a delayed UI frame.
+   const rawDelta=Math.max(0,perfNow-lastUiTick);lastUiTick=perfNow;
+   const visibleDelta=document.hidden?0:Math.min(30000,rawDelta);
+   if(sessionId&&trackingConnected&&visibleDelta>0)pendingMs+=visibleDelta;
+   else if(visibleDelta>0&&(localManualTracking||(running&&selectedMode==='focus'&&!sessionId)))addOfflineStudyTime(visibleDelta);
    if(running){
      renderTimer(wallNow);
      if(wallNow-lastTimerPersist>=1000){saveTimerState();lastTimerPersist=wallNow;}
      if(seconds===0){running=false;deadlineAt=0;saveTimerState();updateControls();if(sessionOrigin==='pomodoro')stopSession('Hết giờ tập trung. Phiên học đã được lưu.');else status.textContent='Đã hết giờ.';}
    }
    if(perfNow-lastStatsRenderPerf>=1000){drawStats();lastStatsRenderPerf=perfNow;}
- },250);
+ },1000);
  const heartbeat=setInterval(ping,HEARTBEAT_MS);
  const onVisibility=()=>{
+   lastUiTick=performance.now();
    if(document.hidden){
      // The countdown keeps its absolute deadline when the browser throttles background timers.
      // Study tracking stops separately, so hidden-tab time is never added to the leaderboard.
      renderTimer();saveTimerState();
-     if(sessionId)stopSession('Đã tạm dừng ghi nhận vì trang không còn hiển thị. Đồng hồ vẫn đếm ngược; bấm Bắt đầu để ghi nhận phiên mới.');
+     if(sessionId)stopSession('Đã tạm dừng đồng bộ vì trang không còn hiển thị. Đồng hồ vẫn đếm ngược; giờ học chỉ cộng khi trang hiển thị lại.');
    }else{
      renderTimer();
      if(running&&seconds===0){running=false;deadlineAt=0;saveTimerState();updateControls();if(sessionOrigin==='pomodoro')stopSession('Hết giờ tập trung. Phiên học đã được lưu.');else status.textContent='Đã hết giờ.';}
@@ -246,6 +279,7 @@ export function renderFocus(){cleanup();const root=element('div','focus-page');c
    }
  };
  document.addEventListener('visibilitychange',onVisibility);
+ drawStats();
  const watcher=new MutationObserver(()=>{if(!root.isConnected)cleanup();});watcher.observe(document.getElementById('main-content')||document.body,{childList:true});
  cleanup=()=>{
    if(!alive)return;alive=false;if(running){pauseTimer();}clearInterval(timerInterval);clearInterval(heartbeat);document.removeEventListener('visibilitychange',onVisibility);watcher.disconnect();
