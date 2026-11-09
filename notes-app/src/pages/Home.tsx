@@ -3,17 +3,8 @@ import {BookOpen,MoreHorizontal,Plus,Search,Copy,PenLine,Trash2,X,Download,Uploa
 import {ProjectSummary} from '../services/projectStore';
 import './home.css';
 
-type Props={projects:ProjectSummary[];error:string;notice:string;onOpen:(id:string)=>void;onCreate:(title:string)=>void;onRename:(id:string,title:string)=>void;onDuplicate:(id:string)=>void;onDelete:(id:string)=>void;onExportBackup:()=>void;onImportBackup:(file:File)=>void};
+type Props={projects:ProjectSummary[];error:string;notice:string;onOpen:(id:string)=>void;onOpenExam:(id:string)=>void;onCreate:(title:string)=>void;onCreateExam:(title:string)=>void;onRename:(id:string,title:string)=>void;onDuplicate:(id:string)=>void;onDelete:(id:string)=>void;onExportBackup:()=>void;onImportBackup:(file:File)=>void};
 type Dialog={kind:'create'|'rename'|'delete';id?:string;title?:string}|null;
-type ExamLink={draftId:string;title:string;updatedAt:number;boardTitle?:string};
-const EXAM_LINKS_KEY='htvvm.exam-board-links.v1';
-function readExamLinks():Record<string,ExamLink>{try{const value=JSON.parse(localStorage.getItem(EXAM_LINKS_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,ExamLink>:{};}catch{return {};}}
-function openExamForBoard(project:ProjectSummary,link?:ExamLink){
-  const params=new URLSearchParams({boardId:project.id,boardTitle:project.title});
-  if(link?.draftId)params.set('draftId',link.draftId);else params.set('new','1');
-  const target=`/exam-author?${params.toString()}`;
-  try{const host=window.top&&window.top!==window?window.top:window;host.location.href=target;}catch{window.open(target,'_top','noopener');}
-}
 type LocalProfile={name:string;avatar:string};
 const PROFILE_KEY='lop-hoc-muc.profile.v1';
 const DEFAULT_PROFILE:LocalProfile={name:'Bạn',avatar:''};
@@ -42,14 +33,19 @@ async function resizeAvatar(file:File):Promise<string>{
 function greeting(){const hour=new Date().getHours();return hour<11?'buổi sáng':hour<14?'buổi trưa':hour<18?'buổi chiều':'buổi tối'}
 function initials(name:string){return name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(part=>part.charAt(0)).join('').toLocaleUpperCase('vi')||'M'}
 
-export default function Home({projects,error,notice,onOpen,onCreate,onRename,onDuplicate,onDelete,onExportBackup,onImportBackup}:Props){
+export default function Home({projects,error,notice,onOpen,onOpenExam,onCreate,onCreateExam,onRename,onDuplicate,onDelete,onExportBackup,onImportBackup}:Props){
   const backupInput=useRef<HTMLInputElement>(null);const avatarInput=useRef<HTMLInputElement>(null);
   const [query,setQuery]=useState('');const [menu,setMenu]=useState<string|null>(null);
   const [dialog,setDialog]=useState<Dialog>(null);const [name,setName]=useState('');
+  const [examTitle,setExamTitle]=useState('');
+  const [filterExamOnly,setFilterExamOnly]=useState(false);
   const [profile,setProfile]=useState<LocalProfile>(()=>readProfile());
-  const examLinks=useMemo(()=>readExamLinks(),[projects]);
   const [profileOpen,setProfileOpen]=useState(false);const [profileName,setProfileName]=useState(profile.name);const [avatarDraft,setAvatarDraft]=useState(profile.avatar);const [profileError,setProfileError]=useState('');
-  const visible=useMemo(()=>projects.filter(p=>p.title.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'))),[projects,query]);
+  const visible=useMemo(()=>projects.filter(p=>{
+    if(filterExamOnly&&!p.hasExamPaper)return false;
+    return p.title.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'));
+  }),[projects,query,filterExamOnly]);
+  const examCount=useMemo(()=>projects.filter(p=>p.hasExamPaper).length,[projects]);
   useEffect(()=>{
     if(!menu)return;
     const onPointerDown=(event:PointerEvent)=>{const target=event.target as HTMLElement|null;if(!target?.closest('.home-card-menu')&&!target?.closest('.home-card-more'))setMenu(null)};
@@ -64,6 +60,11 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
     if(dialog.kind==='delete'&&dialog.id)onDelete(dialog.id);
     setDialog(null);setMenu(null);
   };
+  const handleCreateExamSubmit=(event:React.FormEvent)=>{
+    event.preventDefault();
+    onCreateExam(examTitle.trim()||'Đề kiểm tra định kỳ');
+    setExamTitle('');
+  };
   const openProfile=()=>{setProfileName(profile.name);setAvatarDraft(profile.avatar);setProfileError('');setProfileOpen(true)};
   const saveProfile=(event:React.FormEvent)=>{event.preventDefault();const next={name:profileName.trim()||'Bạn',avatar:avatarDraft};
     try{localStorage.setItem(PROFILE_KEY,JSON.stringify(next));setProfile(next);setProfileOpen(false);setProfileError('')}
@@ -75,12 +76,14 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
   const handleImport=(event:React.ChangeEvent<HTMLInputElement>)=>{const file=event.currentTarget.files?.[0];if(file)onImportBackup(file);event.currentTarget.value=''};
   return <div className="home-shell">
     <aside className="home-side">
-      <div className="home-brand"><span className="home-mark" aria-hidden="true"><span>M</span><i/></span><div><strong>Lớp học <em>Mực</em></strong><small>Không gian viết của bạn</small></div></div>
+      <div className="home-brand"><span className="home-mark" aria-hidden="true"><span>M</span><i/></span><div><strong>Lớp học <em>Mực</em></strong><small>Bảng viết & Soạn đề A4</small></div></div>
       <div className="home-side-label">KHÔNG GIAN</div>
-      <button className="home-inbox" onClick={()=>setQuery('')}><span className="home-nav-icon"><PanelsTopLeft size={17}/></span><span>Sảnh của tôi</span><b>{projects.length}</b></button>
+      <button className={'home-inbox '+(!filterExamOnly?'':'is-muted')} onClick={()=>{setFilterExamOnly(false);setQuery('')}}><span className="home-nav-icon"><PanelsTopLeft size={17}/></span><span>Tất cả bảng</span><b>{projects.length}</b></button>
+      <button className={'home-side-link '+(filterExamOnly?'is-active':'')} onClick={()=>setFilterExamOnly(v=>!v)}><span>📝 Đề thi khổ A4</span><b>{examCount}</b></button>
       <button className="home-side-create" onClick={createDialog}><Plus size={17}/><span>Tạo bảng mới</span></button>
+      <button className="home-side-exam-btn" onClick={()=>onCreateExam(examTitle.trim()||'Đề kiểm tra định kỳ')}><span>📝 Soạn đề thi A4</span></button>
       <div className="home-side-label home-library-label">THƯ VIỆN</div>
-      <button className="home-side-link" onClick={()=>setQuery('')}><BookOpen size={16}/><span>Tất cả bài viết</span></button>
+      <button className="home-side-link" onClick={()=>{setFilterExamOnly(false);setQuery('')}}><BookOpen size={16}/><span>Tất cả bài viết</span></button>
       <div className="home-side-spacer"/>
       <div className="home-side-tools">
         <button className="home-backup" onClick={onExportBackup}><Download size={16}/> Sao lưu thư viện</button>
@@ -96,26 +99,40 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
 
     <main className="home-main">
       <header className="home-header">
-        <div className="home-heading"><span className="home-overline"><span/> KHÔNG GIAN CÁ NHÂN</span><h1>Sảnh của bạn</h1></div>
+        <div className="home-heading"><span className="home-overline"><span/> QUẢN TRỊ BẢNG & ĐỀ THI A4</span><h1>Sảnh của bạn</h1></div>
         <div className="home-header-actions">
-          <label className="home-search"><Search size={17}/><input aria-label="Tìm bài viết" placeholder="Tìm trong thư viện…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button type="button" title="Xóa tìm kiếm" onClick={()=>setQuery('')}><X size={15}/></button>}</label>
+          <label className="home-search"><Search size={17}/><input aria-label="Tìm bài viết" placeholder="Tìm bảng hoặc đề thi…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button type="button" title="Xóa tìm kiếm" onClick={()=>setQuery('')}><X size={15}/></button>}</label>
           <button className="home-profile-chip" onClick={openProfile} title="Chỉnh sửa hồ sơ"><span className="home-avatar">{profile.avatar?<img src={profile.avatar} alt="Ảnh đại diện"/>:<span>{initials(profile.name)}</span>}</span><span className="home-profile-name">{profile.name}</span><PenLine className="home-profile-edit" size={14}/></button>
         </div>
       </header>
 
       <div className="home-content">
         <section className="home-welcome">
-          <div className="home-welcome-copy"><div className="home-kicker"><Sparkles size={14}/> GÓC LÀM VIỆC CỦA RIÊNG BẠN</div>
+          <div className="home-welcome-copy"><div className="home-kicker"><Sparkles size={14}/> BẢNG VIẾT & TRÌNH SOẠN ĐỀ THI KHỔ A4 NHƯ WORD</div>
             <h2>Chào {greeting()},<br/><span>{profile.name}.</span></h2>
-            <p>Mở một trang trắng, ghi lại ý tưởng và để bài học thành hình theo cách của bạn.</p>
-            <div className="home-welcome-actions"><button className="home-primary-action" onClick={()=>onCreate('Ghi chú mới')}><Plus size={17}/> Bắt đầu viết</button><span className="home-shortcut-note"><PenLine size={14}/> Viết tự do, lưu trên thiết bị</span></div>
+            <p>Gõ đề trên trang A4 như trong Word, tự đánh số câu, thẳng cột phương án A B C D, vẽ hình 3D / đồ thị / phân tử trên bảng rồi kéo thẳng vào đề, tải về Word (.docx) hoặc PDF.</p>
+            <form className="home-exam-quick-bar" onSubmit={handleCreateExamSubmit}>
+              <input
+                type="text"
+                value={examTitle}
+                onChange={e=>setExamTitle(e.target.value)}
+                placeholder="Gõ tên đề thi (VD: Đề kiểm tra giữa kì 1 Toán - Hóa 12)…"
+                aria-label="Tên đề thi mới"
+              />
+              <button type="submit" className="home-exam-quick-btn">
+                📝 Soạn đề thi
+              </button>
+              <button type="button" className="home-primary-action" onClick={()=>onCreate(examTitle.trim()||'Ghi chú mới')}>
+                <Plus size={16}/> Tạo bảng viết
+              </button>
+            </form>
           </div>
           <div className="home-welcome-visual" aria-hidden="true">
             <div className="welcome-orbit orbit-one"/><div className="welcome-orbit orbit-two"/>
             <div className="welcome-sheet sheet-back"><span/><span/><span/></div>
             <div className="welcome-sheet sheet-front"><div className="welcome-sheet-dot"/><span/><span/><i/></div>
             <div className="welcome-pen"><PenLine size={27}/></div>
-            <div className="welcome-sticker">mực <span>✳</span></div>
+            <div className="welcome-sticker">A4 <span>📝</span></div>
           </div>
         </section>
 
@@ -123,19 +140,69 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
         {notice&&<p className="home-notice" role="status">{notice}</p>}
 
         <section className="home-library-section">
-          <div className="home-section-heading"><div><span className="home-section-kicker">NƠI Ý TƯỞNG ĐƯỢC LƯU LẠI</span><h2>{query?'Kết quả tìm kiếm':'Bài viết gần đây'}</h2><p>{query?`Đang tìm “${query}”`:'Các bảng viết được lưu trên thiết bị của bạn.'}</p></div><div className="home-count-pill"><FileText size={15}/><span>{visible.length} bài viết</span></div></div>
+          <div className="home-section-heading">
+            <div>
+              <span className="home-section-kicker">KHUNG BẢNG & ĐỀ THI ĐÃ LƯU</span>
+              <h2>{filterExamOnly?'Danh sách Đề thi khổ A4':query?'Kết quả tìm kiếm':'Danh sách bảng & đề thi'}</h2>
+              <p>{query?`Đang tìm “${query}”`:'Bấm nhãn 📝 Đề thi để mở lại đề cũ và sửa tiếp, hoặc bấm ⋯ trên bảng thường để thêm đề thi khổ A4.'}</p>
+            </div>
+            <div className="home-section-pills">
+              <button type="button" className={'home-filter-pill '+(!filterExamOnly?'is-on':'')} onClick={()=>setFilterExamOnly(false)}>Tất cả ({projects.length})</button>
+              <button type="button" className={'home-filter-pill '+(filterExamOnly?'is-on':'')} onClick={()=>setFilterExamOnly(true)}>📝 Đề thi ({examCount})</button>
+            </div>
+          </div>
           <div className="home-library">
-            {visible.length?<div className="home-grid">{visible.map((project,index)=>{const examLink=examLinks[project.id];return <article className="home-card" key={project.id}>
-              <button className="home-card-open" onClick={()=>onOpen(project.id)} aria-label={`Mở ${project.title}`}>
-                <div className="home-preview-wrap"><div className={'home-paper '+(project.background==='grid'?'grid':project.background==='dotted'?'dotted':project.background==='black'?'black':'lined')}><span className="paper-edge"/><span className="home-paper-index">{String(index+1).padStart(2,'0')}</span><span className="home-paper-mark"/></div><span className="home-open-arrow"><ArrowUpRight size={16}/></span></div>
-                <div className="home-card-info"><div className="home-card-title-line"><strong title={project.title}>{project.title}</strong>{examLink&&<span className="home-card-exam-badge"><FileText size={10}/> Đề thi</span>}</div><div className="home-card-meta"><span><BookOpen size={13}/>{project.pageCount} trang</span><time><Clock3 size={13}/>{date(project.updatedAt)}</time></div></div>
+            {visible.length?<div className="home-grid">{visible.map((project,index)=><article className={'home-card '+(project.hasExamPaper?'has-exam':'')} key={project.id}>
+              <button className="home-card-open" onClick={()=>project.hasExamPaper?onOpenExam(project.id):onOpen(project.id)} aria-label={`Mở ${project.title}`}>
+                <div className="home-preview-wrap">
+                  <div className={'home-paper '+(project.background==='grid'?'grid':project.background==='dotted'?'dotted':project.background==='black'?'black':'lined')}>
+                    <span className="paper-edge"/>
+                    <span className="home-paper-index">{String(index+1).padStart(2,'0')}</span>
+                    <span className="home-paper-mark"/>
+                  </div>
+                  <span className="home-open-arrow"><ArrowUpRight size={16}/></span>
+                </div>
+                <div className="home-card-info">
+                  <strong title={project.title}>{project.title}</strong>
+                  <div className="home-card-meta">
+                    <span><BookOpen size={13}/>{project.pageCount} trang</span>
+                    <time><Clock3 size={13}/>{date(project.updatedAt)}</time>
+                  </div>
+                </div>
               </button>
+              {project.hasExamPaper&&(
+                <button
+                  type="button"
+                  className="home-exam-badge"
+                  title="Bấm để mở và sửa tiếp Đề thi khổ A4"
+                  onClick={e=>{e.stopPropagation();onOpenExam(project.id)}}
+                >
+                  📝 Đề thi
+                </button>
+              )}
               <button className="home-card-more" aria-label={`Tùy chọn ${project.title}`} title="Tùy chọn" onClick={()=>setMenu(menu===project.id?null:project.id)}><MoreHorizontal size={19}/></button>
-              {menu===project.id&&<div className="home-card-menu" role="menu"><div className="home-menu-heading">TÙY CHỌN BẢNG</div><button role="menuitem" onClick={()=>openExamForBoard(project,examLink)}>{examLink?<FileText size={15}/>:<PenLine size={15}/>} {examLink?'Mở đề thi':'Soạn đề thi khổ A4'}</button><button role="menuitem" onClick={()=>{setName(project.title);setDialog({kind:'rename',id:project.id,title:project.title});setMenu(null)}}><PenLine size={15}/> Đổi tên</button><button role="menuitem" onClick={()=>{onDuplicate(project.id);setMenu(null)}}><Copy size={15}/> Nhân đôi</button><button role="menuitem" className="danger" onClick={()=>{setDialog({kind:'delete',id:project.id,title:project.title});setMenu(null)}}><Trash2 size={15}/> Xóa bảng</button></div>}
-            </article>})}</div>:<div className="home-empty"><div className="home-empty-icon"><PenLine size={26}/></div><strong>{query?'Chưa tìm thấy bảng phù hợp':'Sảnh đang còn trống'}</strong><p>{query?'Thử một từ khóa khác.':'Tạo bảng đầu tiên để bắt đầu lưu ghi chú, bài giảng và ý tưởng.'}</p>{query?<button onClick={()=>setQuery('')}>Xóa tìm kiếm</button>:<button onClick={createDialog}><Plus size={16}/> Tạo bảng đầu tiên</button>}</div>}
+              {menu===project.id&&<div className="home-card-menu" role="menu">
+                <div className="home-menu-heading">TÙY CHỌN BẢNG</div>
+                {project.hasExamPaper?(
+                  <button role="menuitem" className="exam-item" onClick={()=>{onOpenExam(project.id);setMenu(null)}}>
+                    📄 Mở đề thi
+                  </button>
+                ):(
+                  <button role="menuitem" className="exam-item" onClick={()=>{onOpenExam(project.id);setMenu(null)}}>
+                    📝 Soạn đề thi khổ A4
+                  </button>
+                )}
+                <button role="menuitem" onClick={()=>{onOpen(project.id);setMenu(null)}}>
+                  <BookOpen size={15}/> Mở bảng viết
+                </button>
+                <button role="menuitem" onClick={()=>{setName(project.title);setDialog({kind:'rename',id:project.id,title:project.title});setMenu(null)}}><PenLine size={15}/> Đổi tên</button>
+                <button role="menuitem" onClick={()=>{onDuplicate(project.id);setMenu(null)}}><Copy size={15}/> Nhân đôi</button>
+                <button role="menuitem" className="danger" onClick={()=>{setDialog({kind:'delete',id:project.id,title:project.title});setMenu(null)}}><Trash2 size={15}/> Xóa bảng</button>
+              </div>}
+            </article>)}</div>:<div className="home-empty"><div className="home-empty-icon"><FileText size={26}/></div><strong>{query?'Chưa tìm thấy bảng phù hợp':filterExamOnly?'Chưa có đề thi khổ A4 nào':'Sảnh đang còn trống'}</strong><p>{query?'Thử một từ khóa khác.':'Gõ tên đề ở thanh phía trên rồi bấm 📝 Soạn đề thi để mở trang đề A4 ngay.'}</p>{query?<button onClick={()=>setQuery('')}>Xóa tìm kiếm</button>:<button onClick={()=>onCreateExam('Đề kiểm tra định kỳ')}>📝 Soạn đề thi đầu tiên</button>}</div>}
           </div>
         </section>
-        <footer className="home-footer"><span className="home-footer-mark">M</span><span>Lớp học Mực</span><i/> <span>Không gian viết của bạn, theo cách của bạn.</span></footer>
+        <footer className="home-footer"><span className="home-footer-mark">M</span><span>Lớp học Mực</span><i/> <span>Không gian viết bảng & soạn đề A4 như Word.</span></footer>
       </div>
     </main>
 

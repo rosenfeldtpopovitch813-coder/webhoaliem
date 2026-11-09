@@ -1,11 +1,11 @@
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {PenLine,Eraser,MousePointer2,Shapes,Type,Sigma,Hand,Undo2,Redo2,Plus,ChevronLeft,ChevronRight,ZoomIn,ZoomOut,Maximize,Upload,Download,Moon,Sun,SlidersHorizontal,Crosshair,Calculator,CircleHelp,Save,Trash2,Copy,Check,X,Highlighter,RotateCcw,House,PanelLeftClose,PanelLeftOpen,LineChart,Box,Ruler,Grid2X2} from 'lucide-react';
+import {PenLine,Eraser,MousePointer2,Shapes,Type,Sigma,Hand,Undo2,Redo2,Plus,ChevronLeft,ChevronRight,ZoomIn,ZoomOut,Maximize,Upload,Download,Moon,Sun,SlidersHorizontal,Crosshair,Calculator,CircleHelp,Save,Trash2,Copy,Check,X,Highlighter,RotateCcw,House,PanelLeftClose,PanelLeftOpen,LineChart,Box,Ruler,Grid2X2,MoreHorizontal,FileText} from 'lucide-react';
 import katex from 'katex';
 import {ActiveTool,BoardSettings} from './components/Whiteboard/Whiteboard';
 import ContinuousPages from './components/Whiteboard/ContinuousPages';
 import ToolPopup,{PopupTool} from './components/Toolbar/ToolPopup';
 import PageThumbnail from './components/Whiteboard/PageThumbnail';
-import {BoardDocument,BoardPage,BoardItem,GeometryObjectConfig,createPage,W,H} from './types/board';
+import {BoardDocument,BoardPage,BoardItem,GeometryObjectConfig,ExamPaperDocument,createPage,W,H} from './types/board';
 import {exportPages} from './utils/export';
 import {pdfToPages} from './utils/pdfImport';
 import {docImageWeight} from './utils/docWeight';
@@ -18,6 +18,8 @@ import GeometryLibraryPanel from './components/GeometryLibraryPanel';
 import ScientificCalculator from './components/Calculator/ScientificCalculator';
 import GeometryTools from './components/GeometryTools/GeometryTools';
 import MathHub from './components/MathHub';
+import ExamPaperStudio from './components/ExamPaper/ExamPaperStudio';
+import {createDefaultExamPaper} from './components/ExamPaper/examTemplates';
 import './styles.css';
 import './studio.css';
 import './scrble.css';
@@ -53,9 +55,11 @@ function clone<T>(v:T):T{return structuredClone(v)}
 function saveErrorText(e:unknown){const name=e instanceof Error?e.name+': '+e.message:String(e);console.error('Lỗi lưu',e);return /quota|full|dung lượng/i.test(name)?'Không lưu được: đầy bộ nhớ thiết bị':'Không lưu được ('+name.slice(0,80)+')'}
 function readFile(file:File):Promise<string>{return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file)})}
 function clipboardImageFingerprint(dataUrl:string|null):string|null{return dataUrl?`${dataUrl.length}:${dataUrl.slice(0,96)}:${dataUrl.slice(-96)}`:null}
-type StudioProps={projectId:string;initialDoc:BoardDocument;onSave:(id:string,document:BoardDocument)=>Promise<void>;onHome:()=>void};
-export default function Studio({projectId,initialDoc,onSave,onHome}:StudioProps){
+type StudioProps={projectId:string;initialDoc:BoardDocument;initialExamOpen?:boolean;onSave:(id:string,document:BoardDocument)=>Promise<void>;onHome:()=>void};
+export default function Studio({projectId,initialDoc,initialExamOpen=false,onSave,onHome}:StudioProps){
  const [doc,setDoc]=useState<BoardDocument>(initialDoc);const [saveState,setSaveState]=useState('Đã lưu trên thiết bị');const [showPages,setShowPages]=useState(()=>localStorage.getItem('muc-show-pages')!=='false');const past=useRef<BoardDocument[]>([]),future=useRef<BoardDocument[]>([]),docRef=useRef(doc);docRef.current=doc;
+ const [examOpen,setExamOpen]=useState<boolean>(Boolean(initialExamOpen));
+ const [boardMenuOpen,setBoardMenuOpen]=useState<boolean>(false);
  const saveFnRef=useRef(onSave);saveFnRef.current=onSave;const projectIdRef=useRef(projectId);projectIdRef.current=projectId;const saveTimer=useRef<number|null>(null);const flushSaveRef=useRef<()=>void>(()=>{});
  const saveSeq=useRef(0),dirtyRef=useRef(false),touched=useRef(false),initialRef=useRef(initialDoc);const [saveKind,setSaveKind]=useState<'saved'|'dirty'|'saving'|'error'>('saved');
  const writeEmergency=()=>{
@@ -277,8 +281,68 @@ export default function Studio({projectId,initialDoc,onSave,onHome}:StudioProps)
  const latexPreview=()=>{try{return katex.renderToString(draftText,{throwOnError:false,trust:false,output:'html'})}catch{return draftText}};
  useEffect(()=>registerBoardTools(addPage,(text)=>{const item:BoardItem={id:crypto.randomUUID(),kind:'text',x:140,y:150,text:formatFormula(text),color:settings.color,fontSize:28,math:true};updatePage(p=>({...p,items:[...p.items,item]}))}),[doc,settings.color]);
  const returnHome=async()=>{try{const ok=await saveLatest();if(ok)onHome();else setSaveState('Chưa xác nhận được bản lưu mới nhất')}catch{setSaveState('Không lưu được trên thiết bị')}};
+ const openExamEditor=()=>{
+  const current=docRef.current;
+  if(!current.examPaper){
+   const next:BoardDocument={...current,examPaper:createDefaultExamPaper(current.title||'Đề kiểm tra')};
+   docRef.current=next;
+   setDoc(next);
+  }
+  setBoardMenuOpen(false);
+  setExamOpen(true);
+ };
+ const handleExamChange=(nextPaper:ExamPaperDocument)=>{
+  const current=docRef.current;
+  const next:BoardDocument={...current,examPaper:nextPaper};
+  docRef.current=next;
+  setDoc(next);
+ };
+ const handleExamSaveAndClose=async(nextPaper:ExamPaperDocument)=>{
+  const current=docRef.current;
+  const next:BoardDocument={...current,examPaper:nextPaper};
+  docRef.current=next;
+  setDoc(next);
+  await saveLatest();
+  setExamOpen(false);
+  if(window.location.hash.endsWith('/exam')){
+   window.location.hash=`/project/${projectIdRef.current}`;
+  }
+  setMessage('Đã lưu đề thi khổ A4 vào bảng');
+ };
+ const handleExamDiscardAndClose=(revertedPaper:ExamPaperDocument)=>{
+  const current=docRef.current;
+  const next:BoardDocument={...current,examPaper:revertedPaper};
+  docRef.current=next;
+  setDoc(next);
+  setExamOpen(false);
+  if(window.location.hash.endsWith('/exam')){
+   window.location.hash=`/project/${projectIdRef.current}`;
+  }
+ };
+ const handleExportOnlineExam=(payload:{title:string;questions:unknown[]})=>{
+  try{
+   localStorage.setItem('htvvm_pending_exam_paper',JSON.stringify({...payload,exportedAt:Date.now()}));
+  }catch{/* ignore storage errors */}
+  if(window.parent&&window.parent!==window){
+   window.parent.postMessage({type:'HTVVM_EXAM_PAPER_EXPORT',...payload},'*');
+   setMessage('Đã gửi đề thi sang Phòng thi trực tuyến!');
+  }else{
+   window.open('/exam','_blank');
+  }
+ };
+ if(examOpen){
+  const activeExamPaper=doc.examPaper||createDefaultExamPaper(doc.title||'Đề kiểm tra');
+  return <ExamPaperStudio
+   paper={activeExamPaper}
+   boardTitle={doc.title}
+   onChangePaper={handleExamChange}
+   onSaveAndClose={p=>{void handleExamSaveAndClose(p);}}
+   onDiscardAndClose={handleExamDiscardAndClose}
+   onExportOnlineExam={handleExportOnlineExam}
+  />;
+ }
  return <div className={'app '+theme}>
- <header className="topbar"><button className="home-return" title="Về thư viện" aria-label="Về thư viện" onClick={returnHome}><House size={18}/></button><div className="brand"><span className="brand-mark"><PenLine size={19}/></span><span>Lớp học <b>Mực</b></span></div><input className="document-input" aria-label="Tên bài giảng" value={doc.title} onChange={e=>setDoc({...doc,title:e.target.value})}/><div className="top-actions"><span className="save-status"><Save size={14}/>{saveState}</span><button className={'top-button save-button '+saveKind} onClick={()=>void saveNow()} title="Lưu ngay (Ctrl + S)" aria-label="Lưu ngay"><Save size={16}/><span>Lưu</span></button><button className="icon-button" title="Toàn màn hình" onClick={()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}><Maximize size={18}/></button><button className="icon-button" title="Đổi giao diện" onClick={()=>setTheme(theme==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="top-button" onClick={()=>input.current?.click()} title="Nhập PDF hoặc hình ảnh"><Upload size={16}/><span>Nhập tài liệu</span></button><button className="top-button" onClick={()=>editInput.current?.click()} title="Nhập PDF và tách chữ thành văn bản sửa được"><Type size={16}/><span>PDF sửa chữ</span></button><input ref={editInput} hidden type="file" accept=".pdf,application/pdf" onChange={e=>{const f=e.target.files?.[0];if(f)importFile(f,true);e.currentTarget.value=''}}/><input ref={input} hidden type="file" accept=".pdf,image/png,image/jpeg,image/webp" onChange={e=>{const f=e.target.files?.[0];if(f)importFile(f);e.currentTarget.value=''}}/><button className="top-button primary" onClick={()=>setModal('export')}><Download size={16}/><span>Xuất bài giảng</span></button></div></header>
+ <header className="topbar"><button className="home-return" title="Về thư viện" aria-label="Về thư viện" onClick={returnHome}><House size={18}/></button><div className="brand"><span className="brand-mark"><PenLine size={19}/></span><span>Lớp học <b>Mực</b></span></div><input className="document-input" aria-label="Tên bài giảng" value={doc.title} onChange={e=>setDoc({...doc,title:e.target.value})}/><div className="top-actions"><span className="save-status"><Save size={14}/>{saveState}</span><button className="top-button" style={{background:'#f5f3ff',borderColor:'#ddd6fe',color:'#5b21b6',fontWeight:700}} onClick={openExamEditor} title={doc.examPaper?'Mở đề thi khổ A4 của bảng này':'Soạn đề thi khổ A4 như Word trên bảng này'}><FileText size={16}/><span>{doc.examPaper?'📄 Mở đề thi':'📝 Soạn đề thi khổ A4'}</span></button><button className={'top-button save-button '+saveKind} onClick={()=>void saveNow()} title="Lưu ngay (Ctrl + S)" aria-label="Lưu ngay"><Save size={16}/><span>Lưu</span></button><button className="icon-button" title="Toàn màn hình" onClick={()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}><Maximize size={18}/></button><button className="icon-button" title="Đổi giao diện" onClick={()=>setTheme(theme==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="top-button" onClick={()=>input.current?.click()} title="Nhập PDF hoặc hình ảnh"><Upload size={16}/><span>Nhập tài liệu</span></button><button className="top-button" onClick={()=>editInput.current?.click()} title="Nhập PDF và tách chữ thành văn bản sửa được"><Type size={16}/><span>PDF sửa chữ</span></button><input ref={editInput} hidden type="file" accept=".pdf,application/pdf" onChange={e=>{const f=e.target.files?.[0];if(f)importFile(f,true);e.currentTarget.value=''}}/><input ref={input} hidden type="file" accept=".pdf,image/png,image/jpeg,image/webp" onChange={e=>{const f=e.target.files?.[0];if(f)importFile(f);e.currentTarget.value=''}}/><button className="top-button primary" onClick={()=>setModal('export')}><Download size={16}/><span>Xuất bài giảng</span></button><div style={{position:'relative'}}><button className="icon-button" title="Menu bảng (⋯)" aria-label="Menu bảng" onClick={()=>setBoardMenuOpen(v=>!v)}><MoreHorizontal size={18}/></button>{boardMenuOpen&&<div style={{position:'absolute',right:0,top:'calc(100% + 6px)',minWidth:215,background:'#fff',border:'1px solid #d8e2ec',borderRadius:12,boxShadow:'0 14px 32px rgba(15,23,42,.18)',padding:6,zIndex:80,display:'flex',flexDirection:'column',gap:3}}><button type="button" style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',border:0,borderRadius:8,background:'#f5f3ff',color:'#5b21b6',fontWeight:700,fontSize:12,cursor:'pointer',textAlign:'left'}} onClick={openExamEditor}>{doc.examPaper?'📄 Mở đề thi':'📝 Soạn đề thi khổ A4'}</button><button type="button" style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',border:0,borderRadius:8,background:'transparent',color:'#1e293b',fontWeight:600,fontSize:12,cursor:'pointer',textAlign:'left'}} onClick={()=>{setBoardMenuOpen(false);setModal('export')}}>⬇ Xuất bảng viết (PDF/Ảnh)</button><button type="button" style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',border:0,borderRadius:8,background:'transparent',color:'#1e293b',fontWeight:600,fontSize:12,cursor:'pointer',textAlign:'left'}} onClick={()=>{setBoardMenuOpen(false);void returnHome()}}>🏠 Về danh sách bảng</button></div>}</div></div></header>
  <main className={'main '+(showPages?'':'pages-hidden')}><aside className="tool-rail"><div className="rail-group">{toolOptions.map(t=>{
  const visuallyActive=tool===t.id;
  return <button key={t.id} className={'tool-button '+(visuallyActive?'active':'')} title={`${t.label} · ${t.key} · nhấn lần nữa để tùy chỉnh`} aria-label={t.label} onClick={e=>{

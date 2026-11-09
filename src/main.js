@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css';
 import './css/input.css';
 import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
@@ -9,7 +10,7 @@ import { element, button } from './core/dom.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/exam-author', '✎', 'Soạn đề'], ['/exam-room', '↗', 'Tạo phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/handbook', '▦', 'Sổ tay đa môn'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'] ];
+const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'], ['/community', '✦', 'Trợ lý AI'] ];
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
@@ -18,6 +19,8 @@ function createShell() {
   root.replaceChildren();
   const shell = element('div', 'app-shell');
   const sidebar = element('aside', 'sidebar'); sidebar.id = 'sidebar';
+  const backdrop = element('div', 'sidebar-backdrop');
+  backdrop.addEventListener('click', () => { sidebarOpen = false; updateSidebar(); });
   const brand = element('div', 'brand');
   brand.append(element('span', 'brand-symbol', 'H'), element('div', 'brand-copy'));
   brand.lastChild.append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO')); 
@@ -38,7 +41,7 @@ function createShell() {
   const topbar = element('header', 'topbar');
   const left = element('div', 'top-left');
   left.append(makeButton('☰', 'mobile-menu', () => { sidebarOpen = !sidebarOpen; updateSidebar(); }), element('div', 'page-title', 'Tổng quan'));
-  left.lastChild.id = 'page-title'; left.lastChild.setAttribute('aria-live', 'polite');
+  left.lastChild.id = 'page-title';
   const right = element('div', 'top-right');
   const status = element('span', 'server-status', '◌ Đang đồng bộ giờ'); status.id = 'server-status';
   const select = element('select', 'theme-select'); select.id = 'theme-select'; select.setAttribute('aria-label', 'Chọn giao diện');
@@ -56,10 +59,10 @@ function createShell() {
   installApp.hidden = true; installApp.id = 'install-app-btn';
   const diagnosticsButton = makeButton('Chẩn đoán Firebase', 'firebase-diagnostics-btn', () => runFirebaseDiagnostics());
   right.append(status, diagnosticsButton, installApp, select, account); topbar.append(left, right);
-  const notice = element('div', 'notice'); notice.id = 'notice'; notice.setAttribute('role', 'status'); notice.hidden = true;
+  const notice = element('div', 'notice'); notice.id = 'notice'; notice.hidden = true;
   const main = element('main', 'main-content'); main.id = 'main-content';
-  content.append(topbar, notice, main); shell.append(sidebar, content); root.append(shell);
-  frame = { sidebar, links, select, account, main, notice, status, installApp };
+  content.append(topbar, notice, main); shell.append(sidebar, backdrop, content); root.append(shell);
+  frame = { sidebar, backdrop, links, select, account, main, notice, status, installApp };
 }
 let entryScreen = null;
 function safeWelcomeSeen(uid) { try { return localStorage.getItem(`htvvm-welcome-seen:${uid}`) === '1'; } catch { return false; } }
@@ -146,7 +149,10 @@ async function runFirebaseDiagnostics() {
   }
 }
 
-function updateSidebar() { frame.sidebar.classList.toggle('open', sidebarOpen); }
+function updateSidebar() {
+  frame.sidebar.classList.toggle('open', sidebarOpen);
+  if (frame.backdrop) frame.backdrop.classList.toggle('open', sidebarOpen);
+}
 function drawAccount() {
   const { user, authLoading } = AppStore.getState();
   frame.account.replaceChildren();

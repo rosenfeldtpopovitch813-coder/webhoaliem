@@ -5,10 +5,11 @@ import { AppStore } from '../../core/store.js';
 
 const modules = [
   ['✦', 'Khảo thí', 'Luyện thi, chấm điểm và sổ tay câu sai', '/exam'],
-  ['⚡', 'Chem Arena', 'Đấu trường Hóa học cùng bạn học', '/arena'],
-  ['▦', 'Sổ tay học tập', 'Tra cứu kiến thức và vẽ đồ thị', '/handbook'],
-  ['◷', 'Góc tập trung', 'Pomodoro, tài liệu và nhạc học', '/focus'],
-  ['⌁', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển', '/admissions']
+  ['⚡', 'Chem Arena', 'Đấu trường Hóa học đối kháng thời gian thực', '/arena'],
+  ['▦', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
+  ['◷', 'Góc tập trung', 'Đồng hồ Pomodoro, Lớp học Mực và nhạc học', '/focus'],
+  ['▧', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
+  ['⌁', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển đại học', '/admissions']
 ];
 const fmt = seconds => `${Math.floor(seconds / 3600)} giờ ${Math.floor(seconds % 3600 / 60)} phút`;
 
@@ -43,7 +44,9 @@ export function renderHome() {
   examProgressHeader.append(examProgressTitle, examOpen);
   const examProgressBody = element('div', 'home-exam-stats-body');
   examProgress.append(examProgressHeader, examProgressBody);
-  wrap.append(boardPanel, examProgress, element('h3', 'section-heading', 'Không gian học tập'));
+  const dashboardGrid = element('div', 'home-dashboard-grid');
+  dashboardGrid.append(examProgress, boardPanel);
+  wrap.append(dashboardGrid, element('h3', 'section-heading', 'Không gian học tập'));
 
   const grid = element('div', 'module-grid');
   for (const [glyph, title, description, path] of modules) {

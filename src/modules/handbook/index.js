@@ -2,139 +2,14 @@ import { ELEMENTS, ELEMENT_RECORDS, IR_BANDS, estimateShells, shellsFromConfigur
 import { compileExpression, sampleGraph } from '../../../shared/graph-math.js';
 import { element, button } from '../../core/dom.js';
 
-const ENGLISH_STUDY_URL = 'https://sites.google.com/view/staytinganhthptv-acththnghcngp/full-page-embed';
-const HANDBOOK_STORAGE_KEY = 'htvvm-handbook-subjects-v1';
-const SUBJECTS = [
-  { id: 'mathematics', name: 'Toán học', short: 'Toán', icon: 'ƒ', color: 'math', description: 'Hàm số, đồ thị, công thức và tư duy giải bài.' },
-  { id: 'chemistry', name: 'Hóa học', short: 'Hóa', icon: 'H', color: 'chemistry', description: 'Nguyên tố, phổ IR, phản ứng và hệ thống hóa lý thuyết.' },
-  { id: 'english', name: 'Tiếng Anh', short: 'Anh', icon: 'A', color: 'english', description: 'Từ vựng, ngữ pháp, đọc hiểu và luyện đề THPT.', defaultUrl: ENGLISH_STUDY_URL },
-  { id: 'physics', name: 'Vật lý', short: 'Lý', icon: 'Φ', color: 'physics', description: 'Công thức, hiện tượng, đồ thị và bài tập vận dụng.' },
-  { id: 'biology', name: 'Sinh học', short: 'Sinh', icon: '生', color: 'biology', description: 'Sơ đồ hóa kiến thức, thuật ngữ và cơ chế sinh học.' },
-  { id: 'literature', name: 'Ngữ văn', short: 'Văn', icon: '文', color: 'literature', description: 'Tác phẩm, dẫn chứng, đọc hiểu và nghị luận.' },
-  { id: 'informatics', name: 'Tin học', short: 'Tin', icon: '</>', color: 'informatics', description: 'Lập trình, thuật toán, dữ liệu và ghi chú dự án.' }
-];
-
-function readHandbookResources() {
-  try {
-    const value = JSON.parse(localStorage.getItem(HANDBOOK_STORAGE_KEY) || '{}');
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch { return {}; }
-}
-function writeHandbookResources(value) {
-  try { localStorage.setItem(HANDBOOK_STORAGE_KEY, JSON.stringify(value)); return true; }
-  catch { return false; }
-}
-
 export function renderHandbook() {
   const root = element('div', 'handbook-root'), hero = element('div', 'hero exam-hero');
-  hero.append(element('div', 'eyebrow', 'SỔ TAY HỌC TẬP'), element('h1', 'hero-title', 'Không gian học tập đa môn.'), element('p', 'hero-subtitle', 'Một nơi để tra cứu khoa học, vẽ đồ thị, mở học liệu theo từng môn và lưu ghi chú cá nhân. Tài liệu và ghi chú do bạn thêm được lưu riêng trên thiết bị này.'));
-  const tabs = element('div', 'exam-tabs handbook-tabs'), panel = element('section', 'exam-panel handbook-panel'); root.append(hero, tabs, panel);
-  const names = [
-    ['overview', 'Tổng quan'], ['element', 'Bảng tuần hoàn'], ['ir', 'Phổ IR'], ['graph', 'Máy vẽ đồ thị'],
-    ...SUBJECTS.map(subject => [subject.id, subject.name])
-  ];
+  hero.append(element('div', 'eyebrow', 'SỔ TAY HỌC TẬP'), element('h1', 'hero-title', 'Sổ tay khoa học & Máy vẽ đồ thị'), element('p', 'hero-subtitle', 'Tra cứu đủ 118 nguyên tố, xem mô hình nguyên tử và ảnh mẫu thực tế, tra phổ hồng ngoại IR và vẽ nhiều hàm số với trục tuỳ chỉnh.'));
+  const tabs = element('div', 'exam-tabs'), panel = element('section', 'exam-panel'); root.append(hero, tabs, panel);
+  const names = [['element', 'Bảng tuần hoàn'], ['ir', 'Phổ hồng ngoại IR'], ['graph', 'Máy vẽ đồ thị']];
   let elementModal = null;
   for (const [id, name] of names) tabs.append(button(name, 'exam-tab', () => show(id)));
-  function show(name) {
-    if (elementModal) { elementModal.remove(); elementModal = null; }
-    panel.replaceChildren();
-    if (name === 'overview') overviewTab();
-    else if (name === 'element') elementTab();
-    else if (name === 'ir') irTab();
-    else if (name === 'graph') graphTab();
-    else if (SUBJECTS.some(subject => subject.id === name)) subjectTab(name);
-    for (const b of tabs.children) b.classList.toggle('selected', b.textContent === names.find(x => x[0] === name)?.[1]);
-  }
-
-  function overviewTab() {
-    panel.append(element('div', 'handbook-section-head', ''));
-    const intro = panel.firstElementChild;
-    intro.append(element('h2', 'exam-heading', 'Chọn môn học'), element('p', 'exam-message', 'Các công cụ Hóa học và Toán học được tích hợp trực tiếp. Những môn còn lại có thể gắn tài liệu riêng, xem trong trang và lưu ghi chú.'));
-    const grid = element('div', 'handbook-subject-grid');
-    const builtins = [
-      { id: 'element', name: 'Hóa học · Bảng tuần hoàn', icon: 'H', description: '118 nguyên tố, cấu hình electron và mô hình nguyên tử.', tone: 'chemistry' },
-      { id: 'ir', name: 'Hóa học · Phổ IR', icon: 'IR', description: 'Tra cứu dải hấp thụ và nhóm chức đặc trưng.', tone: 'chemistry' },
-      { id: 'graph', name: 'Toán học · Máy vẽ đồ thị', icon: 'ƒ', description: 'Vẽ nhiều hàm số, tùy chỉnh trục và xuất PNG.', tone: 'math' }
-    ];
-    for (const item of builtins) {
-      const card = button('', 'handbook-subject-card', () => show(item.id));
-      card.append(element('span', `handbook-subject-icon ${item.tone}`, item.icon), element('strong', '', item.name), element('span', '', item.description), element('small', '', 'Mở công cụ →'));
-      grid.append(card);
-    }
-    for (const subject of SUBJECTS) {
-      const card = button('', `handbook-subject-card ${subject.color}`, () => show(subject.id));
-      card.append(element('span', 'handbook-subject-icon', subject.icon), element('strong', '', subject.name), element('span', '', subject.description), element('small', '', 'Mở sổ tay môn học →'));
-      grid.append(card);
-    }
-    panel.append(grid);
-    const foot = element('p', 'handbook-local-note', 'Lưu ý: ghi chú và đường dẫn tùy chỉnh được lưu bằng bộ nhớ trình duyệt (localStorage). Hãy xuất/sao lưu nội dung quan trọng nếu bạn đổi thiết bị hoặc xóa dữ liệu trình duyệt.');
-    panel.append(foot);
-  }
-
-  function subjectTab(subjectId) {
-    const subject = SUBJECTS.find(item => item.id === subjectId);
-    const resources = readHandbookResources();
-    const saved = resources[subjectId] && typeof resources[subjectId] === 'object' ? resources[subjectId] : {};
-    const initialUrl = typeof saved.url === 'string' ? saved.url : (subject.defaultUrl || '');
-    panel.append(element('h2', 'exam-heading', `${subject.name} · Sổ tay môn học`));
-    panel.append(element('p', 'exam-message', subject.description));
-    const toolLinks = subjectId === 'chemistry'
-      ? [['Bảng tuần hoàn', 'element'], ['Phổ hồng ngoại IR', 'ir']]
-      : subjectId === 'mathematics' ? [['Máy vẽ đồ thị', 'graph']] : [];
-    if (toolLinks.length) {
-      const toolBox = element('div', 'handbook-subject-tools');
-      toolBox.append(element('strong', '', 'Công cụ tích hợp'));
-      for (const [labelText, route] of toolLinks) toolBox.append(button(labelText, 'exam-tab', () => show(route)));
-      panel.append(toolBox);
-    }
-    const toolbar = element('div', 'handbook-resource-toolbar');
-    const urlInput = document.createElement('input'); urlInput.type = 'url'; urlInput.className = 'exam-input'; urlInput.placeholder = 'Dán liên kết tài liệu HTTPS…'; urlInput.value = initialUrl; urlInput.setAttribute('aria-label', `Liên kết học liệu môn ${subject.name}`);
-    const openButton = button('Tải tài liệu', 'primary-btn', () => loadResource());
-    const external = document.createElement('a'); external.className = 'handbook-external-link'; external.target = '_blank'; external.rel = 'noopener noreferrer'; external.textContent = 'Mở trang ngoài ↗'; external.hidden = true;
-    toolbar.append(urlInput, openButton, external); panel.append(toolbar);
-    const resourceStatus = element('p', 'handbook-resource-status', initialUrl ? 'Đang chuẩn bị mở tài liệu đã lưu.' : 'Chưa có tài liệu. Dán liên kết HTTPS để mở trong khung xem trước.');
-    panel.append(resourceStatus);
-    const frameWrap = element('div', 'handbook-frame-wrap');
-    const frame = document.createElement('iframe'); frame.className = 'handbook-resource-frame'; frame.title = `Học liệu ${subject.name}`; frame.loading = 'lazy'; frame.referrerPolicy = 'strict-origin-when-cross-origin'; frame.allow = 'fullscreen'; frame.hidden = true;
-    frameWrap.append(frame, element('div', 'handbook-frame-placeholder', 'Tài liệu sẽ xuất hiện tại đây khi bạn tải liên kết. Nếu trang không cho phép nhúng, hãy dùng nút “Mở trang ngoài”.'));
-    panel.append(frameWrap);
-    const notes = element('section', 'handbook-notes');
-    notes.append(element('h3', '', 'Ghi chú môn học'), element('p', 'exam-message', 'Ghi chú được tự động lưu trên thiết bị này. Bạn có thể dùng Markdown đơn giản như tiêu đề, gạch đầu dòng và công thức dạng chữ.'));
-    const noteArea = document.createElement('textarea'); noteArea.className = 'exam-input handbook-notes-area'; noteArea.rows = 8; noteArea.placeholder = `Ghi lại công thức, từ vựng, dẫn chứng hoặc câu hỏi của môn ${subject.name}…`; noteArea.value = typeof saved.notes === 'string' ? saved.notes : ''; noteArea.setAttribute('aria-label', `Ghi chú môn ${subject.name}`);
-    const saveStatus = element('small', 'handbook-save-status', 'Đang lưu tự động khi bạn nhập.');
-    const exportNotes = button('Tải ghi chú .txt', 'exam-tab', () => {
-      const blob = new Blob([noteArea.value], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `so-tay-${subjectId}.txt`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
-    const saveRow = element('div', 'handbook-notes-actions'); saveRow.append(exportNotes, saveStatus); notes.append(noteArea, saveRow); panel.append(notes);
-    let saveTimer = 0;
-    const persist = () => {
-      window.clearTimeout(saveTimer);
-      saveTimer = window.setTimeout(() => {
-        const latest = readHandbookResources();
-        latest[subjectId] = { url: urlInput.value.trim(), notes: noteArea.value };
-        saveStatus.textContent = writeHandbookResources(latest) ? 'Đã lưu trên thiết bị.' : 'Không thể lưu. Hãy tải ghi chú .txt để sao lưu.';
-      }, 220);
-    };
-    noteArea.addEventListener('input', persist);
-    urlInput.addEventListener('input', persist);
-    urlInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); loadResource(); } });
-    function loadResource() {
-      try {
-        const url = new URL(urlInput.value.trim());
-        if (url.protocol !== 'https:') throw new Error('Chỉ chấp nhận đường dẫn HTTPS an toàn.');
-        if (!url.hostname.includes('.')) throw new Error('Liên kết chưa hợp lệ.');
-        frame.src = url.href; frame.hidden = false; frameWrap.classList.add('is-loaded');
-        external.href = url.href; external.hidden = false;
-        resourceStatus.textContent = 'Đã gửi yêu cầu mở tài liệu. Một số website chặn nhúng; khi khung trống, hãy mở trang ngoài.';
-        persist();
-      } catch (error) {
-        frame.removeAttribute('src'); frame.hidden = true; frameWrap.classList.remove('is-loaded'); external.hidden = true;
-        resourceStatus.textContent = error.message || 'Liên kết không hợp lệ.';
-      }
-    }
-    if (initialUrl) loadResource();
-  }
+  function show(name) { if (elementModal) { elementModal.remove(); elementModal = null; } panel.replaceChildren(); if (name === 'element') elementTab(); if (name === 'ir') irTab(); if (name === 'graph') graphTab(); for (const b of tabs.children) b.classList.toggle('selected', b.textContent === names.find(x => x[0] === name)[1]); }
 
   function elementTab() {
     panel.append(element('h2', 'exam-heading', 'Bảng tuần hoàn 118 nguyên tố'));
@@ -304,5 +179,5 @@ export function renderHandbook() {
     const stopDrag = () => { drag = null; canvas.style.cursor = 'grab'; }; canvas.addEventListener('pointerup', stopDrag); canvas.addEventListener('pointercancel', stopDrag); canvas.addEventListener('wheel', event => { if (!event.ctrlKey) return; event.preventDefault(); scaleRange(event.deltaY < 0 ? .85 : 1.18); }, { passive: false });
     const exportButton=button('Xuất PNG','exam-tab',()=>{const a=document.createElement('a');a.download='do-thi-htvvm.png';a.href=canvas.toDataURL('image/png');a.click();}); side.append(exportButton); draw();
   }
-  show('overview'); return root;
+  show('element'); return root;
 }

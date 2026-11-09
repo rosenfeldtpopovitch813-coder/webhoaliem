@@ -23,14 +23,6 @@ export function remainingFocusSeconds(remainingAtStart, startedAt, now) {
   return Math.max(0, Math.ceil((remaining * 1000 - (current - start)) / 1000));
 }
 
-/** Calculate a deadline-based countdown. UI intervals may be throttled in background tabs. */
-export function remainingToDeadline(deadlineAt, now = Date.now()) {
-  const deadline = Number(deadlineAt);
-  const current = Number(now);
-  if (!Number.isFinite(deadline) || !Number.isFinite(current) || deadline <= 0) return 0;
-  return Math.max(0, Math.ceil((deadline - current) / 1000));
-}
-
 export function normalizeRemaining(value, duration) {
   if (!validFocusDuration(duration) || !Number.isFinite(value)) return duration;
   return Math.max(0, Math.min(duration, Math.floor(value)));

@@ -3,7 +3,6 @@ import type { PointerEvent, RefObject } from 'react';
 import { Activity, Check, ChevronDown, Eraser, LoaderCircle, MousePointer2, PenLine, Plus, RotateCcw, Sparkles, X } from 'lucide-react';
 import katex from 'katex';
 import { InferenceEngine, isStrokeMeaningful, loadVocab, preprocessStrokes } from 'ink-on/core';
-import { env as ortEnv } from 'onnxruntime-web';
 import type { Stroke as InkStroke, Vocab } from 'ink-on/core';
 import { buildGraphPath, buildImplicitContourPath, buildParametricPath, buildPolarPath, parseImplicitExpression, parseMathExpression, parseParametricExpression, parsePolarExpression } from './mathExpression';
 import './graph-panel.css';
@@ -22,7 +21,7 @@ const DEFAULT_FORMULAS = [
   { label: 'Tham số', value: '(2cos(t), sin(2t))' },
   { label: 'Đường cực', value: 'r=2+cos(theta)' },
 ];
-const MODEL_BASE = `${import.meta.env.BASE_URL}models/comer/`;
+const MODEL_BASE = `${import.meta.env.BASE_URL}models/corner/`;
 
 function isPolarFormula(formula: string) { return /^\s*r(?:\s*\(\s*(?:theta|θ)\s*\))?\s*=/i.test(formula); }
 function isParametricFormula(formula: string) { return /^\s*x\s*=.+,\s*y\s*=/i.test(formula) || /^\s*\(.+,.+\)\s*$/.test(formula); }
@@ -130,8 +129,6 @@ export default function GraphPanel({ onClose, onInsertGraph }: Props) {
     try {
       if (!engineRef.current || !vocabRef.current) {
         setModelStatus('loading');
-        // Pin ONNX Runtime to assets packaged under /ort; the desktop app blocks network requests.
-        ortEnv.wasm.wasmPaths = new URL('/ort/', window.location.href).toString();
         const encoderUrl = new URL(`${MODEL_BASE}encoder_int8.onnx`, window.location.href).toString();
         const decoderUrl = new URL(`${MODEL_BASE}decoder_int8.onnx`, window.location.href).toString();
         const vocabUrl = new URL(`${MODEL_BASE}vocab.json`, window.location.href).toString();

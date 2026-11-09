@@ -11,7 +11,7 @@ const tombstoneKey=(key:string)=>`muc-deleted:${key}`;
 function isTombstoned(key:string):boolean{try{return localStorage.getItem(tombstoneKey(key))==='1'}catch{return false}}
 const EMERGENCY_LIMIT=2.5*1024*1024;
 
-export type ProjectSummary={id:string;title:string;pageCount:number;updatedAt:number;createdAt:number;background:string};
+export type ProjectSummary={id:string;title:string;pageCount:number;updatedAt:number;createdAt:number;background:string;hasExamPaper?:boolean};
 export type ProjectRecord={id:string;document:BoardDocument;createdAt:number;updatedAt:number};
 type ProjectIndex={version:2;projects:ProjectSummary[]};
 
@@ -89,7 +89,8 @@ async function writeMany(entries:{key:string;value?:unknown;remove?:boolean}[]):
 function summary(record:ProjectRecord):ProjectSummary{
   const page=record.document.pages[0];
   return {id:record.id,title:record.document.title||'Không có tên',pageCount:record.document.pages.length,
-    updatedAt:record.updatedAt,createdAt:record.createdAt,background:page?.background||'lined'};
+    updatedAt:record.updatedAt,createdAt:record.createdAt,background:page?.background||'lined',
+    hasExamPaper:Boolean(record.document.examPaper)};
 }
 
 function isProjectRecord(value:unknown):value is ProjectRecord{
@@ -297,7 +298,7 @@ export const projectStore={
       // Tự phục hồi: nếu danh sách bị thiếu/hỏng hoặc không có project này thì dựng lại thay vì báo lỗi.
       let current:ProjectIndex;try{current=await index()}catch{current={version:2,projects:[]}}
       const savedAt=Date.now();
-      const meta=current.projects.find(p=>p.id===id)||{id,title:'',pageCount:0,updatedAt:savedAt,createdAt:savedAt,background:'lined'};
+      const meta=current.projects.find(p=>p.id===id)||{id,title:'',pageCount:0,updatedAt:savedAt,createdAt:savedAt,background:'lined',hasExamPaper:Boolean(document.examPaper)};
       const record:ProjectRecord={id,document,createdAt:meta.createdAt,updatedAt:meta.updatedAt};
       // Emergency journal is intentionally small so it does not crowd out the main local store.
       // Write it before IndexedDB: if the tab closes mid-transaction, load() can recover it.

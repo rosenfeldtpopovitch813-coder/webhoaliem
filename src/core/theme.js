@@ -1,4 +1,5 @@
 import { AppStore } from './store.js';
+import { setUserTheme } from './firebase.js';
 export const THEMES = Object.freeze({ aurora: 'Aurora', light: 'Sáng', midnight: 'Midnight' });
 const STORAGE_KEY = 'htvvm-theme-v2';
 export function normalizeTheme(value) { return Object.hasOwn(THEMES, value) ? value : 'aurora'; }
@@ -20,7 +21,7 @@ export async function changeTheme(name) {
   const theme = applyTheme(name);
   const uid = AppStore.get('user')?.uid;
   if (uid) {
-    try { const { setUserTheme } = await import('./firebase.js'); await setUserTheme(uid, theme); }
+    try { await setUserTheme(uid, theme); }
     catch { AppStore.set('notice', 'Đã đổi giao diện trên máy; chưa đồng bộ được lên tài khoản.'); }
   }
 }

@@ -1,0 +1,965 @@
+.exam-studio-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: #e2e8f0;
+  color: #0f172a;
+  font-family: 'Be Vietnam Pro', Inter, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* Word-like Top Ribbon */
+.exam-ribbon {
+  background: #ffffff;
+  border-bottom: 1px solid #cbd5e1;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  z-index: 20;
+}
+
+.exam-ribbon-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.exam-ribbon-sep {
+  width: 1px;
+  height: 24px;
+  background: #cbd5e1;
+  margin: 0 3px;
+}
+
+.exam-btn {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  white-space: nowrap;
+}
+
+.exam-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.exam-btn.active {
+  background: #ede9fe;
+  border-color: #8b5cf6;
+  color: #5b21b6;
+  font-weight: 700;
+}
+
+.exam-btn.primary {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.exam-btn.primary:hover {
+  background: #0f766e;
+}
+
+.exam-btn.purple {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.exam-btn.purple:hover {
+  background: #6d28d9;
+}
+
+.exam-select {
+  height: 34px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exam-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #334155;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exam-icon-btn:hover,
+.exam-icon-btn.active {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+/* Sub-toolbar for quick question insertion & smart typing */
+.exam-subbar {
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+}
+
+.exam-subbar-left,
+.exam-subbar-right {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.exam-chip-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 99px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.exam-chip-btn:hover {
+  border-color: #0d9488;
+  color: #0d9488;
+  background: #f0fdfa;
+}
+
+.exam-autosave-pill {
+  color: #059669;
+  font-weight: 700;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Download Dropdown */
+.exam-download-wrap {
+  position: relative;
+}
+
+.exam-download-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 310px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+  padding: 6px;
+  z-index: 100;
+  display: grid;
+  gap: 3px;
+}
+
+.exam-download-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 9px 11px;
+  border-radius: 8px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.exam-download-item:hover {
+  background: #f1f5f9;
+}
+
+.exam-download-item strong {
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.exam-download-item small {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+/* Main Workspace (Single or Split Screen) */
+.exam-workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.exam-workspace.is-split {
+  grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.92fr);
+}
+
+/* Left Pane: Scrollable A4 Paper Area */
+.exam-paper-viewport {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 18px 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  background: #cbd5e1;
+}
+
+/* The A4 Sheet (210mm wide) */
+.exam-a4-sheet {
+  width: min(210mm, 100%);
+  min-height: 297mm;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  padding: 16mm 18mm 20mm;
+  position: relative;
+  transition: box-shadow 0.2s ease;
+}
+
+/* Header on A4 Paper */
+.exam-a4-header {
+  display: grid;
+  grid-template-columns: 44% 56%;
+  border-bottom: 1.5px solid #1e293b;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.exam-a4-header-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+}
+
+.exam-inline-input {
+  width: 100%;
+  border: 1px dashed transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.exam-inline-input:hover,
+.exam-inline-input:focus {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  outline: none;
+}
+
+.exam-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid #1e293b;
+  padding: 1px 8px;
+  margin-top: 3px;
+  font-weight: 700;
+  font-size: 0.92em;
+}
+
+.exam-student-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 8px 0 14px;
+  font-size: 0.96em;
+  color: #1e293b;
+}
+
+/* Smart Word-like Quick-Type Bar inside A4 Sheet */
+.exam-smart-composer {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1.5px dashed #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+}
+
+.exam-smart-composer-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.exam-smart-textarea {
+  width: 100%;
+  min-height: 68px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+/* Blocks on A4 Sheet */
+.exam-block {
+  position: relative;
+  padding: 6px 8px;
+  margin: 0 -8px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.exam-block:hover,
+.exam-block.is-focused {
+  background: rgba(241, 245, 249, 0.65);
+  border-color: #e2e8f0;
+}
+
+/* Purple Drop Indicator Line when dragging figure from board */
+.exam-block.is-drop-target::after {
+  content: 'Thả hình vào đây (tự căn giữa dưới câu hỏi)';
+  display: block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: #f3e8ff;
+  border-top: 3px solid #7c3aed;
+  color: #6d28d9;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.exam-block-controls {
+  position: absolute;
+  right: 6px;
+  top: -11px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 99px;
+  padding: 2px 6px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 10px;
+  z-index: 5;
+}
+
+.exam-block:hover .exam-block-controls,
+.exam-block.is-focused .exam-block-controls {
+  display: inline-flex;
+}
+
+.exam-mini-action {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+
+.exam-mini-action:hover,
+.exam-mini-action.active {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.exam-mini-action.danger:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Section Block */
+.exam-section-title-input {
+  width: 100%;
+  font: inherit;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  padding: 2px 0;
+}
+
+.exam-section-sub-input {
+  width: 100%;
+  font: inherit;
+  font-style: italic;
+  font-size: 0.94em;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  padding: 1px 0;
+}
+
+/* Question Prompt Row */
+.exam-q-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.exam-q-label {
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.exam-q-points {
+  border: 1px dashed transparent;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  width: 72px;
+  padding: 0 3px;
+  color: #334155;
+}
+
+.exam-q-points:hover,
+.exam-q-points:focus {
+  border-color: #cbd5e1;
+  background: #fff;
+}
+
+.exam-q-prompt-area {
+  flex: 1;
+  min-width: 240px;
+}
+
+.exam-q-textarea {
+  width: 100%;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  line-height: 1.5;
+  background: #ffffff;
+  color: #0f172a;
+  resize: vertical;
+}
+
+.exam-q-rendered {
+  cursor: text;
+  min-height: 1.5em;
+  line-height: 1.55;
+}
+
+/* Multiple Choice Options + 1 dòng · 2 dòng · 4 dòng switcher */
+.exam-options-wrap {
+  position: relative;
+  margin-top: 6px;
+}
+
+.exam-options-layout-bar {
+  position: absolute;
+  right: 0;
+  top: -24px;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  background: #1e293b;
+  color: #ffffff;
+  padding: 2px 6px;
+  border-radius: 99px;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 10px;
+  z-index: 6;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+.exam-options-wrap:hover .exam-options-layout-bar,
+.exam-options-wrap:focus-within .exam-options-layout-bar {
+  display: inline-flex;
+}
+
+.exam-options-layout-bar button {
+  border: 0;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+
+.exam-options-layout-bar button.active {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.exam-options-grid {
+  display: grid;
+  gap: 5px 14px;
+}
+
+.exam-options-grid.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.exam-options-grid.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.exam-options-grid.cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.exam-option-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.exam-option-letter {
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  font: inherit;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+
+.exam-option-letter:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.exam-option-letter.is-correct {
+  color: #dc2626;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+.exam-option-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px dashed transparent;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.exam-option-input:hover,
+.exam-option-input:focus {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  outline: none;
+}
+
+/* True / False Statements */
+.exam-tf-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.exam-tf-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.exam-tf-label {
+  font-weight: 700;
+  min-width: 18px;
+}
+
+.exam-tf-toggle {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  flex: none;
+}
+
+.exam-tf-toggle button {
+  border: 0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.exam-tf-toggle button.is-true {
+  background: #059669;
+  color: #ffffff;
+}
+
+.exam-tf-toggle button.is-false {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+/* Short Answer & Solution rows */
+.exam-short-row,
+.exam-solution-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.95em;
+}
+
+.exam-short-row strong {
+  color: #0f766e;
+}
+
+.exam-solution-row {
+  padding: 5px 8px;
+  background: #f8fafc;
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 6px 6px 0;
+}
+
+.exam-solution-row strong {
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+
+/* Inline Figures inside Question (Click to resize, align left/center/right, Edit on board) */
+.exam-figure-row {
+  margin: 8px 0;
+  display: flex;
+}
+
+.exam-figure-row.align-left {
+  justify-content: flex-start;
+}
+
+.exam-figure-row.align-center {
+  justify-content: center;
+}
+
+.exam-figure-row.align-right {
+  justify-content: flex-end;
+}
+
+.exam-figure-box {
+  position: relative;
+  display: inline-block;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  transition: border-color 0.14s;
+}
+
+.exam-figure-box:hover,
+.exam-figure-box.is-selected {
+  border-color: #7c3aed;
+}
+
+.exam-figure-box img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  border-radius: 4px;
+  user-select: none;
+}
+
+/* Corner Resize Square */
+.exam-figure-resize-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 13px;
+  height: 13px;
+  background: #7c3aed;
+  border: 2px solid #ffffff;
+  border-radius: 3px;
+  cursor: nwse-resize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Figure Floating Toolbar (⇤ Trái · ↔ Giữa · Phải ⇥ · ✏️ Sửa hình · 🗑) */
+.exam-figure-toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #1e293b;
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 99px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.25);
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 12;
+}
+
+.exam-figure-toolbar button {
+  border: 0;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+
+.exam-figure-toolbar button:hover,
+.exam-figure-toolbar button.active {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.exam-figure-toolbar button.danger:hover {
+  background: #dc2626;
+}
+
+/* Right Pane: Split-Screen Interactive Drawing Board */
+.exam-board-pane {
+  background: #ffffff;
+  border-left: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.exam-board-header {
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.exam-board-tabs {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.exam-board-tab {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exam-board-tab.active {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #ffffff;
+}
+
+.exam-board-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exam-board-controls {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.exam-board-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exam-board-stage {
+  position: relative;
+  border: 2px solid #cbd5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  min-height: 300px;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.exam-board-stage:active {
+  cursor: grabbing;
+}
+
+.exam-board-stage img,
+.exam-board-stage canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.exam-board-drag-pill {
+  position: sticky;
+  bottom: 8px;
+  margin-top: auto;
+  padding: 11px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: grab;
+  box-shadow: 0 10px 25px rgba(124, 58, 237, 0.32);
+  user-select: none;
+}
+
+.exam-board-drag-pill:active {
+  cursor: grabbing;
+}
+
+/* Formula & Molecule Modal */
+.exam-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.exam-modal-card {
+  width: min(780px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.exam-formula-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 8px;
+}
+
+.exam-formula-tile {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 9px 10px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.exam-formula-tile:hover {
+  border-color: #7c3aed;
+  background: #f5f3ff;
+}
+
+.exam-formula-tile strong {
+  font-size: 11.5px;
+  color: #1e293b;
+}
+
+.exam-formula-tile span {
+  font-size: 12px;
+  color: #6d28d9;
+  font-family: Georgia, serif;
+}
+
+@media (max-width: 1024px) {
+  .exam-workspace.is-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1.1fr 0.9fr;
+  }
+  .exam-board-pane {
+    border-left: 0;
+    border-top: 2px solid #cbd5e1;
+  }
+}

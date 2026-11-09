@@ -12,7 +12,107 @@ export type ImageItem={id:string;kind:'image';x:number;y:number;w:number;h:numbe
 export type BoardItem=Stroke|Shape|TextItem|ImageItem;
 export type Background='white'|'black'|'grid'|'dots'|'lined'|'graph'|'chemistry'|'physics'|'notebook';
 export type BoardPage={id:string;name:string;items:BoardItem[];background:Background;backgroundImage?:string;paperColor?:string;lineColor?:string;spacing?:number;border?:boolean;margins?:boolean};
-export type BoardDocument={title:string;pages:BoardPage[];activeId:string;paperFormat?:'A4'};
+
+export type ExamHeaderConfig={
+  department:string;
+  school:string;
+  examTitle:string;
+  subject:string;
+  duration:string;
+  examCode:string;
+  academicYear:string;
+  showStudentInfo:boolean;
+};
+
+export type ExamFigureSource={
+  id:string;
+  kind:'board'|'3d'|'graph'|'molecule';
+  label:string;
+  src:string;
+  aspectRatio:number;
+  pointFontSize:number;
+  strokeColor:string;
+  // Source config so editing on the board live-updates the figure in the exam
+  graphFormula?:string;
+  graphXMin?:number;
+  graphXMax?:number;
+  graphYMin?:number;
+  graphYMax?:number;
+  solid3DConfig?: {
+    solid:'pyramid3'|'pyramid4'|'prism3'|'cube'|'cylinder'|'cone';
+    rx:number;
+    ry:number;
+    showMidpoints:boolean;
+    showSection:boolean;
+    faceColor:string;
+    pointLabels:string[];
+  };
+  moleculeConfig?: {
+    preset:string;
+    atoms:Array<{id:string;el:string;x:number;y:number}>;
+    bonds:Array<{from:string;to:string;order:1|2|3}>;
+  };
+  boardStrokes?:Array<{id:string;points:Array<{x:number;y:number}>;color:string;width:number;label?:string;lx?:number;ly?:number}>;
+};
+
+export type ExamInlineFigure={
+  id:string;
+  sourceId:string;
+  src:string;
+  width:number; // px on A4 page (e.g. 120..620)
+  align:'left'|'center'|'right';
+  caption?:string;
+};
+
+export type ExamStatementTF={
+  id:string;
+  label:'a'|'b'|'c'|'d';
+  text:string;
+  correct:boolean|null;
+};
+
+export type ExamBlock=
+  | {
+      id:string;
+      type:'section';
+      title:string;
+      subtitle?:string;
+    }
+  | {
+      id:string;
+      type:'question';
+      questionType:'mcq'|'tf'|'short'|'essay';
+      points?:string; // e.g. "1 điểm", "0,25 điểm"
+      prompt:string; // supports inline text, $latex$, \ce{...}
+      align?:'left'|'center'|'right'|'justify';
+      options?:[string,string,string,string];
+      optionCols?:1|2|4; // 4 dòng (1 col), 2 dòng (2 cols), 1 dòng (4 cols)
+      correctChoice?:'A'|'B'|'C'|'D'|'';
+      statements?:ExamStatementTF[];
+      shortAnswer?:string;
+      solution?:string;
+      figures?:ExamInlineFigure[];
+    }
+  | {
+      id:string;
+      type:'paragraph';
+      text:string;
+      align?:'left'|'center'|'right'|'justify';
+      bold?:boolean;
+      italic?:boolean;
+      figures?:ExamInlineFigure[];
+    };
+
+export type ExamPaperDocument={
+  fontFamily:string;
+  fontSizePt:number;
+  header:ExamHeaderConfig;
+  blocks:ExamBlock[];
+  figureSources:ExamFigureSource[];
+  updatedAt:number;
+};
+
+export type BoardDocument={title:string;pages:BoardPage[];activeId:string;paperFormat?:'A4';examPaper?:ExamPaperDocument};
 // A4 portrait at 96 CSS pixels per inch (210 × 297 mm).
 export const W=794,H=1123;
 export const createPage=(n:number):BoardPage=>({id:crypto.randomUUID(),name:`Trang ${n}`,items:[],background:'lined'});
