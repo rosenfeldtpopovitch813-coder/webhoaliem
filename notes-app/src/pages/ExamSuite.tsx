@@ -283,7 +283,7 @@ export default function ExamSuite() {
                   placeholder="Gõ tên đề thi mới (VD: Đề kiểm tra giữa kì 1 Hóa học 12)…"
                 />
                 <button type="submit" className="home-exam-quick-btn">
-                  📝 Mở trang A4 soạn ngay
+                  <FileText size={16} /> Mở trang A4 soạn ngay
                 </button>
               </form>
             </div>
@@ -302,7 +302,7 @@ export default function ExamSuite() {
                 <i />
               </div>
               <div className="welcome-sticker">
-                A4 <span>📝</span>
+                A4 <FileText size={15} />
               </div>
             </div>
           </section>
@@ -367,8 +367,8 @@ export default function ExamSuite() {
                         </div>
                       </button>
 
-                      <span className="home-exam-badge" style={{ pointerEvents: 'none' }}>
-                        📝 Đề A4
+                      <span className="home-exam-badge" style={{ pointerEvents: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <FileText size={12} /> Đề A4
                       </span>
 
                       <button
@@ -390,7 +390,7 @@ export default function ExamSuite() {
                               void openExam(exam.id);
                             }}
                           >
-                            📄 Mở soạn tiếp
+                            <FileText size={15} /> Mở soạn tiếp
                           </button>
                           <button
                             role="menuitem"
@@ -435,10 +435,10 @@ export default function ExamSuite() {
                     {query ? 'Không tìm thấy đề thi phù hợp' : 'Chưa có đề thi khổ A4 nào'}
                   </strong>
                   <p>
-                    Gõ tên đề ở ô phía trên rồi bấm “📝 Mở trang A4 soạn ngay” để tạo đề đầu tiên (có sẵn mẫu nhiều phần).
+                    Gõ tên đề ở ô phía trên rồi bấm “Mở trang A4 soạn ngay” để tạo đề đầu tiên (có sẵn mẫu nhiều phần).
                   </p>
-                  <button onClick={() => void createNewExam('Đề kiểm tra Hóa học 12')}>
-                    📝 Tạo đề A4 mẫu ngay
+                  <button onClick={() => void createNewExam('Đề kiểm tra Hóa học 12')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Plus size={16} /> Tạo đề A4 mẫu ngay
                   </button>
                 </div>
               )}

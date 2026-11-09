@@ -1,17 +1,18 @@
 import { element, button } from '../../core/dom.js';
+import { icon } from '../../core/icons.js';
 import { navigate } from '../../core/router.js';
 import { auth } from '../../core/firebase.js';
 import { AppStore } from '../../core/store.js';
 
 const modules = [
-  ['📝', 'Soạn đề A4', 'Soạn đề nhiều trang A4 như Word, công thức Toán/Hóa, xuất .docx & PDF', '/exam-paper'],
-  ['✎', 'Bảng vẽ Mực', 'Bảng viết tay độc lập, dựng hình 3D, vẽ đồ thị và viết lên PDF', '/whiteboard'],
-  ['✦', 'Phòng thi trực tuyến', 'Tạo phòng thi OMR, chấm điểm tự động và sổ tay câu sai', '/exam'],
-  ['⚡', 'Chem Arena', 'Đấu trường Hóa học đối kháng thời gian thực', '/arena'],
-  ['▦', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
-  ['◷', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
-  ['▧', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
-  ['⌁', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển đại học', '/admissions']
+  ['exam-paper', 'Soạn đề A4', 'Soạn đề nhiều trang A4 như Word, công thức Toán/Hóa, xuất .docx & PDF', '/exam-paper'],
+  ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay độc lập, dựng hình 3D, vẽ đồ thị và viết lên PDF', '/whiteboard'],
+  ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR tinh gọn bên phải, chấm điểm tự động', '/exam'],
+  ['arena', 'Chem Arena', 'Đấu trường Hóa học đối kháng thời gian thực', '/arena'],
+  ['handbook', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
+  ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
+  ['library', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
+  ['admissions', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển đại học', '/admissions']
 ];
 const fmt = seconds => `${Math.floor(seconds / 3600)} giờ ${Math.floor(seconds % 3600 / 60)} phút`;
 
@@ -28,7 +29,9 @@ export function renderHome() {
   const boardPanel = element('section', 'home-leaderboard-panel');
   const boardHeader = element('div', 'home-board-header');
   const boardTitle = element('div', 'home-board-title');
-  boardTitle.append(element('span', 'home-board-icon', '🏆'), element('div', '', ''));
+  const boardIcon = element('span', 'home-board-icon');
+  boardIcon.append(icon('trophy', 22));
+  boardTitle.append(boardIcon, element('div', '', ''));
   boardTitle.lastChild.append(element('h3', 'section-heading', 'Bảng xếp hạng'), element('p', 'home-board-subtitle', 'Xếp hạng thời gian học do người dùng tự nguyện chia sẻ.'));
   const refresh = button('Làm mới', 'focus-btn', () => loadBoard());
   boardHeader.append(boardTitle, refresh);
@@ -51,9 +54,11 @@ export function renderHome() {
   wrap.append(dashboardGrid, element('h3', 'section-heading', 'Không gian học tập'));
 
   const grid = element('div', 'module-grid');
-  for (const [glyph, title, description, path] of modules) {
+  for (const [iconName, title, description, path] of modules) {
     const card = element('button', 'module-card'); card.type = 'button';
-    card.append(element('span', 'module-icon', glyph), element('strong', 'module-title', title), element('span', 'module-description', description), element('span', 'module-link', 'Khám phá →'));
+    const modIcon = element('span', 'module-icon');
+    modIcon.append(icon(iconName, 22));
+    card.append(modIcon, element('strong', 'module-title', title), element('span', 'module-description', description), element('span', 'module-link', 'Khám phá →'));
     card.addEventListener('click', () => navigate(path)); grid.append(card);
   }
   wrap.append(grid);

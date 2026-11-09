@@ -1,5 +1,34 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  ArrowLeft,
+  Bold,
+  Check,
+  ChevronDown,
+  CornerDownLeft,
+  Download,
+  FilePlus2,
+  FileText,
+  FlaskConical,
+  ImagePlus,
+  Italic,
+  Keyboard,
+  Pencil,
+  Plus,
+  Printer,
+  RotateCcw,
+  Save,
+  Scissors,
+  Send,
+  Shapes,
+  Sigma,
+  Trash2,
+  X
+} from 'lucide-react';
+import {
   ExamBlock,
   ExamFigureSource,
   ExamInlineFigure,
@@ -833,14 +862,14 @@ export default function ExamPaperStudio({
             }}
             title="Lưu đề thi và quay về danh sách đề"
           >
-            💾 Lưu & Về danh sách đề
+            <Save size={15} /> Lưu &amp; Về danh sách đề
           </button>
           <button
             className="exam-btn"
             onClick={handleRevertChanges}
             title="Bỏ các thay đổi vừa gõ trên trang đề (hình minh hoạ vẫn giữ)"
           >
-            ↩ Bỏ thay đổi
+            <RotateCcw size={15} /> Bỏ thay đổi
           </button>
           <span className="exam-ribbon-sep" />
           <select
@@ -890,7 +919,7 @@ export default function ExamPaperStudio({
               }));
             }}
           >
-            <b>B</b>
+            <Bold size={15} />
           </button>
           <button
             className="exam-icon-btn"
@@ -907,7 +936,7 @@ export default function ExamPaperStudio({
               }));
             }}
           >
-            <i>I</i>
+            <Italic size={15} />
           </button>
           {(['left', 'center', 'right', 'justify'] as const).map(al => (
             <button
@@ -927,13 +956,15 @@ export default function ExamPaperStudio({
                 }));
               }}
             >
-              {al === 'left'
-                ? '⇤'
-                : al === 'center'
-                ? '↔'
-                : al === 'right'
-                ? '⇥'
-                : '≡'}
+              {al === 'left' ? (
+                <AlignLeft size={15} />
+              ) : al === 'center' ? (
+                <AlignCenter size={15} />
+              ) : al === 'right' ? (
+                <AlignRight size={15} />
+              ) : (
+                <AlignJustify size={15} />
+              )}
             </button>
           ))}
           <span className="exam-ribbon-sep" />
@@ -942,14 +973,14 @@ export default function ExamPaperStudio({
             onClick={() => setFormulaModal('math')}
             title="Chèn công thức Toán học (phân số, căn, hệ PT, tích phân, giới hạn, vectơ...)"
           >
-            <b>ƒ</b> Công thức
+            <Sigma size={15} /> Công thức
           </button>
           <button
             className="exam-btn"
             onClick={() => setFormulaModal('chem')}
             title="Chèn phương trình Hóa học & vẽ công thức cấu tạo phân tử"
           >
-            ⚗ Phân tử & Hóa
+            <FlaskConical size={15} /> Phân tử &amp; Hóa
           </button>
         </div>
 
@@ -966,14 +997,14 @@ export default function ExamPaperStudio({
             onClick={() => imageUploadRef.current?.click()}
             title="Chèn ảnh từ máy tính vào câu đang chọn"
           >
-            📂 Chèn ảnh
+            <ImagePlus size={15} /> Chèn ảnh
           </button>
           <button
             className={`exam-btn ${splitBoardOpen ? 'active' : 'purple'}`}
             onClick={() => setSplitBoardOpen(v => !v)}
             title="Mở khung công cụ dựng hình minh hoạ (3D, đồ thị, phân tử) để kéo vào đề"
           >
-            📐 Dựng hình minh hoạ {splitBoardOpen ? '· Đang mở' : ''}
+            <Shapes size={15} /> Dựng hình minh hoạ {splitBoardOpen ? '· Đang mở' : ''}
           </button>
 
           <div className="exam-download-wrap">
@@ -981,7 +1012,7 @@ export default function ExamPaperStudio({
               className="exam-btn primary"
               onClick={() => setDownloadMenuOpen(v => !v)}
             >
-              ⬇ Tải về ▸
+              <Download size={15} /> Tải về <ChevronDown size={14} />
             </button>
             {downloadMenuOpen && (
               <div className="exam-download-menu" role="menu">
@@ -992,9 +1023,11 @@ export default function ExamPaperStudio({
                     setDownloadMenuOpen(false);
                   }}
                 >
-                  <strong>📄 File Word (.docx) — Bản Học sinh</strong>
+                  <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <FileText size={14} /> File Word (.docx) — Bản Học sinh
+                  </strong>
                   <small>
-                    Mở bằng Microsoft Word, công thức chuẩn Word sửa tiếp được, đã ẩn đáp án & lời giải
+                    Mở bằng Microsoft Word, công thức chuẩn Word sửa tiếp được, đã ẩn đáp án &amp; lời giải
                   </small>
                 </button>
                 <button
@@ -1004,7 +1037,9 @@ export default function ExamPaperStudio({
                     setDownloadMenuOpen(false);
                   }}
                 >
-                  <strong>📄 File Word (.docx) — Bản Giáo viên</strong>
+                  <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <FileText size={14} /> File Word (.docx) — Bản Giáo viên
+                  </strong>
                   <small>
                     Có gạch chân đáp án đúng, nhãn Đ/S và lời giải chi tiết
                   </small>
@@ -1016,7 +1051,9 @@ export default function ExamPaperStudio({
                     setDownloadMenuOpen(false);
                   }}
                 >
-                  <strong>🖨 PDF (In / Lưu PDF) — Bản phát cho Học sinh</strong>
+                  <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Printer size={14} /> PDF (In / Lưu PDF) — Bản phát cho Học sinh
+                  </strong>
                   <small>
                     Tự động bỏ đáp án, bỏ Đ/S, ẩn lời giải và chừa trống ô trả lời ngắn
                   </small>
@@ -1028,14 +1065,18 @@ export default function ExamPaperStudio({
                     setDownloadMenuOpen(false);
                   }}
                 >
-                  <strong>🖨 PDF (In / Lưu PDF) — Bản Giáo viên</strong>
+                  <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Printer size={14} /> PDF (In / Lưu PDF) — Bản Giáo viên
+                  </strong>
                   <small>Đầy đủ đáp án A/B/C/D, Đ/S và lời giải</small>
                 </button>
                 <button
                   className="exam-download-item"
                   onClick={pushToOnlineExamRoom}
                 >
-                  <strong>🚀 Chuyển sang Phòng thi trực tuyến</strong>
+                  <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Send size={14} /> Chuyển sang Phòng thi trực tuyến
+                  </strong>
                   <small>
                     Trích xuất tự động các câu hỏi và đáp án sang Phòng thi HTVVM
                   </small>
@@ -1045,7 +1086,7 @@ export default function ExamPaperStudio({
           </div>
 
           <button className="exam-btn" onClick={onClose} title="Đóng trình soạn đề">
-            ✕
+            <X size={15} />
           </button>
         </div>
       </header>
@@ -1054,16 +1095,16 @@ export default function ExamPaperStudio({
       <div className="exam-subbar">
         <div className="exam-subbar-left">
           <button className="exam-chip-btn" onClick={() => addBlock('section')}>
-            + Chia PHẦN (I, II, III)
+            <Plus size={13} /> Chia PHẦN (I, II, III)
           </button>
           <button className="exam-chip-btn" onClick={() => addBlock('mcq')}>
-            + Câu trắc nghiệm (A–D)
+            <Plus size={13} /> Câu trắc nghiệm (A–D)
           </button>
           <button className="exam-chip-btn" onClick={() => addBlock('tf')}>
-            + Câu Đúng / Sai (a–d)
+            <Plus size={13} /> Câu Đúng / Sai (a–d)
           </button>
           <button className="exam-chip-btn" onClick={() => addBlock('short')}>
-            + Câu Trả lời ngắn / Tự luận
+            <Plus size={13} /> Câu Trả lời ngắn / Tự luận
           </button>
           <button
             className="exam-chip-btn"
@@ -1071,7 +1112,7 @@ export default function ExamPaperStudio({
             onClick={addNewPage}
             title="Tạo ngay trang A4 tiếp theo (Trang 2, Trang 3…)"
           >
-            📄 + Thêm trang mới
+            <FilePlus2 size={13} /> Thêm trang mới
           </button>
           <button
             className="exam-chip-btn"
@@ -1081,7 +1122,7 @@ export default function ExamPaperStudio({
             }}
             onClick={() => setSmartComposerOpen(v => !v)}
           >
-            ⌨ Gõ / Dán nhanh nhiều câu như Word
+            <Keyboard size={13} /> Gõ / Dán nhanh nhiều câu như Word
           </button>
         </div>
         <div className="exam-subbar-right">
@@ -1141,7 +1182,7 @@ export default function ExamPaperStudio({
                     onClick={() => removeManualPageBreak(pg.manualBreakId, pg.breakBeforeBlockId)}
                     title="Xoá ngắt trang thủ công để gộp lại với trang phía trên"
                   >
-                    ✂ Ngắt trang thủ công · Bấm để gộp trang
+                    <Scissors size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Ngắt trang thủ công · Bấm để gộp trang
                   </button>
                 )}
               </div>
@@ -1288,7 +1329,7 @@ export default function ExamPaperStudio({
                         title="Đẩy phần này sang đầu trang A4 tiếp theo"
                         onClick={() => togglePageBreakBefore(block.id)}
                       >
-                        ↵ Sang trang
+                        <CornerDownLeft size={11} /> Sang trang
                       </button>
                       <button
                         className="exam-mini-action danger"
@@ -1299,7 +1340,7 @@ export default function ExamPaperStudio({
                           }))
                         }
                       >
-                        🗑 Xoá phần
+                        <Trash2 size={11} /> Xoá phần
                       </button>
                     </div>
                     {editingFieldKey === `sec-title:${block.id}` ? (
@@ -1387,7 +1428,7 @@ export default function ExamPaperStudio({
                           }))
                         }
                       >
-                        🗑 Xoá dòng
+                        <Trash2 size={11} /> Xoá dòng
                       </button>
                     </div>
                     <input
@@ -1453,7 +1494,7 @@ export default function ExamPaperStudio({
                         setEditingPromptId(isEditingPrompt ? null : block.id)
                       }
                     >
-                      {isEditingPrompt ? '✓ Xong' : '✎ Sửa đề'}
+                      {isEditingPrompt ? <><Check size={11} /> Xong</> : <><Pencil size={11} /> Sửa đề</>}
                     </button>
                     <button
                       className="exam-mini-action"
@@ -1462,7 +1503,7 @@ export default function ExamPaperStudio({
                         setSplitBoardOpen(true);
                       }}
                     >
-                      📐 Dựng hình
+                      <Shapes size={11} /> Dựng hình
                     </button>
                     <button
                       className="exam-mini-action"
@@ -1478,14 +1519,14 @@ export default function ExamPaperStudio({
                         setEditingSolutionId(block.id);
                       }}
                     >
-                      + Lời giải
+                      <Plus size={11} /> Lời giải
                     </button>
                     <button
                       className={`exam-mini-action ${block.pageBreakBefore ? 'active' : ''}`}
                       title="Đẩy câu này sang đầu trang A4 tiếp theo"
                       onClick={() => togglePageBreakBefore(block.id)}
                     >
-                      ↵ Sang trang
+                      <CornerDownLeft size={11} /> Sang trang
                     </button>
                     <button
                       className="exam-mini-action danger"
@@ -1497,7 +1538,7 @@ export default function ExamPaperStudio({
                         }))
                       }
                     >
-                      🗑 Xoá câu
+                      <Trash2 size={11} /> Xoá câu
                     </button>
                   </div>
 
@@ -1700,7 +1741,7 @@ export default function ExamPaperStudio({
                                   setSplitBoardOpen(true);
                                 }}
                               >
-                                ✏️ Sửa hình
+                                <Pencil size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} /> Sửa hình
                               </button>
                               <button
                                 className="danger"
@@ -1724,7 +1765,7 @@ export default function ExamPaperStudio({
                                   setSelectedFigure(null);
                                 }}
                               >
-                                🗑
+                                <Trash2 size={12} />
                               </button>
                             </div>
                           )}
@@ -2103,7 +2144,7 @@ export default function ExamPaperStudio({
             className="exam-add-page-below"
             onClick={addNewPage}
           >
-            📄 + Thêm Trang {pages.length + 1} (Khổ A4)
+            <FilePlus2 size={16} /> Thêm Trang {pages.length + 1} (Khổ A4)
           </button>
         </div>
 
@@ -2528,7 +2569,9 @@ export default function ExamPaperStudio({
                     onClick={() => insertFigureIntoBlock(activeSource.id)}
                     title="Kéo ô này thả sang câu hỏi bên trang đề A4 (hoặc bấm để chèn vào câu đang chọn)"
                   >
-                    <span>⟵ 🖼 Kéo hình sang trang (hoặc bấm để chèn ngay)</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <ArrowLeft size={15} /> Kéo hình sang trang (hoặc bấm để chèn ngay)
+                    </span>
                     <small style={{ opacity: 0.9 }}>
                       Hình trong đề luôn tự cập nhật theo bảng
                     </small>
@@ -2556,16 +2599,18 @@ export default function ExamPaperStudio({
                 alignItems: 'center'
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 16 }}>
-                {formulaModal === 'math'
-                  ? 'ƒ Bảng công thức Toán học (chuẩn sách giáo khoa)'
-                  : '⚗ Công thức Hóa học & Cấu tạo Phân tử'}
+              <h3 style={{ margin: 0, fontSize: 16, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                {formulaModal === 'math' ? (
+                  <><Sigma size={18} /> Bảng công thức Toán học (chuẩn sách giáo khoa)</>
+                ) : (
+                  <><FlaskConical size={18} /> Công thức Hóa học &amp; Cấu tạo Phân tử</>
+                )}
               </h3>
               <button
                 className="exam-btn"
                 onClick={() => setFormulaModal(null)}
               >
-                Đóng ✕
+                Đóng <X size={14} />
               </button>
             </div>
 
@@ -2629,7 +2674,7 @@ export default function ExamPaperStudio({
                       createBoardSource('molecule');
                     }}
                   >
-                    🖼 Mở bảng vẽ Phân tử 2D
+                    <Shapes size={14} /> Mở bảng vẽ Phân tử 2D
                   </button>
                 </div>
               </>
@@ -2675,7 +2720,7 @@ export default function ExamPaperStudio({
                   className="exam-btn primary"
                   onClick={() => insertFormulaIntoFocused(customLatex)}
                 >
-                  ✓ Chèn công thức vào câu đang chọn
+                  <Check size={14} /> Chèn công thức vào câu đang chọn
                 </button>
               </div>
             </div>

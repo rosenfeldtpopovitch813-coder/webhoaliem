@@ -1,4 +1,5 @@
 import { element, button } from '../../core/dom.js';
+import { icon } from '../../core/icons.js';
 import { navigate } from '../../core/router.js';
 import { AppStore } from '../../core/store.js';
 import { auth } from '../../core/firebase.js';
@@ -223,7 +224,9 @@ export function renderExam() {
       body.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }));
   }
-  bar.append(button('📝 Khu Soạn đề A4 riêng →', 'exam-tab', () => navigate('/exam-paper')));
+  const openA4Top = button('', 'exam-tab', () => navigate('/exam-paper'));
+  openA4Top.append(icon('exam-paper', 15), document.createTextNode(' Khu Soạn đề A4 riêng →'));
+  bar.append(openA4Top);
   wrap.append(showcase, bar, body);
   let hasPendingPaper = false;
   try { hasPendingPaper = Boolean(localStorage.getItem('htvvm_pending_exam_paper')); } catch { /* ignore */ }
@@ -263,66 +266,129 @@ async function begin(host, id) {
     const localIsNewer = !!localDraft && Number(localDraft.savedAt || 0) > Number(data.session.draftUpdatedAt || 0);
     answers = cloneAnswers(localIsNewer ? localDraft.answers : serverAnswers);
     if (!answeredCount(answers) && localDraft && answeredCount(localDraft.answers)) answers = cloneAnswers(localDraft.answers);
-    const validQuestionIds = new Set((data.questions || []).map(q => q.id));
+    const questions = data.questions || [];
+    const validQuestionIds = new Set(questions.map(q => q.id));
     const initialFlags = localIsNewer && Array.isArray(localDraft?.flaggedQuestions)
       ? localDraft.flaggedQuestions
       : (data.session.flaggedQuestions || localDraft?.flaggedQuestions || []);
     const flaggedQuestions = new Set((Array.isArray(initialFlags) ? initialFlags : []).filter(qid => validQuestionIds.has(qid)));
 
-    const p = panel(data.exam.title);
-    const timer = E('div', 'exam-timer');
-    const status = E('small', 'exam-save-status', 'Bản nháp được lưu tự động.');
-    const description = E('p', 'exam-message', `Mã đề: ${id} • ${data.exam.durationMinutes} phút. Bài làm tự lưu trên thiết bị và đồng bộ lên máy chủ khi kết nối được.`);
-    if (answeredCount(answers)) description.textContent += ` Đã khôi phục ${answeredCount(answers)} câu đã trả lời.`;
+    const p = E('section', 'exam-runner-shell');
+    let busy = false, draftSaveBusy = false, draftSaveQueued = false, omrFilter = 'all';
+    const initialPerf = performance.now(), serverAt = data.serverNow;
+    const remaining = () => Math.max(0, data.session.endsAt - (serverAt + performance.now() - initialPerf));
 
-    const tools = E('div', 'exam-session-tools');
-    const answeredLabel = E('strong', 'exam-progress-label', 'Đã trả lời 0 câu');
-    const fullscreenButton = button('⛶ Toàn màn hình', 'exam-session-tool', async () => {
+    const submit = async (automatic = false) => {
+      if (busy) return; busy = true;
+      if (ticker) clearInterval(ticker); ticker = null;
+      if (autosaveTicker) clearInterval(autosaveTicker); autosaveTicker = null;
+      if (draftSaveTimer) clearTimeout(draftSaveTimer); draftSaveTimer = null;
+      timer.textContent = automatic ? 'Hết giờ · đang nộp…' : 'Đang nộp bài…';
+      status.textContent = 'Đang gửi phiếu trả lời lên máy chủ…';
+      try {
+        const output = await api('submit', { id, answers: cloneAnswers(answers) });
+        removeLocalDraft(uid, id); showResult(host, output.result, id);
+      } catch (err) {
+        busy = false; showError(host, err);
+        host.append(button('Thử nộp lại', 'primary-btn', () => submit(automatic)));
+      }
+    };
+    const confirmSubmit = () => {
+      const done = questions.filter(questionIsAnswered).length;
+      const msg = done < questions.length
+        ? `Bạn mới khoanh ${done}/${questions.length} câu (còn ${questions.length - done} câu trống). Xác nhận nộp bài?`
+        : 'Xác nhận nộp phiếu trả lời và chấm điểm ngay?';
+      if (confirm(msg)) submit(false);
+    };
+
+    // --- STICKY COMPACT TOP BAR ---
+    const topBar = E('header', 'exam-run-topbar');
+    const titleGroup = E('div', 'exam-run-title-group');
+    titleGroup.append(
+      E('strong', 'exam-run-title', data.exam.title),
+      E('span', 'exam-run-meta', `Mã phòng ${id} · ${data.exam.durationMinutes} phút`)
+    );
+    const controlsGroup = E('div', 'exam-run-controls');
+    const answeredLabel = E('span', 'exam-run-progress-pill', `0/${questions.length} câu`);
+    const timer = E('div', 'exam-run-clock', '--:--');
+    const fullscreenButton = button('', 'exam-session-tool', async () => {
       try {
         if (document.fullscreenElement) await document.exitFullscreen();
         else if (p.requestFullscreen) await p.requestFullscreen();
-      } catch { status.textContent = 'Trình duyệt không cho phép toàn màn hình; bài thi vẫn hoạt động bình thường.'; }
+      } catch { status.textContent = 'Trình duyệt chặn toàn màn hình tự động; vẫn làm bài bình thường.'; }
     });
-    tools.append(answeredLabel, fullscreenButton);
+    fullscreenButton.append(icon('maximize', 14), document.createTextNode(' Toàn màn hình'));
+    const topSubmitBtn = button('Nộp bài', 'primary-btn exam-run-submit-top', confirmSubmit);
+    controlsGroup.append(answeredLabel, timer, fullscreenButton, topSubmitBtn);
+    topBar.append(titleGroup, controlsGroup);
 
-    const progressTrack = E('div', 'exam-progress-track');
+    const status = E('small', 'exam-save-status', answeredCount(answers) ? `Đã khôi phục ${answeredCount(answers)} câu đã lưu.` : 'Tự động lưu nháp mỗi lần khoanh.');
     const progressFill = E('div', 'exam-progress-fill');
+    const progressTrack = E('div', 'exam-progress-track');
     progressTrack.append(progressFill);
-    const mapHeading = E('div', 'exam-question-map-heading');
-    mapHeading.append(E('strong', '', 'Sơ đồ câu hỏi'), E('small', '', 'Chọn số câu để di chuyển · ☆ để đánh dấu câu cần xem lại'));
-    const questionMap = E('div', 'exam-question-map');
-    const questionList = E('div', 'exam-question-list');
-    const navButtons = new Map(), flagButtons = new Map(), questionItems = new Map();
-    let busy = false, draftSaveBusy = false, draftSaveQueued = false;
-    const initialPerf = performance.now(), serverAt = data.serverNow;
-    const remaining = () => Math.max(0, data.session.endsAt - (serverAt + performance.now() - initialPerf));
+
+    // --- SPLIT WORKSPACE: LEFT = ĐỀ THI, RIGHT = PHIẾU TRẢ LỜI OMR ---
+    const splitLayout = E('div', 'exam-split-workspace');
+    const leftPane = E('section', 'exam-left-paper-pane');
+    const leftHead = E('div', 'exam-pane-head');
+    leftHead.append(E('strong', '', 'ĐỀ THI'));
+
+    const rightPane = E('aside', 'exam-right-omr-pane');
+    const omrCard = E('section', 'exam-omr-sheet-card');
+    const omrHead = E('div', 'exam-omr-card-head');
+    const omrTitleRow = E('div', 'exam-omr-title-row');
+    omrTitleRow.append(E('strong', '', 'PHIẾU TRẢ LỜI'), E('span', 'exam-omr-sub', 'Bấm chữ cái để khoanh tròn'));
+    const filterBar = E('div', 'exam-omr-filter-bar');
+    const filterBtns = new Map();
+    for (const [fKey, fLabel] of [['all', 'Tất cả'], ['unanswered', 'Chưa làm'], ['flagged', '★ Xem lại']]) {
+      const fb = button(fLabel, `exam-omr-filter-pill ${fKey === 'all' ? 'is-active' : ''}`, () => {
+        omrFilter = fKey;
+        for (const [k, btn] of filterBtns) btn.classList.toggle('is-active', k === fKey);
+        applyOmrFilter();
+      });
+      filterBtns.set(fKey, fb);
+      filterBar.append(fb);
+    }
+    omrHead.append(omrTitleRow, progressTrack, filterBar);
+
+    const omrBody = E('div', 'exam-omr-sheet-body');
+    const omrFooter = E('div', 'exam-omr-sheet-footer');
+    const bottomSubmitBtn = button('Nộp bài & Chấm điểm', 'primary-btn exam-omr-submit-btn', confirmSubmit);
+    omrFooter.append(status, bottomSubmitBtn);
+    omrCard.append(omrHead, omrBody, omrFooter);
+    rightPane.append(omrCard);
+
+    const syncUIHooks = new Map();
+    const omrRowMap = new Map();
+    const paperItemMap = new Map();
 
     const questionIsAnswered = (q) => {
       const value = answers[q.id];
       if (q.part === 'II') return Array.isArray(value) && value.some(v => v === true || v === false);
-      if (q.part === 'III') return typeof value === 'string' && value.trim() !== '';
       return typeof value === 'string' && value.trim() !== '';
     };
-    const updateProgress = () => {
-      const count = (data.questions || []).filter(questionIsAnswered).length;
-      const total = (data.questions || []).length;
-      answeredLabel.textContent = `Đã trả lời ${count}/${total} câu`;
-      progressFill.style.width = `${total ? (count / total) * 100 : 0}%`;
-      for (const q of data.questions || []) {
-        const answered = questionIsAnswered(q), flagged = flaggedQuestions.has(q.id);
-        const jump = navButtons.get(q.id), flag = flagButtons.get(q.id);
-        if (jump) {
-          jump.classList.toggle('answered', answered);
-          jump.classList.toggle('flagged', flagged);
-          jump.setAttribute('aria-label', `Câu ${q.id.slice(1)}${answered ? ', đã trả lời' : ', chưa trả lời'}${flagged ? ', đã đánh dấu' : ''}`);
-        }
-        if (flag) {
-          flag.classList.toggle('is-flagged', flagged);
-          flag.textContent = flagged ? '★ Đã đánh dấu' : '☆ Đánh dấu';
-          flag.setAttribute('aria-pressed', String(flagged));
-        }
+
+    const applyOmrFilter = () => {
+      for (const q of questions) {
+        const row = omrRowMap.get(q.id);
+        if (!row) continue;
+        const ans = questionIsAnswered(q), flg = flaggedQuestions.has(q.id);
+        row.hidden = (omrFilter === 'unanswered' && ans) || (omrFilter === 'flagged' && !flg);
       }
     };
+
+    const updateProgress = () => {
+      const count = questions.filter(questionIsAnswered).length;
+      const total = questions.length;
+      answeredLabel.textContent = `Đã làm ${count}/${total}`;
+      progressFill.style.width = `${total ? (count / total) * 100 : 0}%`;
+      for (const q of questions) {
+        const hook = syncUIHooks.get(q.id);
+        if (hook) hook();
+      }
+      applyOmrFilter();
+    };
+
     const syncDraft = async () => {
       if (busy || !host.isConnected || data.session.status !== 'active') return;
       if (draftSaveBusy) { draftSaveQueued = true; return; }
@@ -332,10 +398,10 @@ async function begin(host, id) {
         if (scopeUid() !== snapshotUid) return;
         const saved = await api('save-draft', { id, answers: snapshot, flaggedQuestions: snapshotFlags });
         writeLocalDraft(uid, id, snapshot, snapshotFlags);
-        status.textContent = `Đã đồng bộ bản nháp lúc ${new Date(saved.savedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}.`;
+        status.textContent = `✓ Đã lưu nháp lúc ${new Date(saved.savedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
         status.classList.remove('exam-save-warning');
       } catch {
-        status.textContent = 'Đã lưu trên thiết bị; đang chờ đồng bộ máy chủ.';
+        status.textContent = '✓ Đã lưu trên máy · chờ đồng bộ mạng';
         status.classList.add('exam-save-warning');
       } finally {
         draftSaveBusy = false;
@@ -344,114 +410,263 @@ async function begin(host, id) {
     };
     const queueDraftSave = () => {
       writeLocalDraft(uid, id, answers, [...flaggedQuestions]);
-      status.textContent = 'Đã lưu trên thiết bị · đang đồng bộ…';
+      status.textContent = 'Đang lưu nháp…';
       status.classList.remove('exam-save-warning');
       if (draftSaveTimer) clearTimeout(draftSaveTimer);
-      draftSaveTimer = setTimeout(() => { draftSaveTimer = null; syncDraft(); }, 650);
+      draftSaveTimer = setTimeout(() => { draftSaveTimer = null; syncDraft(); }, 600);
     };
     const toggleFlag = (qid) => {
       if (flaggedQuestions.has(qid)) flaggedQuestions.delete(qid); else flaggedQuestions.add(qid);
       updateProgress(); queueDraftSave();
     };
-
-    for (const [index, q] of (data.questions || []).entries()) {
-      const item = E('section', 'exam-question');
-      item.id = `htvvm-${id}-${q.id}`;
-      questionItems.set(q.id, item);
-      const top = E('div', 'exam-question-top');
-      top.append(E('h4', '', `Câu ${index + 1} · Phần ${q.part}`));
-      const flagButton = button(flaggedQuestions.has(q.id) ? '★ Đã đánh dấu' : '☆ Đánh dấu', 'exam-flag-btn', () => toggleFlag(q.id));
-      flagButtons.set(q.id, flagButton);
-      top.append(flagButton);
-      const promptNode = E('div', 'exam-question-prompt exam-markdown-body'); setRichText(promptNode, q.prompt);
-      item.append(top, promptNode);
-      const imageUrl = imageDataURL(q.image);
-      if (imageUrl) { const image = document.createElement('img'); image.className = 'exam-markdown-uploaded-image'; image.src = imageUrl; image.alt = `Hình minh họa câu ${index + 1}`; item.append(image); }
-      if (q.latex) { const formulaNode = E('div', 'exam-question-latex'); formulaNode.innerHTML = renderDedicatedLatex(q.latex); item.append(formulaNode); }
-
-      const jump = button(String(index + 1), 'exam-question-jump', () => item.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-      jump.title = `Đi đến câu ${index + 1}`;
-      navButtons.set(q.id, jump); questionMap.append(jump);
-
-      if (q.part === 'I') {
-        const options = E('div', 'exam-options');
-        q.options.forEach((opt, i) => {
-          const choice = 'ABCD'[i], b = button('', 'exam-option', () => {
-            answers[q.id] = choice;
-            for (const child of options.children) child.classList.toggle('selected', child === b);
-            queueDraftSave(); updateProgress();
-          });
-          setRichText(b, data.exam.sourceUrl ? choice : `${choice}. ${opt}`); b.classList.toggle('selected', answers[q.id] === choice); options.append(b);
-        });
-        item.append(options);
-      } else if (q.part === 'II') {
-        q.options.forEach((opt, i) => {
-          const row = E('div', 'exam-tf'); const statement = E('span', ''); setRichText(statement, data.exam.sourceUrl ? `Ý ${'abcd'[i]}` : `${'abcd'[i]}) ${opt}`); row.append(statement);
-          const select = E('select', 'exam-input');
-          for (const [val, text] of [['', 'Chưa chọn'], ['true', 'Đúng'], ['false', 'Sai']]) { const option = E('option', '', text); option.value = val; select.append(option); }
-          const previous = Array.isArray(answers[q.id]) ? answers[q.id][i] : null;
-          select.value = previous === true ? 'true' : previous === false ? 'false' : '';
-          select.onchange = () => {
-            if (!Array.isArray(answers[q.id])) answers[q.id] = [null, null, null, null];
-            answers[q.id][i] = select.value === '' ? null : select.value === 'true'; queueDraftSave(); updateProgress();
-          };
-          row.append(select); item.append(row);
-        });
-      } else {
-        const input = field('text', 'Nhập đáp án số (ví dụ 12,5)', typeof answers[q.id] === 'string' ? answers[q.id] : '');
-        input.inputMode = 'decimal'; input.maxLength = 200; input.oninput = () => { answers[q.id] = input.value; queueDraftSave(); updateProgress(); }; item.append(input);
-      }
-      questionList.append(item);
-    }
-
-    const submit = async (automatic = false) => {
-      if (busy) return; busy = true;
-      if (ticker) clearInterval(ticker); ticker = null;
-      if (autosaveTicker) clearInterval(autosaveTicker); autosaveTicker = null;
-      if (draftSaveTimer) clearTimeout(draftSaveTimer); draftSaveTimer = null;
-      timer.textContent = automatic ? 'Hết giờ · đang tự nộp bài…' : 'Đang nộp bài…';
-      status.textContent = 'Đang gửi bài làm lên máy chủ…';
-      try {
-        const output = await api('submit', { id, answers: cloneAnswers(answers) });
-        removeLocalDraft(uid, id); showResult(host, output.result, id);
-      } catch (err) {
-        busy = false; showError(host, err);
-        host.append(button('Thử nộp lại', 'primary-btn', () => submit(automatic)));
-      }
-    };
-    const update = () => {
-      if (!host.isConnected) { clearTimer(); return; }
-      const ms = remaining(), seconds = Math.ceil(ms / 1000);
-      timer.textContent = `Còn ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-      timer.classList.toggle('exam-timer-urgent', ms <= 60000);
-      if (ms <= 0) submit(true);
+    const scrollToQuestionOnPaper = (qid) => {
+      const target = paperItemMap.get(qid);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('is-highlighted');
+      setTimeout(() => target.classList.remove('is-highlighted'), 1200);
     };
 
-    const submitButton = button('Nộp bài & xem kết quả', 'primary-btn', () => { if (confirm('Xác nhận nộp bài? Sau khi nộp, bạn không thể sửa đáp án.')) submit(false); });
+    // Build Left Paper (if no PDF/Drive sourceUrl) + Right OMR Sections
+    let paperSheet = null;
     if (data.exam.sourceUrl) {
-      const sessionLayout = E('div', 'exam-source-session-layout');
-      const sourcePanel = panel('Đề thi');
+      const openSource = E('a', 'exam-link', 'Mở đề tab riêng ↗');
+      openSource.href = data.exam.sourceOpenUrl || data.exam.sourceUrl;
+      openSource.target = '_blank'; openSource.rel = 'noopener noreferrer';
+      leftHead.append(openSource);
       const sourceFrame = document.createElement('iframe');
       sourceFrame.className = 'exam-source-document';
-      sourceFrame.title = 'Tài liệu đề thi do giáo viên cung cấp';
+      sourceFrame.title = 'Tài liệu đề thi';
       sourceFrame.src = data.exam.sourceUrl;
       sourceFrame.loading = 'eager';
       sourceFrame.referrerPolicy = 'strict-origin-when-cross-origin';
       sourceFrame.allowFullscreen = true;
-      const openSource = E('a', 'exam-link', 'Mở đề ở tab mới ↗');
-      openSource.href = data.exam.sourceOpenUrl || data.exam.sourceUrl;
-      openSource.target = '_blank'; openSource.rel = 'noopener noreferrer';
-      sourcePanel.append(sourceFrame, openSource);
-      const answerPanel = panel('Phiếu trả lời');
-      answerPanel.append(mapHeading, questionMap, questionList);
-      sessionLayout.append(sourcePanel, answerPanel);
-      p.append(description, timer, status, tools, progressTrack, sessionLayout, submitButton);
+      leftPane.append(leftHead, sourceFrame);
     } else {
-      p.append(description, timer, status, tools, progressTrack, mapHeading, questionMap, questionList, submitButton);
+      leftHead.append(E('span', 'exam-pane-note', 'Đọc đề bên trái · Khoanh trên phiếu bên phải (hoặc bấm trực tiếp vào phương án)'));
+      paperSheet = E('div', 'exam-paper-sheet');
+      leftPane.append(leftHead, paperSheet);
     }
+
+    const partMeta = [
+      ['I', 'PHẦN I · Trắc nghiệm A – D', 'Chọn 1 đáp án đúng cho mỗi câu'],
+      ['II', 'PHẦN II · Đúng / Sai', 'Chọn Đ hoặc S cho từng ý a, b, c, d'],
+      ['III', 'PHẦN III · Trả lời ngắn', 'Điền đáp số vào ô trống']
+    ];
+
+    let globalIdx = 0;
+    for (const [partCode, partTitle, partHint] of partMeta) {
+      const partQuestions = questions.filter(q => q.part === partCode);
+      if (!partQuestions.length) continue;
+
+      // Section header on Left Paper (when !sourceUrl)
+      if (paperSheet) {
+        const secHead = E('div', 'exam-paper-sec-head');
+        secHead.append(E('strong', '', partTitle), E('span', '', partHint));
+        paperSheet.append(secHead);
+      }
+
+      // Section card on Right OMR Sheet
+      const omrSec = E('div', 'exam-omr-run-section');
+      const omrSecHead = E('div', 'exam-omr-run-sec-head');
+      omrSecHead.append(E('strong', '', partTitle), E('span', '', `${partQuestions.length} câu`));
+      const omrSecList = E('div', `exam-omr-run-list is-part-${partCode}`);
+      omrSec.append(omrSecHead, omrSecList);
+      omrBody.append(omrSec);
+
+      for (const q of partQuestions) {
+        globalIdx += 1;
+        const qNum = globalIdx;
+        const padNum = String(qNum).padStart(2, '0');
+        const paperOptionNodes = [];
+        const omrBubbleNodes = [];
+        let paperShortInput = null;
+        let omrShortInput = null;
+
+        // 1) Left Paper Question Item (if !sourceUrl)
+        if (paperSheet) {
+          const pItem = E('article', 'exam-paper-q');
+          paperItemMap.set(q.id, pItem);
+          const pPromptRow = E('div', 'exam-paper-q-head');
+          pPromptRow.append(E('span', 'exam-paper-q-num', `Câu ${qNum}.`));
+          const pPrompt = E('div', 'exam-paper-q-prompt exam-markdown-body');
+          setRichText(pPrompt, q.prompt);
+          pPromptRow.append(pPrompt);
+          pItem.append(pPromptRow);
+
+          const imageUrl = imageDataURL(q.image);
+          if (imageUrl) {
+            const img = document.createElement('img');
+            img.className = 'exam-markdown-uploaded-image';
+            img.src = imageUrl;
+            img.alt = `Hình câu ${qNum}`;
+            pItem.append(img);
+          }
+          if (q.latex) {
+            const fNode = E('div', 'exam-question-latex');
+            fNode.innerHTML = renderDedicatedLatex(q.latex);
+            pItem.append(fNode);
+          }
+
+          if (q.part === 'I') {
+            const pOpts = E('div', 'exam-paper-opts');
+            (q.options || []).forEach((opt, i) => {
+              const choice = 'ABCD'[i];
+              const optBtn = button('', 'exam-paper-opt-item', () => {
+                answers[q.id] = answers[q.id] === choice ? '' : choice;
+                if (!answers[q.id]) delete answers[q.id];
+                queueDraftSave(); updateProgress();
+              });
+              const badge = E('span', 'exam-paper-opt-letter', choice);
+              const txt = E('span', 'exam-paper-opt-text');
+              setRichText(txt, opt);
+              optBtn.append(badge, txt);
+              paperOptionNodes.push({ choice, node: optBtn, badge });
+              pOpts.append(optBtn);
+            });
+            pItem.append(pOpts);
+          } else if (q.part === 'II') {
+            const pTfList = E('div', 'exam-paper-tf-list');
+            (q.options || []).forEach((opt, i) => {
+              const line = E('div', 'exam-paper-tf-line');
+              const txt = E('div', 'exam-paper-opt-text');
+              setRichText(txt, `<strong>${'abcd'[i]})</strong> ${opt}`);
+              line.append(txt);
+              pTfList.append(line);
+            });
+            pItem.append(pTfList);
+          } else {
+            const inlineAns = E('div', 'exam-paper-short-inline');
+            inlineAns.append(E('span', '', 'Đáp số:'));
+            paperShortInput = field('text', 'Điền kết quả số (VD: 12,5)…', typeof answers[q.id] === 'string' ? answers[q.id] : '');
+            paperShortInput.inputMode = 'decimal';
+            paperShortInput.maxLength = 200;
+            paperShortInput.oninput = () => {
+              answers[q.id] = paperShortInput.value;
+              if (omrShortInput && omrShortInput.value !== paperShortInput.value) omrShortInput.value = paperShortInput.value;
+              queueDraftSave(); updateProgress();
+            };
+            inlineAns.append(paperShortInput);
+            pItem.append(inlineAns);
+          }
+          paperSheet.append(pItem);
+        }
+
+        // 2) Right OMR Sheet Row / Card
+        const flagBtn = button('☆', 'exam-omr-star', () => toggleFlag(q.id));
+        flagBtn.title = 'Đánh dấu xem lại';
+        const qJumpBtn = button(q.part === 'I' ? padNum : `Câu ${padNum}`, 'exam-omr-qjump', () => scrollToQuestionOnPaper(q.id));
+        qJumpBtn.title = `Xem đề Câu ${qNum}`;
+
+        if (q.part === 'I') {
+          const row = E('div', 'exam-omr-row');
+          omrRowMap.set(q.id, row);
+          const bubbles = E('div', 'exam-omr-bubbles');
+          for (const choice of 'ABCD') {
+            const b = button(choice, 'exam-omr-bubble', () => {
+              if (answers[q.id] === choice) delete answers[q.id];
+              else answers[q.id] = choice;
+              queueDraftSave(); updateProgress();
+            });
+            omrBubbleNodes.push({ choice, node: b });
+            bubbles.append(b);
+          }
+          row.append(qJumpBtn, bubbles, flagBtn);
+          omrSecList.append(row);
+
+          syncUIHooks.set(q.id, () => {
+            const cur = answers[q.id] || '';
+            const flg = flaggedQuestions.has(q.id);
+            row.classList.toggle('is-answered', Boolean(cur));
+            row.classList.toggle('is-flagged', flg);
+            flagBtn.textContent = flg ? '★' : '☆';
+            flagBtn.classList.toggle('is-flagged', flg);
+            for (const { choice, node } of omrBubbleNodes) node.classList.toggle('is-selected', cur === choice);
+            for (const { choice, node, badge } of paperOptionNodes) {
+              node.classList.toggle('is-selected', cur === choice);
+              badge.classList.toggle('is-selected', cur === choice);
+            }
+          });
+        } else if (q.part === 'II') {
+          const card = E('div', 'exam-omr-tf-card');
+          omrRowMap.set(q.id, card);
+          const head = E('div', 'exam-omr-tf-head');
+          head.append(qJumpBtn, flagBtn);
+          const grid = E('div', 'exam-omr-tf-list');
+          const tfButtons = [];
+          for (let i = 0; i < 4; i++) {
+            const subRow = E('div', 'exam-omr-tf-row');
+            subRow.append(E('small', '', `${'abcd'[i]})`));
+            const pair = E('div', 'exam-omr-tf-pair');
+            const btnD = button('Đ', 'exam-omr-mini-tf', () => {
+              if (!Array.isArray(answers[q.id])) answers[q.id] = [null, null, null, null];
+              answers[q.id][i] = answers[q.id][i] === true ? null : true;
+              queueDraftSave(); updateProgress();
+            });
+            const btnS = button('S', 'exam-omr-mini-tf', () => {
+              if (!Array.isArray(answers[q.id])) answers[q.id] = [null, null, null, null];
+              answers[q.id][i] = answers[q.id][i] === false ? null : false;
+              queueDraftSave(); updateProgress();
+            });
+            pair.append(btnD, btnS);
+            subRow.append(pair);
+            grid.append(subRow);
+            tfButtons.push({ i, btnD, btnS });
+          }
+          card.append(head, grid);
+          omrSecList.append(card);
+
+          syncUIHooks.set(q.id, () => {
+            const arr = Array.isArray(answers[q.id]) ? answers[q.id] : [null, null, null, null];
+            const flg = flaggedQuestions.has(q.id);
+            card.classList.toggle('is-answered', arr.some(v => v === true || v === false));
+            card.classList.toggle('is-flagged', flg);
+            flagBtn.textContent = flg ? '★' : '☆';
+            flagBtn.classList.toggle('is-flagged', flg);
+            for (const { i, btnD, btnS } of tfButtons) {
+              btnD.classList.toggle('is-true', arr[i] === true);
+              btnS.classList.toggle('is-false', arr[i] === false);
+            }
+          });
+        } else {
+          const row = E('div', 'exam-omr-row is-short');
+          omrRowMap.set(q.id, row);
+          omrShortInput = field('text', 'Đáp số…', typeof answers[q.id] === 'string' ? answers[q.id] : '');
+          omrShortInput.className = 'exam-input exam-omr-short-input';
+          omrShortInput.inputMode = 'decimal';
+          omrShortInput.maxLength = 200;
+          omrShortInput.oninput = () => {
+            answers[q.id] = omrShortInput.value;
+            if (paperShortInput && paperShortInput.value !== omrShortInput.value) paperShortInput.value = omrShortInput.value;
+            queueDraftSave(); updateProgress();
+          };
+          row.append(qJumpBtn, omrShortInput, flagBtn);
+          omrSecList.append(row);
+
+          syncUIHooks.set(q.id, () => {
+            const val = typeof answers[q.id] === 'string' ? answers[q.id].trim() : '';
+            const flg = flaggedQuestions.has(q.id);
+            row.classList.toggle('is-answered', Boolean(val));
+            row.classList.toggle('is-flagged', flg);
+            flagBtn.textContent = flg ? '★' : '☆';
+            flagBtn.classList.toggle('is-flagged', flg);
+          });
+        }
+      }
+    }
+
+    const update = () => {
+      if (!host.isConnected) { clearTimer(); return; }
+      const ms = remaining(), seconds = Math.ceil(ms / 1000);
+      timer.textContent = `⏱ ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      timer.classList.toggle('exam-timer-urgent', ms <= 60000);
+      if (ms <= 0) submit(true);
+    };
+
+    splitLayout.append(leftPane, rightPane);
+    p.append(topBar, splitLayout);
     host.replaceChildren(p);
     updateProgress();
-    // Restore both answers and locally/server-saved question flags when returning to an attempt.
     if (localIsNewer || answeredCount(answers) > 0 || flaggedQuestions.size > 0) queueDraftSave();
     ticker = setInterval(update, 250); autosaveTicker = setInterval(syncDraft, 8000); update();
   } catch (e) { showError(host, e); }
@@ -533,9 +748,10 @@ function showCreator(host) {
   common.append(titleWrap, durationWrap);
 
   const tabs = E('div', 'exam-creator-tabs');
-  const roomTab = button('1. 🎯 Tạo phòng thi & Phiếu OMR (PDF / Drive)', 'exam-creator-tab is-active', () => switchMode('room'));
-  const authorTab = button('2. ⚡ Danh sách câu hỏi / Đề chuyển từ Khu A4', 'exam-creator-tab', () => switchMode('author'));
-  const openA4SuiteBtn = button('📝 Mở Khu Soạn đề A4 riêng →', 'exam-tab', () => navigate('/exam-paper'));
+  const roomTab = button('1. Đề bên trái · Phiếu OMR bên phải (PDF / Drive)', 'exam-creator-tab is-active', () => switchMode('room'));
+  const authorTab = button('2. Soạn từng câu / Đề chuyển từ Khu A4', 'exam-creator-tab', () => switchMode('author'));
+  const openA4SuiteBtn = button('', 'exam-tab', () => navigate('/exam-paper'));
+  openA4SuiteBtn.append(icon('exam-paper', 15), document.createTextNode(' Mở Khu Soạn đề A4 riêng →'));
   tabs.append(roomTab, authorTab, openA4SuiteBtn);
 
   const content = E('div', 'exam-creator-content');
@@ -753,26 +969,32 @@ function showCreator(host) {
   function renderRoomCreator() {
     content.replaceChildren();
 
-    // Khung 1: Nguồn đề thi (Tài liệu Drive hoặc Đề đã soạn)
-    const topGrid = E('div', 'exam-room-creator-grid');
+    // Bố cục chia đôi chuẩn Phòng thi: ĐỀ BÊN TRÁI — PHIẾU ĐÁP ÁN OMR TINH GỌN BÊN PHẢI
+    const splitWrap = E('div', 'exam-split-workspace is-creator');
 
-    const sourceCard = E('section', 'exam-panel exam-teacher-source-panel');
-    sourceCard.append(
-      E('div', 'exam-card-badge-row', '📄 NGUỒN ĐỀ THI (TÙY CHỌN)'),
-      E('h4', '', 'Đính kèm đề PDF / Google Drive'),
-      E('p', 'exam-message', 'Dán link Google Drive/Docs để học sinh vừa xem đề bên trái vừa tô phiếu trả lời bên phải (hoặc để trống nếu chỉ thu phiếu trả lời).')
-    );
+    // === CỘT TRÁI: TÀI LIỆU ĐỀ THI (PDF / GOOGLE DRIVE) ===
+    const leftDocPane = E('section', 'exam-left-paper-pane exam-creator-doc-pane');
+    const docHead = E('div', 'exam-pane-head');
+    docHead.append(E('strong', '', 'ĐỀ THI BÊN TRÁI (PDF / GOOGLE DRIVE)'), E('span', 'exam-pane-note', 'Học sinh vừa đọc đề bên trái vừa khoanh phiếu bên phải'));
     const sourceRow = E('div', 'exam-source-input-row');
-    const sourceInput = field('url', 'Dán liên kết Google Drive / Docs được chia sẻ…', sourceOpenUrl || '');
-    const previewButton = button('Xem trước', 'exam-tab', showDocumentPreview);
+    const sourceInput = field('url', 'Dán link Google Drive / Docs công khai (hoặc để trống nếu chỉ phát phiếu)…', sourceOpenUrl || '');
+    const previewButton = button('Xem đề', 'primary-btn', showDocumentPreview);
     sourceRow.append(sourceInput, previewButton);
 
     const openDocument = E('a', 'exam-link', 'Mở tài liệu ở tab mới ↗');
     openDocument.hidden = !sourceOpenUrl; openDocument.target = '_blank'; openDocument.rel = 'noopener noreferrer';
     if (sourceOpenUrl) openDocument.href = sourceOpenUrl;
     const sourceMessage = E('p', 'exam-message', '');
+    const emptyDocHint = E('div', 'exam-creator-doc-placeholder');
+    emptyDocHint.append(
+      icon('exam-paper', 34),
+      E('strong', '', 'Khung hiển thị đề thi bên trái'),
+      E('p', '', 'Dán liên kết file PDF hoặc Google Docs trên Google Drive rồi bấm “Xem đề” để kiểm tra trang đề ngay tại đây. Nếu bạn đã phát đề giấy cho học sinh, có thể để trống và chỉ tạo Phiếu OMR bên phải.')
+    );
+    emptyDocHint.hidden = Boolean(sourceEmbedUrl);
+
     const previewFrame = document.createElement('iframe');
-    previewFrame.className = 'exam-teacher-document-preview'; previewFrame.title = 'Bản xem trước tài liệu đề thi';
+    previewFrame.className = 'exam-source-document'; previewFrame.title = 'Bản xem trước tài liệu đề thi';
     previewFrame.loading = 'lazy'; previewFrame.referrerPolicy = 'strict-origin-when-cross-origin';
     previewFrame.hidden = !sourceEmbedUrl;
     if (sourceEmbedUrl) previewFrame.src = sourceEmbedUrl;
@@ -780,77 +1002,75 @@ function showCreator(host) {
     function showDocumentPreview() {
       try {
         if (!sourceInput.value.trim()) {
-          sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true;
-          sourceMessage.textContent = 'Không đính kèm link (phòng thi chỉ hiện phiếu trả lời hoặc câu hỏi đã soạn).';
+          sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true; emptyDocHint.hidden = false;
+          sourceMessage.textContent = 'Chế độ chỉ dùng Phiếu trả lời OMR (không đính kèm link đề).';
           return;
         }
         const resource = resolveResourceLink(sourceInput.value);
-        if (resource.type !== 'drive') throw Error('Hãy dán liên kết tệp Google Drive/Docs/Slides/Sheets.');
+        if (resource.type !== 'drive') throw Error('Hãy dán liên kết tệp Google Drive / Docs / Slides.');
         sourceEmbedUrl = resource.embedUrl; sourceOpenUrl = resource.openUrl;
-        previewFrame.src = resource.embedUrl; previewFrame.hidden = false;
+        previewFrame.src = resource.embedUrl; previewFrame.hidden = false; emptyDocHint.hidden = true;
         openDocument.href = resource.openUrl; openDocument.hidden = false;
-        sourceMessage.textContent = '✅ Đã kết nối tài liệu đề thi.';
+        sourceMessage.textContent = '✓ Đã kết nối đề thi bên trái.';
       } catch (error) {
-        sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true;
+        sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true; emptyDocHint.hidden = false;
         sourceMessage.textContent = error.message || String(error);
       }
     }
     sourceInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); showDocumentPreview(); } });
-    sourceCard.append(sourceRow, openDocument, sourceMessage, previewFrame);
+    const docControls = E('div', 'exam-creator-doc-controls');
+    docControls.append(sourceRow, openDocument, sourceMessage);
+    leftDocPane.append(docHead, docControls, emptyDocHint, previewFrame);
 
-    // Khung Cấu trúc đề & Mẫu nhanh
-    const presetCard = E('section', 'exam-panel exam-preset-panel');
-    presetCard.append(
-      E('div', 'exam-card-badge-row', '⚡ CẤU TRÚC ĐỀ MẪU (1 CHẠM)'),
-      E('h4', '', 'Chọn nhanh cấu trúc phiếu trả lời'),
-      E('p', 'exam-message', 'Bạn có thể đặt 0 câu cho bất kỳ phần nào không dùng. Bấm mẫu bên dưới hoặc tự nhập số câu:')
-    );
+    // === CỘT PHẢI: PHIẾU ĐÁP ÁN OMR TINH GỌN, DỄ KHOANH ===
+    const rightOmrPane = E('aside', 'exam-right-omr-pane');
+    const omrSheet = E('section', 'exam-omr-sheet-card');
+    const omrTop = E('div', 'exam-omr-card-head');
+    const omrTitleRow = E('div', 'exam-omr-title-row');
+    const totalLabel = E('span', 'exam-omr-sub', '22 câu');
+    omrTitleRow.append(E('strong', '', 'PHIẾU ĐÁP ÁN MẪU'), totalLabel);
 
     const maxPerSection = MAX_EXAM_QUESTIONS;
     const existingCounts = Object.fromEntries(['I', 'II', 'III'].map(part => [part, data.filter(q => q.part === part).length]));
     const hasExisting = data.length > 0;
-    const defaultCounts = hasExisting
-      ? existingCounts
-      : { I: 12, II: 4, III: 6 };
+    const defaultCounts = hasExisting ? existingCounts : { I: 12, II: 4, III: 6 };
 
     const sectionDefs = [
       {
         part: 'I',
-        title: 'Phần I · Trắc nghiệm 4 lựa chọn (A, B, C, D)',
+        title: 'PHẦN I · Trắc nghiệm A – D',
         shortTitle: 'Phần I (A–D)',
-        placeholder: 'Dán nhanh: ABCDABCD... hoặc 1A 2B 3C 4D...',
+        placeholder: 'Dán nhanh: ABCD... hoặc 1A 2B 3C...',
         makeKey: () => ({ value: 'A' })
       },
       {
         part: 'II',
-        title: 'Phần II · Trắc nghiệm Đúng / Sai (a, b, c, d)',
+        title: 'PHẦN II · Đúng / Sai (a–d)',
         shortTitle: 'Phần II (Đ/S)',
-        placeholder: 'Dán nhanh: ĐSĐS, ĐĐSS, SĐSĐ... (mỗi cụm 4 ký tự Đ/S hoặc T/F)',
+        placeholder: 'Dán nhanh: ĐSĐS, ĐĐSS...',
         makeKey: () => ({ values: ['true', 'false', 'true', 'false'] })
       },
       {
         part: 'III',
-        title: 'Phần III · Trả lời ngắn (Điền đáp số)',
+        title: 'PHẦN III · Trả lời ngắn',
         shortTitle: 'Phần III (Số)',
-        placeholder: 'Dán nhanh cách nhau bởi dấu chấm phẩy: 12,5; 0,25; 48; -2...',
+        placeholder: 'Dán nhanh: 12,5; 0,25; 48...',
         makeKey: () => ({ value: '0' })
       }
     ];
 
     const sectionState = {};
     const countInputsRow = E('div', 'exam-count-inputs-grid');
-
     for (const section of sectionDefs) {
       const box = E('div', 'exam-count-box');
       box.append(E('label', '', section.shortTitle));
-      const count = field('number', 'Số câu', String(defaultCounts[section.part] ?? 0));
+      const count = field('number', '0', String(defaultCounts[section.part] ?? 0));
       count.min = '0'; count.max = String(maxPerSection); count.step = '1';
       box.append(count);
       countInputsRow.append(box);
       sectionState[section.part] = { ...section, count, state: { keys: [] } };
     }
 
-    // Nếu có sẵn câu hỏi từ trình soạn đề, nạp đáp án vào state
     if (hasExisting) {
       sectionState.I.state.keys = data.filter(q => q.part === 'I').map(q => ({ value: q.answer || 'A' }));
       sectionState.II.state.keys = data.filter(q => q.part === 'II').map(q => ({
@@ -867,47 +1087,31 @@ function showCreator(host) {
       for (const s of sectionDefs) sectionState[s.part].renderKeys();
     };
     presetBtns.append(
-      button('Chuẩn THPT 2025 (12 - 4 - 6)', 'exam-preset-pill', () => applyPreset(12, 4, 6)),
-      button('Trắc nghiệm 40 câu (40 - 0 - 0)', 'exam-preset-pill', () => applyPreset(40, 0, 0)),
-      button('Kiểm tra 15p (15 - 0 - 0)', 'exam-preset-pill', () => applyPreset(15, 0, 0)),
-      button('Trắc nghiệm + Đ/S (20 - 4 - 0)', 'exam-preset-pill', () => applyPreset(20, 4, 0)),
-      button('ĐGNL (80 - 20 - 20)', 'exam-preset-pill', () => applyPreset(80, 20, 20))
+      button('Chuẩn 2025 (12-4-6)', 'exam-preset-pill', () => applyPreset(12, 4, 6)),
+      button('40 câu A–D', 'exam-preset-pill', () => applyPreset(40, 0, 0)),
+      button('15 phút (15 câu)', 'exam-preset-pill', () => applyPreset(15, 0, 0)),
+      button('20 A–D + 4 Đ/S', 'exam-preset-pill', () => applyPreset(20, 4, 0))
     );
 
-    const totalLabel = E('div', 'exam-answer-total-badge', 'Tổng: 22 câu');
     const totalError = E('p', 'exam-error');
-    presetCard.append(presetBtns, countInputsRow, totalLabel, totalError);
+    omrTop.append(omrTitleRow, presetBtns, countInputsRow, totalError);
 
-    topGrid.append(presetCard, sourceCard);
-
-    // Khung 2: Phiếu tô đáp án OMR gọn đẹp
-    const setup = E('section', 'exam-panel exam-answer-setup');
-    const setupHead = E('div', 'exam-omr-sheet-head');
-    setupHead.append(
-      E('div', '', ),
-      E('h4', '', '🎯 Phiếu đáp án chuẩn OMR (Bấm nút để chọn hoặc dán chuỗi đáp án 1 giây)'),
-      E('p', 'exam-message', 'Mặc định các câu mới được điền sẵn đáp án mẫu để bạn có thể tạo phòng thử ngay lập tức hoặc sửa lại từng câu.')
-    );
-    setup.append(setupHead);
-
-    const sectionPanels = E('div', 'exam-omr-sections-stack');
+    const sectionPanels = E('div', 'exam-omr-sheet-body');
 
     for (const section of sectionDefs) {
-      const panelEl = E('section', 'exam-omr-section-card');
-      const headerRow = E('div', 'exam-omr-section-header');
-      const titleEl = E('h5', '', section.title);
-      const badgeEl = E('span', 'exam-omr-count-pill', '0 câu');
+      const panelEl = E('div', 'exam-omr-run-section');
+      const headerRow = E('div', 'exam-omr-run-sec-head');
+      const titleEl = E('strong', '', section.title);
+      const badgeEl = E('span', '', '0 câu');
       headerRow.append(titleEl, badgeEl);
 
-      // Thanh dán nhanh chuỗi đáp án
       const quickBar = E('div', 'exam-omr-quick-bar');
       const quickInput = field('text', section.placeholder, '');
-      const applyQuickBtn = button('⚡ Điền nhanh', 'exam-tab', () => {
+      const applyQuickBtn = button('Điền', 'exam-tab', () => {
         const raw = quickInput.value.trim();
         if (!raw) return;
         const currentKeys = sectionState[section.part].state.keys;
         if (section.part === 'I') {
-          // Hỗ trợ cả "1A 2B 3C" lẫn "ABCD..."
           const pairs = [...raw.toUpperCase().matchAll(/(\d+)\s*[:.-]?\s*([ABCD])/g)];
           if (pairs.length) {
             for (const m of pairs) {
@@ -936,25 +1140,23 @@ function showCreator(host) {
           });
         }
         renderKeys();
-        message.textContent = `Đã điền nhanh đáp án cho ${section.shortTitle}!`;
+        message.textContent = `✓ Đã điền nhanh đáp án cho ${section.shortTitle}.`;
       });
       quickBar.append(quickInput, applyQuickBtn);
 
-      const keyList = E('div', `exam-omr-grid exam-omr-grid-${section.part}`);
+      const keyList = E('div', `exam-omr-run-list is-part-${section.part}`);
       panelEl.append(headerRow, quickBar, keyList);
 
       const oldState = sectionState[section.part].state;
       const renderKeys = () => {
         const amount = Number(sectionState[section.part].count.value);
         if (!Number.isInteger(amount) || amount < 0 || amount > maxPerSection) {
-          badgeEl.textContent = 'Lỗi số câu';
-          keyList.replaceChildren(E('p', 'exam-error', `Số câu phải từ 0 đến ${maxPerSection}.`));
+          badgeEl.textContent = 'Lỗi';
+          keyList.replaceChildren(E('p', 'exam-error', `Từ 0 đến ${maxPerSection} câu.`));
           refreshTotal(); return;
         }
-        badgeEl.textContent = amount === 0 ? 'Không dùng (0 câu)' : `${amount} câu`;
-        panelEl.classList.toggle('is-empty-section', amount === 0);
-        quickBar.hidden = amount === 0;
-        keyList.hidden = amount === 0;
+        badgeEl.textContent = `${amount} câu`;
+        panelEl.hidden = amount === 0;
 
         const previous = oldState.keys;
         oldState.keys = Array.from({ length: amount }, (_, i) => previous[i] || section.makeKey());
@@ -966,25 +1168,29 @@ function showCreator(host) {
 
         const fragment = document.createDocumentFragment();
         oldState.keys.forEach((key, index) => {
-          const cell = E('div', 'exam-omr-cell');
-          cell.append(E('span', 'exam-omr-qnum', `Câu ${index + 1}`));
+          const qLabel = String(index + 1).padStart(2, '0');
           if (section.part === 'I') {
+            const row = E('div', 'exam-omr-row is-answered');
+            row.append(E('span', 'exam-omr-qjump is-static', qLabel));
             const bubbles = E('div', 'exam-omr-bubbles');
             for (const choice of 'ABCD') {
               const b = button(choice, `exam-omr-bubble ${key.value === choice ? 'is-selected' : ''}`, () => {
                 key.value = choice;
-                for (const child of bubbles.children) {
-                  child.classList.toggle('is-selected', child.textContent === choice);
-                }
+                for (const child of bubbles.children) child.classList.toggle('is-selected', child.textContent === choice);
               });
               bubbles.append(b);
             }
-            cell.append(bubbles);
+            row.append(bubbles);
+            fragment.append(row);
           } else if (section.part === 'II') {
+            const card = E('div', 'exam-omr-tf-card is-answered');
+            const head = E('div', 'exam-omr-tf-head');
+            head.append(E('span', 'exam-omr-qjump is-static', `Câu ${qLabel}`));
             const tfList = E('div', 'exam-omr-tf-list');
             for (let i = 0; i < 4; i++) {
               const itemRow = E('div', 'exam-omr-tf-row');
               itemRow.append(E('small', '', `${'abcd'[i]})`));
+              const pair = E('div', 'exam-omr-tf-pair');
               const isTrue = key.values?.[i] !== 'false';
               const btnD = button('Đ', `exam-omr-mini-tf ${isTrue ? 'is-true' : ''}`, () => {
                 key.values[i] = 'true';
@@ -996,17 +1202,21 @@ function showCreator(host) {
                 btnS.classList.add('is-false');
                 btnD.classList.remove('is-true');
               });
-              itemRow.append(btnD, btnS);
+              pair.append(btnD, btnS);
+              itemRow.append(pair);
               tfList.append(itemRow);
             }
-            cell.append(tfList);
+            card.append(head, tfList);
+            fragment.append(card);
           } else {
+            const row = E('div', 'exam-omr-row is-short is-answered');
+            row.append(E('span', 'exam-omr-qjump is-static', `Câu ${qLabel}`));
             const input = field('text', 'Đáp số…', key.value ?? '0');
             input.className = 'exam-input exam-omr-short-input';
             input.addEventListener('input', () => { key.value = input.value; });
-            cell.append(input);
+            row.append(input);
+            fragment.append(row);
           }
-          fragment.append(cell);
         });
         keyList.append(fragment);
         refreshTotal();
@@ -1018,10 +1228,9 @@ function showCreator(host) {
       sectionPanels.append(panelEl);
     }
 
-    const footerActions = E('div', 'exam-room-submit-bar');
-    const createRoomBtn = button('🚀 Tạo phòng thi ngay', 'primary-btn', createRoomNow);
-    const openA4Btn = button('📝 Mở Khu Soạn đề A4 riêng →', 'exam-tab', () => navigate('/exam-paper'));
-    footerActions.append(createRoomBtn, openA4Btn);
+    const footerActions = E('div', 'exam-omr-sheet-footer');
+    const createRoomBtn = button('Tạo phòng thi ngay', 'primary-btn exam-omr-submit-btn', createRoomNow);
+    footerActions.append(createRoomBtn);
 
     function selectedCounts() {
       return Object.fromEntries(sectionDefs.map(({ part }) => [part, Number(sectionState[part].count.value)]));
@@ -1030,13 +1239,13 @@ function showCreator(host) {
       const counts = selectedCounts();
       const validEach = Object.values(counts).every(value => Number.isInteger(value) && value >= 0 && value <= maxPerSection);
       const sum = validEach ? Object.values(counts).reduce((a, b) => a + b, 0) : 0;
-      totalLabel.textContent = `Tổng số câu: ${sum.toLocaleString('vi-VN')} câu (Phần I: ${counts.I || 0} · Phần II: ${counts.II || 0} · Phần III: ${counts.III || 0})`;
+      totalLabel.textContent = `Tổng ${sum} câu (${counts.I || 0} · ${counts.II || 0} · ${counts.III || 0})`;
       totalError.textContent = !validEach
-        ? `Số câu mỗi phần phải từ 0 đến ${maxPerSection}.`
+        ? `Số câu mỗi phần từ 0 đến ${maxPerSection}.`
         : sum > maxPerSection
-          ? `Tổng số câu không được vượt quá ${maxPerSection}.`
+          ? `Tối đa ${maxPerSection} câu.`
           : sum < 1
-            ? 'Hãy chọn ít nhất 1 câu ở một trong ba phần.'
+            ? 'Chọn ít nhất 1 câu.'
             : '';
       createRoomBtn.disabled = Boolean(totalError.textContent);
     }
@@ -1117,8 +1326,10 @@ function showCreator(host) {
       }
     }
 
-    setup.append(sectionPanels, footerActions);
-    content.append(topGrid, setup);
+    omrSheet.append(omrTop, sectionPanels, footerActions);
+    rightOmrPane.append(omrSheet);
+    splitWrap.append(leftDocPane, rightOmrPane);
+    content.append(splitWrap);
     refreshTotal();
   }
 

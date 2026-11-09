@@ -7,10 +7,22 @@ import { initializeTheme, THEMES, changeTheme } from './core/theme.js';
 import { firebaseReady, databaseReady, signInGoogle, signOutUser } from './core/firebase.js';
 import { startAuth } from './core/auth.js';
 import { element, button } from './core/dom.js';
+import { icon } from './core/icons.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam-paper', '📝', 'Soạn đề A4'], ['/whiteboard', '✎', 'Bảng vẽ Mực'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'], ['/community', '✦', 'Trợ lý AI'] ];
+const nav = [
+  ['/', 'home', 'Tổng quan'],
+  ['/exam-paper', 'exam-paper', 'Soạn đề A4'],
+  ['/whiteboard', 'whiteboard', 'Bảng vẽ Mực'],
+  ['/exam', 'exam-room', 'Phòng thi'],
+  ['/arena', 'arena', 'Chem Arena'],
+  ['/handbook', 'handbook', 'Sổ tay'],
+  ['/focus', 'focus', 'Góc tập trung'],
+  ['/library', 'library', 'Thư viện học liệu'],
+  ['/admissions', 'admissions', 'Nguyện vọng'],
+  ['/community', 'ai', 'Trợ lý AI']
+];
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
@@ -26,9 +38,11 @@ function createShell() {
   brand.lastChild.append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO')); 
   const navLabel = element('div', 'nav-section-label', 'ĐIỀU HƯỚNG');
   const links = element('nav', 'nav-list');
-  for (const [path, glyph, title] of nav) {
+  for (const [path, iconName, title] of nav) {
     const link = element('a', 'nav-link'); link.href = path; link.dataset.path = path;
-    link.append(element('span', 'nav-glyph', glyph), element('span', '', title));
+    const glyphWrap = element('span', 'nav-glyph');
+    glyphWrap.append(icon(iconName, 18));
+    link.append(glyphWrap, element('span', '', title));
     link.addEventListener('click', (event) => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); sidebarOpen = false; updateSidebar(); navigate(path);
@@ -83,8 +97,8 @@ function drawEntryScreen() {
     const intro = element('div', 'entry-intro');
     intro.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'HTVVM STUDIO'), element('h1', 'entry-title', 'Không gian học tập của bạn.'), element('p', 'entry-copy', 'Luyện thi, hệ thống kiến thức, tập trung và theo dõi tiến trình học trên một nền tảng duy nhất.'));
     const featureList = element('div', 'entry-feature-list');
-    for (const [icon, title, desc] of [['▤','Phòng thi','Luyện tập và xem kết quả'],['◷','Góc tập trung','Pomodoro, tài liệu và âm nhạc'],['✦','Trợ lý AI','Hỏi đáp và giải thích từng bước']]) {
-      const item = element('div', 'entry-feature'); item.append(element('span','',icon), element('div','', ''));
+    for (const [iconName, title, desc] of [['exam-room','Phòng thi','Đề bên trái, phiếu OMR bên phải'],['exam-paper','Soạn đề A4','Soạn đề nhiều trang chuẩn như Word'],['focus','Góc tập trung','Pomodoro, tài liệu và âm nhạc']]) {
+      const item = element('div', 'entry-feature'); const ic = element('span',''); ic.append(icon(iconName, 18)); item.append(ic, element('div','', ''));
       item.lastChild.append(element('strong','',title), element('small','',desc)); featureList.append(item);
     }
     intro.append(featureList);
