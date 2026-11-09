@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     const history = normalizeHistory(body.history);
     const apiKey = process.env.GEMINI_API_KEY;
     assert(Boolean(apiKey), 'Máy chủ chưa cấu hình GEMINI_API_KEY.', 503);
-    const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     assert(/^[a-z0-9.-]{3,80}$/i.test(model), 'Tên mô hình AI không hợp lệ.', 500);
     const encoded = JSON.stringify({ question, image, history });
     assert(encoded.length < 3_000_000, 'Yêu cầu vượt quá giới hạn kích thước.', 413);
