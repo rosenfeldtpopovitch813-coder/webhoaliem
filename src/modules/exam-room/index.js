@@ -192,6 +192,28 @@ async function api(action, payload = {}, method = 'POST') {
   return data;
 }
 function label(text) { return E('label', 'exam-label', text); }
+// Render the exam PDF page by page into canvases (no links to click, readable on phones).
+async function renderExamPdf(id, host) {
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch(`/api/exam?${new URLSearchParams({ action: 'document', id })}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+  if (!response.ok) throw Error((await response.json().catch(() => ({}))).error || `HTTP ${response.status}`);
+  const pdfjs = await import('pdfjs-dist');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await response.arrayBuffer()) }).promise;
+  host.replaceChildren();
+  const cssWidth = Math.max(300, host.clientWidth - 24);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const viewport = page.getViewport({ scale: (cssWidth / page.getViewport({ scale: 1 }).width) * dpr });
+    const canvas = document.createElement('canvas');
+    canvas.className = 'exam-pdf-page';
+    canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
+    canvas.oncontextmenu = event => event.preventDefault();
+    host.append(canvas);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  }
+}
 function field(type, placeholder, value = '') { const el = E(type === 'textarea' ? 'textarea' : 'input', 'exam-input'); if (type !== 'textarea') el.type = type; el.placeholder = placeholder; el.value = value; return el; }
 function panel(title) { const d = E('section', 'exam-panel'); d.append(E('h3', 'exam-heading', title)); return d; }
 function showError(host, error) { host.replaceChildren(E('p', 'exam-error', error.message || String(error))); }
@@ -534,20 +556,25 @@ async function begin(host, id) {
     // Build Left Paper (PDF/Drive embed OR authored paper) + Right OMR Sections
     let paperSheet = null;
     if (data.exam.sourceUrl) {
-      const sourceFrame = document.createElement('iframe');
-      sourceFrame.className = 'exam-source-document';
-      sourceFrame.title = 'Tài liệu đề thi';
-      sourceFrame.src = data.exam.sourceUrl;
-      sourceFrame.loading = 'eager';
-      sourceFrame.referrerPolicy = 'strict-origin-when-cross-origin';
-      sourceFrame.allow = 'autoplay';
-      sourceFrame.allowFullscreen = true;
-      const reloadDocBtn = button('', 'exam-session-tool exam-reload-doc-btn', () => {
+      const pages = E('div', 'exam-pdf-pages');
+      pages.append(E('p', 'exam-message', 'Đang tải đề thi…'));
+      const showIframeFallback = () => {
+        const sourceFrame = document.createElement('iframe');
+        sourceFrame.className = 'exam-source-document';
+        sourceFrame.title = 'Tài liệu đề thi';
+        // No allow-popups: blocks Drive's "open in new window" button so students stay in the room.
+        sourceFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
         sourceFrame.src = data.exam.sourceUrl;
+        pages.replaceWith(sourceFrame);
+      };
+      const reloadDocBtn = button('', 'exam-session-tool exam-reload-doc-btn', () => {
+        pages.replaceChildren(E('p', 'exam-message', 'Đang tải đề thi…'));
+        renderExamPdf(id, pages).catch(showIframeFallback);
       });
-      reloadDocBtn.append(icon('refresh', 13), document.createTextNode(' Tải lại khung đề'));
+      reloadDocBtn.append(icon('refresh', 13), document.createTextNode(' Tải lại đề'));
       leftHead.append(reloadDocBtn);
-      leftPane.append(leftHead, sourceFrame);
+      leftPane.append(leftHead, pages);
+      renderExamPdf(id, pages).catch(showIframeFallback);
     } else {
       const isPlaceholderOnlyPaper = questions.length > 0 && questions.every((q) => {
         const pText = String(q.prompt || '').trim();

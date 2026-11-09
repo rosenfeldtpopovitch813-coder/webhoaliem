@@ -78,6 +78,25 @@ export default async function handler(req,res) {
       const questions=(await database.ref(`exams_public/${id}`).get()).val();
       return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes,isOwner:meta.owner===user.uid,sourceUrl:meta.sourceUrl || null,sourceOpenUrl:meta.sourceOpenUrl || meta.sourceUrl || null},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status,draftAnswers:session.draftAnswers||{},draftUpdatedAt:session.draftUpdatedAt||0,flaggedQuestions:session.flaggedQuestions||[]},serverNow:Date.now(),result:session.status==='submitted'?session.result:null});
     }
+    if (action==='document') {
+      // Stream the exam file as raw PDF so the client renders it with pdf.js: works on phones and has no Drive "open in new window" link.
+      const id=String(req.query.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
+      const meta=(await database.ref(`exams_meta/${id}`).get()).val(); assert(meta?.sourceUrl,'Phòng thi này không gắn file đề.',404);
+      if (meta.owner!==user.uid) assert((await database.ref(`exam_sessions/${id}/${user.uid}`).get()).exists(),'Hãy vào phòng thi trước khi xem đề.',403);
+      const m=/^https:\/\/(?:drive|docs)\.google\.com\/(file|document|spreadsheets|presentation)\/d\/([A-Za-z0-9_-]{5,200})\/preview$/.exec(meta.sourceUrl);
+      assert(m,'Chỉ đọc trực tiếp được file Google Drive / Google Docs.',415);
+      const [,kind,fileId]=m;
+      const src=kind==='file' ? `https://drive.google.com/uc?export=download&id=${fileId}`
+        : kind==='presentation' ? `https://docs.google.com/presentation/d/${fileId}/export/pdf`
+        : `https://docs.google.com/${kind}/d/${fileId}/export?format=pdf`;
+      const upstream=await fetch(src,{redirect:'follow',signal:AbortSignal.timeout(8000)}).catch(()=>null);
+      const pdf=upstream?.ok ? Buffer.from(await upstream.arrayBuffer()) : Buffer.alloc(0);
+      assert(pdf.subarray(0,5).toString('latin1')==='%PDF-','Không tải được file đề. Trên Google Drive hãy bật Chia sẻ → “Bất kỳ ai có liên kết”, và dùng file PDF hoặc Google Docs.',422);
+      // shortcut: Vercel caps responses at ~4.5 MB, move to Firebase Storage signed URLs if teachers need bigger files.
+      assert(pdf.length<=4_400_000,'File đề lớn hơn 4,4 MB. Hãy nén PDF (giảm chất lượng ảnh) rồi tạo lại phòng.',413);
+      res.setHeader('Content-Type','application/pdf');
+      return res.status(200).send(pdf);
+    }
     if (action==='save-draft') {
       assert(req.method==='POST','POST bắt buộc.');
       const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
@@ -86,11 +105,13 @@ export default async function handler(req,res) {
       const flaggedQuestions=sanitizeFlaggedQuestions(publicSet,req.body.flaggedQuestions||[]);
       const sessionRef=database.ref(`exam_sessions/${id}/${user.uid}`); const now=Date.now();
       const tx=await sessionRef.transaction(session=>{
-        if(!session || session.status!=='active' || now>session.endsAt+30000) return;
+        // First call sees the empty local cache (null); returning undefined would abort before reading the server.
+        if(session===null) return null;
+        if(session.status!=='active' || now>session.endsAt+30000) return;
         return {...session,draftAnswers,flaggedQuestions,draftUpdatedAt:now};
       },undefined,false);
-      assert(tx.committed,'Phiên thi đã kết thúc hoặc không còn tồn tại; không thể lưu bản nháp.',409);
-      return res.json({savedAt:tx.snapshot.val().draftUpdatedAt,answerCount:Object.keys(draftAnswers).length,flaggedCount:flaggedQuestions.length});
+      assert(tx.committed && tx.snapshot.val()?.draftUpdatedAt===now,'Phiên thi đã kết thúc hoặc không còn tồn tại; không thể lưu bản nháp.',409);
+      return res.json({savedAt:now,answerCount:Object.keys(draftAnswers).length,flaggedCount:flaggedQuestions.length});
     }
     if (action==='history') {
       assert(req.method==='GET','GET bắt buộc.');
@@ -121,7 +142,8 @@ export default async function handler(req,res) {
       const grading=gradeExam(questions,answers), submittedAt=Date.now();
       const result={...grading,submittedAt};
       const tx=await sessionRef.transaction(current => {
-        if (!current || current.status!=='active') return;
+        if (current===null) return null; // empty local cache on first call; SDK retries with the server value
+        if (current.status!=='active') return;
         if (submittedAt > current.endsAt+30000) return;
         const {draftAnswers:_draftAnswers,draftUpdatedAt:_draftUpdatedAt,flaggedQuestions:_flaggedQuestions,...rest}=current;
         return {...rest,status:'submitted',submittedAt,result};

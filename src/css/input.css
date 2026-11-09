@@ -1159,7 +1159,10 @@ body.is-exam-lockdown .exam-left-paper-pane .exam-source-document{
   height:calc(100vh - 134px);
   min-height:580px;
 }
-body.is-exam-lockdown .exam-paper-sheet{max-height:calc(100vh - 134px)}
+body.is-exam-lockdown .exam-paper-sheet,
+body.is-exam-lockdown .exam-pdf-pages{max-height:calc(100vh - 134px)}
+.exam-pdf-pages{display:grid;gap:12px;padding:12px;max-height:calc(100vh - 200px);overflow-y:auto;background:var(--panel-2);-webkit-overflow-scrolling:touch}
+.exam-pdf-page{display:block;width:100%;height:auto;background:#fff;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 
 .exam-run-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .exam-lock-pill{
@@ -1261,6 +1264,8 @@ body.is-exam-lockdown .exam-paper-sheet{max-height:calc(100vh - 134px)}
 @media(max-width:1024px){
   body.is-exam-lockdown .exam-right-omr-pane{position:static}
   body.is-exam-lockdown .exam-omr-sheet-card,
-  body.is-exam-lockdown .exam-paper-sheet{max-height:none}
+  body.is-exam-lockdown .exam-paper-sheet,
+  body.is-exam-lockdown .exam-pdf-pages,
+  .exam-pdf-pages{max-height:none}
   body.is-exam-lockdown .exam-left-paper-pane .exam-source-document{height:58vh;min-height:380px}
 }
