@@ -34,6 +34,19 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' }); }
   try {
     const user = await identity(req);
+    const lockSnap = await db().ref(`active_exam_locks/${user.uid}`).get();
+    if (lockSnap.exists()) {
+      const lock = lockSnap.val();
+      const now = Date.now();
+      if (lock?.examId && Number(lock.endsAt) > now) {
+        const sessionSnap = await db().ref(`exam_sessions/${lock.examId}/${user.uid}`).get();
+        const session = sessionSnap.val();
+        if (session?.status === 'active' && Number(session.endsAt) > now) {
+          return res.status(403).json({ error: 'Trợ lý AI bị khóa hoàn toàn trong thời gian bạn đang làm bài thi!' });
+        }
+      }
+      await db().ref(`active_exam_locks/${user.uid}`).remove().catch(() => {});
+    }
     const body = req.body || {};
     const { question, image } = validateTutorInput(body);
     const history = normalizeHistory(body.history);

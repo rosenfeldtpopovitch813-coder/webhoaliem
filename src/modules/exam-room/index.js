@@ -127,13 +127,60 @@ function exportExamPDF({ title, durationMinutes, questions }, includeAnswers) {
   </style></head><body><header class="paper-head"><div class="eyebrow">HTVVM STUDIO · PHÒNG THI</div><h1>${pageTitle}</h1><p>Thời gian làm bài: ${escapeHTML(durationMinutes)} phút</p><p>Họ và tên: ............................................................. Lớp: ....................</p></header><div class="print-tip">Chọn “Save as PDF / Lưu dưới dạng PDF” trong hộp thoại in để tải file PDF.</div>${blocks}${answerKey}<script>window.addEventListener('load',()=>setTimeout(()=>{window.focus();window.print()},650));</script></body></html>`);
   win.document.close();
 }
-let ticker = null, autosaveTicker = null, draftSaveTimer = null;
+let ticker = null, autosaveTicker = null, draftSaveTimer = null, lockdownCleanup = null;
 let current = null, answers = {}, currentExamId = null;
 function clearTimer() {
   if (ticker) clearInterval(ticker);
   if (autosaveTicker) clearInterval(autosaveTicker);
   if (draftSaveTimer) clearTimeout(draftSaveTimer);
   ticker = autosaveTicker = draftSaveTimer = null;
+}
+function exitExamLockdown() {
+  if (lockdownCleanup) { try { lockdownCleanup(); } catch {} lockdownCleanup = null; }
+  document.body.classList.remove('is-exam-lockdown');
+  AppStore.set('examLockdown', false);
+  AppStore.set('activeExamId', null);
+  AppStore.set('notice', '');
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+}
+function enterExamLockdown(id, { onLeaveScreen, onFullscreenChange } = {}) {
+  if (lockdownCleanup) { try { lockdownCleanup(); } catch {} lockdownCleanup = null; }
+  document.body.classList.add('is-exam-lockdown');
+  AppStore.set('examLockdown', true);
+  AppStore.set('activeExamId', id);
+  AppStore.set('notice', '');
+  try { history.pushState({ examLockdown: true, id }, '', '/exam'); } catch {}
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  document.documentElement.requestFullscreen?.().catch(() => {});
+
+  const onBeforeUnload = (event) => {
+    event.preventDefault();
+    event.returnValue = '';
+    return '';
+  };
+  const onVisibility = () => {
+    if (document.hidden) onLeaveScreen?.();
+  };
+  const onFsChange = () => {
+    onFullscreenChange?.(Boolean(document.fullscreenElement));
+  };
+  const onKeyDown = (event) => {
+    const tag = (event.target?.tagName || '').toLowerCase();
+    const isEditable = tag === 'input' || tag === 'textarea' || event.target?.isContentEditable;
+    if ((event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) || (event.key === 'Backspace' && !isEditable)) {
+      event.preventDefault();
+    }
+  };
+  window.addEventListener('beforeunload', onBeforeUnload);
+  document.addEventListener('visibilitychange', onVisibility);
+  document.addEventListener('fullscreenchange', onFsChange);
+  window.addEventListener('keydown', onKeyDown, true);
+  lockdownCleanup = () => {
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    document.removeEventListener('visibilitychange', onVisibility);
+    document.removeEventListener('fullscreenchange', onFsChange);
+    window.removeEventListener('keydown', onKeyDown, true);
+  };
 }
 async function api(action, payload = {}, method = 'POST') {
   if (!auth?.currentUser) throw Error('Bạn cần đăng nhập Google để sử dụng phòng thi.');
@@ -219,12 +266,16 @@ export function renderExam() {
   ];
   for (const [name, action] of actions) {
     bar.append(button(name, 'exam-tab', () => {
+      if (AppStore.get('examLockdown')) return;
       clearTimer();
       action(body);
       body.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }));
   }
-  const openA4Top = button('', 'exam-tab', () => navigate('/exam-paper'));
+  const openA4Top = button('', 'exam-tab', () => {
+    if (AppStore.get('examLockdown')) return;
+    navigate('/exam-paper');
+  });
   openA4Top.append(icon('exam-paper', 15), document.createTextNode(' Khu Soạn đề A4 riêng →'));
   bar.append(openA4Top);
   wrap.append(showcase, bar, body);
@@ -234,16 +285,56 @@ export function renderExam() {
   else showList(body);
   return wrap;
 }
+async function deleteExamById(host, examId, examTitle, onDeleted) {
+  if (!confirm(`Xóa vĩnh viễn đề thi “${examTitle}” (Mã ${examId}) cùng toàn bộ dữ liệu lượt làm bài khỏi hệ thống?`)) return;
+  try {
+    await api('delete', { id: examId });
+    removeLocalDraft(scopeUid(), examId);
+    if (onDeleted) onDeleted();
+    else showList(host);
+  } catch (err) {
+    alert(err.message || String(err));
+  }
+}
 async function showList(host) {
   host.replaceChildren(E('p', 'exam-message', 'Đang tải danh sách đề...'));
   if (!requireLogin(host)) return;
   try {
     const data = await api('list', {}, 'GET');
     const section = panel('Đề thi đang mở'), grid = E('div', 'exam-grid');
-    if (!data.exams.length) grid.append(E('p', 'exam-message', 'Chưa có đề thi. Hãy dùng mục “Tạo đề thi” để tạo đề đầu tiên.'));
+    if (!data.exams.length) grid.append(E('p', 'exam-message', 'Chưa có đề thi. Hãy dùng mục “Tạo phòng thi” để tạo đề đầu tiên.'));
     for (const x of data.exams) {
       const card = E('article', 'exam-card');
-      card.append(E('strong', '', x.title), E('span', '', `Mã ${x.id} • ${x.durationMinutes} phút • ${x.counts.I + x.counts.II + x.counts.III} câu`), button('Vào phòng →', 'primary-btn', () => begin(host, x.id)));
+      const badgeRow = E('div', 'exam-card-badges');
+      badgeRow.append(
+        E('span', `exam-card-pill ${x.hasSourceDocument ? 'is-doc' : ''}`, x.hasSourceDocument ? 'Đề Drive / PDF' : 'Đề trực tiếp')
+      );
+      if (x.isOwner) badgeRow.append(E('span', 'exam-card-pill is-owner', 'Của bạn'));
+      const totalQ = (x.counts?.I || 0) + (x.counts?.II || 0) + (x.counts?.III || 0);
+      const cardActions = E('div', 'exam-card-actions');
+      const enterBtn = button('Vào phòng →', 'primary-btn', () => begin(host, x.id));
+      const copyBtn = button('', 'exam-card-icon-btn', () => {
+        navigator.clipboard?.writeText(x.id);
+        copyBtn.title = 'Đã sao chép mã!';
+      });
+      copyBtn.title = `Sao chép mã ${x.id}`;
+      copyBtn.append(icon('copy', 14));
+      cardActions.append(enterBtn, copyBtn);
+      if (x.isOwner) {
+        const delBtn = button('', 'exam-card-delete-btn', () => {
+          delBtn.disabled = true;
+          deleteExamById(host, x.id, x.title, () => showList(host)).finally(() => { delBtn.disabled = false; });
+        });
+        delBtn.title = 'Xóa đề thi này khỏi cơ sở dữ liệu';
+        delBtn.append(icon('trash', 14), document.createTextNode(' Xóa'));
+        cardActions.append(delBtn);
+      }
+      card.append(
+        badgeRow,
+        E('strong', 'exam-card-title', x.title),
+        E('span', '', `Mã ${x.id} • ${x.durationMinutes} phút • ${totalQ} câu`),
+        cardActions
+      );
       grid.append(card);
     }
     section.append(grid); host.replaceChildren(section);
@@ -274,7 +365,7 @@ async function begin(host, id) {
     const flaggedQuestions = new Set((Array.isArray(initialFlags) ? initialFlags : []).filter(qid => validQuestionIds.has(qid)));
 
     const p = E('section', 'exam-runner-shell');
-    let busy = false, draftSaveBusy = false, draftSaveQueued = false, omrFilter = 'all';
+    let busy = false, draftSaveBusy = false, draftSaveQueued = false, omrFilter = 'all', leaveScreenCount = 0;
     const initialPerf = performance.now(), serverAt = data.serverNow;
     const remaining = () => Math.max(0, data.session.endsAt - (serverAt + performance.now() - initialPerf));
 
@@ -287,39 +378,52 @@ async function begin(host, id) {
       status.textContent = 'Đang gửi phiếu trả lời lên máy chủ…';
       try {
         const output = await api('submit', { id, answers: cloneAnswers(answers) });
-        removeLocalDraft(uid, id); showResult(host, output.result, id);
+        removeLocalDraft(uid, id);
+        exitExamLockdown();
+        showResult(host, output.result, id);
       } catch (err) {
-        busy = false; showError(host, err);
-        host.append(button('Thử nộp lại', 'primary-btn', () => submit(automatic)));
+        busy = false;
+        status.textContent = `⚠ Chưa nộp được (${err.message || 'lỗi mạng'}). Bấm Nộp bài để gửi lại.`;
+        status.classList.add('exam-save-warning');
+        if (remaining() > 0 && !ticker) ticker = setInterval(update, 250);
       }
     };
     const confirmSubmit = () => {
       const done = questions.filter(questionIsAnswered).length;
       const msg = done < questions.length
-        ? `Bạn mới khoanh ${done}/${questions.length} câu (còn ${questions.length - done} câu trống). Xác nhận nộp bài?`
-        : 'Xác nhận nộp phiếu trả lời và chấm điểm ngay?';
+        ? `Bạn mới khoanh ${done}/${questions.length} câu (còn ${questions.length - done} câu trống). Xác nhận nộp bài và mở khóa phòng thi?`
+        : 'Xác nhận nộp phiếu trả lời, chấm điểm và mở khóa phòng thi?';
       if (confirm(msg)) submit(false);
     };
 
     // --- STICKY COMPACT TOP BAR ---
     const topBar = E('header', 'exam-run-topbar');
     const titleGroup = E('div', 'exam-run-title-group');
+    const titleRow = E('div', 'exam-run-title-row');
+    const lockBadge = E('span', 'exam-lock-pill');
+    lockBadge.append(icon('lock', 12), document.createTextNode(' Khóa phòng thi · Đã tắt AI'));
+    titleRow.append(E('strong', 'exam-run-title', data.exam.title), lockBadge);
     titleGroup.append(
-      E('strong', 'exam-run-title', data.exam.title),
-      E('span', 'exam-run-meta', `Mã phòng ${id} · ${data.exam.durationMinutes} phút`)
+      titleRow,
+      E('span', 'exam-run-meta', `Mã phòng ${id} · ${data.exam.durationMinutes} phút · Chỉ mở khóa sau khi nộp bài`)
     );
     const controlsGroup = E('div', 'exam-run-controls');
+    const violationBadge = E('span', 'exam-violation-pill', '');
+    violationBadge.hidden = true;
     const answeredLabel = E('span', 'exam-run-progress-pill', `0/${questions.length} câu`);
     const timer = E('div', 'exam-run-clock', '--:--');
     const fullscreenButton = button('', 'exam-session-tool', async () => {
       try {
         if (document.fullscreenElement) await document.exitFullscreen();
-        else if (p.requestFullscreen) await p.requestFullscreen();
-      } catch { status.textContent = 'Trình duyệt chặn toàn màn hình tự động; vẫn làm bài bình thường.'; }
+        else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+      } catch { status.textContent = 'Trình duyệt chặn toàn màn hình tự động; phòng thi vẫn đang được khóa.'; }
     });
-    fullscreenButton.append(icon('maximize', 14), document.createTextNode(' Toàn màn hình'));
+    const setFsButtonLabel = (isFs) => {
+      fullscreenButton.replaceChildren(icon('maximize', 14), document.createTextNode(isFs ? ' Thu nhỏ khung' : ' Toàn màn hình'));
+    };
+    setFsButtonLabel(Boolean(document.fullscreenElement));
     const topSubmitBtn = button('Nộp bài', 'primary-btn exam-run-submit-top', confirmSubmit);
-    controlsGroup.append(answeredLabel, timer, fullscreenButton, topSubmitBtn);
+    controlsGroup.append(violationBadge, answeredLabel, timer, fullscreenButton, topSubmitBtn);
     topBar.append(titleGroup, controlsGroup);
 
     const status = E('small', 'exam-save-status', answeredCount(answers) ? `Đã khôi phục ${answeredCount(answers)} câu đã lưu.` : 'Tự động lưu nháp mỗi lần khoanh.');
@@ -427,25 +531,47 @@ async function begin(host, id) {
       setTimeout(() => target.classList.remove('is-highlighted'), 1200);
     };
 
-    // Build Left Paper (if no PDF/Drive sourceUrl) + Right OMR Sections
+    // Build Left Paper (PDF/Drive embed OR authored paper) + Right OMR Sections
     let paperSheet = null;
     if (data.exam.sourceUrl) {
-      const openSource = E('a', 'exam-link', 'Mở đề tab riêng ↗');
-      openSource.href = data.exam.sourceOpenUrl || data.exam.sourceUrl;
-      openSource.target = '_blank'; openSource.rel = 'noopener noreferrer';
-      leftHead.append(openSource);
       const sourceFrame = document.createElement('iframe');
       sourceFrame.className = 'exam-source-document';
       sourceFrame.title = 'Tài liệu đề thi';
       sourceFrame.src = data.exam.sourceUrl;
       sourceFrame.loading = 'eager';
       sourceFrame.referrerPolicy = 'strict-origin-when-cross-origin';
+      sourceFrame.allow = 'autoplay';
       sourceFrame.allowFullscreen = true;
+      const reloadDocBtn = button('', 'exam-session-tool exam-reload-doc-btn', () => {
+        sourceFrame.src = data.exam.sourceUrl;
+      });
+      reloadDocBtn.append(icon('refresh', 13), document.createTextNode(' Tải lại khung đề'));
+      leftHead.append(reloadDocBtn);
       leftPane.append(leftHead, sourceFrame);
     } else {
-      leftHead.append(E('span', 'exam-pane-note', 'Đọc đề bên trái · Khoanh trên phiếu bên phải (hoặc bấm trực tiếp vào phương án)'));
-      paperSheet = E('div', 'exam-paper-sheet');
-      leftPane.append(leftHead, paperSheet);
+      const isPlaceholderOnlyPaper = questions.length > 0 && questions.every((q) => {
+        const pText = String(q.prompt || '').trim();
+        const genericPrompt = !pText || /^Câu\s+\d+$/i.test(pText);
+        if (!genericPrompt || q.image || q.latex) return false;
+        if (q.part === 'I') return Array.isArray(q.options) && q.options.every((opt, i) => !opt || opt === `Phương án ${'ABCD'[i]}`);
+        if (q.part === 'II') return Array.isArray(q.options) && q.options.every((opt, i) => !opt || opt === `Nhận định ${'abcd'[i]}`);
+        return true;
+      });
+      if (isPlaceholderOnlyPaper) {
+        leftHead.append(E('span', 'exam-pane-note', 'Chế độ phát đề giấy (chưa gắn link file đề)'));
+        const emptyPaperNotice = E('div', 'exam-creator-doc-placeholder exam-missing-doc-notice');
+        emptyPaperNotice.append(
+          icon('exam-paper', 38),
+          E('strong', '', 'Phòng thi này chưa đính kèm link đề Google Drive / PDF'),
+          E('p', '', 'Người tạo phòng chưa dán liên kết tài liệu đề thi nên khung bên trái không có trang đề điện tử. Hãy đọc bản đề giấy được phát và khoanh đáp án ở Phiếu trả lời bên phải.'),
+          ...(data.exam.isOwner ? [E('p', 'exam-owner-recreate-tip', 'Mẹo cho người tạo đề: Bạn có thể bấm “Nộp bài” để mở khóa, xóa phòng này trong Kho đề, rồi dán link Google Drive công khai khi tạo phòng mới.')] : [])
+        );
+        leftPane.append(leftHead, emptyPaperNotice);
+      } else {
+        leftHead.append(E('span', 'exam-pane-note', 'Đọc đề bên trái · Khoanh trên phiếu bên phải (hoặc bấm trực tiếp vào phương án)'));
+        paperSheet = E('div', 'exam-paper-sheet');
+        leftPane.append(leftHead, paperSheet);
+      }
     }
 
     const partMeta = [
@@ -666,20 +792,42 @@ async function begin(host, id) {
     splitLayout.append(leftPane, rightPane);
     p.append(topBar, splitLayout);
     host.replaceChildren(p);
+    enterExamLockdown(id, {
+      onLeaveScreen: () => {
+        leaveScreenCount += 1;
+        violationBadge.hidden = false;
+        violationBadge.textContent = `⚠ Rời màn hình: ${leaveScreenCount}`;
+        status.textContent = `⚠ Cảnh báo: Hệ thống ghi nhận bạn vừa chuyển tab/rời màn hình (${leaveScreenCount} lần).`;
+        status.classList.add('exam-save-warning');
+      },
+      onFullscreenChange: (isFs) => setFsButtonLabel(isFs)
+    });
     updateProgress();
     if (localIsNewer || answeredCount(answers) > 0 || flaggedQuestions.size > 0) queueDraftSave();
     ticker = setInterval(update, 250); autosaveTicker = setInterval(syncDraft, 8000); update();
-  } catch (e) { showError(host, e); }
+  } catch (e) { exitExamLockdown(); showError(host, e); }
 }
 function showResult(host, result, id) {
   clearTimer();
+  exitExamLockdown();
   const p = panel('Kết quả bài thi'); if (!result) return showError(host, Error('Chưa nhận được kết quả.'));
   p.append(E('div', 'exam-score', `${Number(result.score || 0).toFixed(2)} / 10`), E('p', 'exam-message', `Đúng trọn vẹn ${result.fullyCorrect || 0}/${result.total || 0} câu`));
   for (const d of result.details || []) {
     const item = E('div', 'exam-result-line');
     item.append(E('strong', '', `${d.id} · Phần ${d.part} · ${d.earned / 100}/${d.possible / 100} điểm`), E('span', '', d.prompt), E('span', '', `Bạn chọn: ${JSON.stringify(d.response)} | Đáp án: ${JSON.stringify(d.answer)}`)); p.append(item);
   }
-  p.append(button('Xem bảng vinh danh', 'primary-btn', () => showLeaderboard(host, id)), button('Lịch sử & thống kê', 'exam-tab', () => showHistory(host)), button('Quay lại kho đề', 'exam-tab', () => showList(host)));
+  const resultActions = E('div', 'exam-tabs');
+  resultActions.append(
+    button('Xem bảng vinh danh', 'primary-btn', () => showLeaderboard(host, id)),
+    button('Lịch sử & thống kê', 'exam-tab', () => showHistory(host)),
+    button('Quay lại kho đề', 'exam-tab', () => showList(host))
+  );
+  if (current?.exam?.id === id && current?.exam?.isOwner) {
+    const delBtn = button('', 'exam-card-delete-btn', () => deleteExamById(host, id, current.exam.title, () => showList(host)));
+    delBtn.append(icon('trash', 14), document.createTextNode(' Xóa đề này khỏi kho'));
+    resultActions.append(delBtn);
+  }
+  p.append(resultActions);
   host.replaceChildren(p);
 }
 async function showLeaderboard(host, id) {
@@ -796,18 +944,24 @@ function showCreator(host) {
     message.textContent = `Đã tạo phòng thi ${response.exam.id}.`;
     const result = E('div', 'exam-created-result');
     result.append(
-      E('h4', '', `🎉 Đã tạo phòng thi thành công!`),
+      E('h4', '', 'Đã tạo phòng thi thành công!'),
       E('p', '', `Mã phòng thi: ${response.exam.id}`),
-      E('p', 'exam-message', sourceUrl ? 'Thí sinh sẽ xem tài liệu ở bên trái và làm bài trên phiếu trả lời OMR bên phải.' : 'Đề đã được lưu trong kho đề chung, sẵn sàng cho học sinh vào thi.')
+      E('p', 'exam-message', sourceUrl ? '✓ Đã gắn file đề bên trái — thí sinh vào phòng sẽ thấy ngay đề Drive/PDF bên trái và Phiếu trả lời OMR bên phải (khóa thoát & khóa AI).' : 'Đề đã được lưu trong kho đề chung, sẵn sàng cho học sinh vào thi.')
     );
     const actRow = E('div', 'exam-tabs');
+    const openNowBtn = button('Mở phòng thi ngay →', 'primary-btn', () => begin(host, response.exam.id));
+    const copyCodeBtn = button('', 'exam-tab', () => {
+      navigator.clipboard?.writeText(response.exam.id);
+      message.textContent = `Đã sao chép mã phòng ${response.exam.id}`;
+    });
+    copyCodeBtn.append(icon('copy', 14), document.createTextNode(' Sao chép mã phòng'));
+    const delCreatedBtn = button('', 'exam-card-delete-btn', () => deleteExamById(host, response.exam.id, examTitle, () => showList(host)));
+    delCreatedBtn.append(icon('trash', 14), document.createTextNode(' Xóa đề vừa tạo'));
     actRow.append(
-      button('🚀 Mở phòng thi ngay', 'primary-btn', () => begin(host, response.exam.id)),
-      button('📋 Sao chép mã phòng', 'exam-tab', () => {
-        navigator.clipboard?.writeText(response.exam.id);
-        message.textContent = `Đã sao chép mã phòng ${response.exam.id}`;
-      }),
-      button('Quay về kho đề', 'exam-tab', () => showList(host))
+      openNowBtn,
+      copyCodeBtn,
+      button('Quay về kho đề', 'exam-tab', () => showList(host)),
+      delCreatedBtn
     );
     result.append(actRow);
     content.replaceChildren(result);
@@ -950,8 +1104,8 @@ function showCreator(host) {
 
     const actions = E('div', 'exam-tabs');
     actions.append(
-      button('🚀 Lưu & Mở phòng thi ngay', 'primary-btn', async () => {
-        try { await publishExam(data, ''); }
+      button('Lưu & Mở phòng thi ngay →', 'primary-btn', async () => {
+        try { await publishExam(data, sourceEmbedUrl, sourceOpenUrl); }
         catch (error) { message.textContent = error.message || String(error); }
       }),
       button('Xuất PDF / In đề nhanh', 'exam-tab', () => {
@@ -975,51 +1129,78 @@ function showCreator(host) {
     // === CỘT TRÁI: TÀI LIỆU ĐỀ THI (PDF / GOOGLE DRIVE) ===
     const leftDocPane = E('section', 'exam-left-paper-pane exam-creator-doc-pane');
     const docHead = E('div', 'exam-pane-head');
-    docHead.append(E('strong', '', 'ĐỀ THI BÊN TRÁI (PDF / GOOGLE DRIVE)'), E('span', 'exam-pane-note', 'Học sinh vừa đọc đề bên trái vừa khoanh phiếu bên phải'));
+    docHead.append(E('strong', '', 'ĐỀ THI BÊN TRÁI (GOOGLE DRIVE / DOCS / PDF)'), E('span', 'exam-pane-note', 'Dán link là hiện đề ngay bên dưới'));
     const sourceRow = E('div', 'exam-source-input-row');
-    const sourceInput = field('url', 'Dán link Google Drive / Docs công khai (hoặc để trống nếu chỉ phát phiếu)…', sourceOpenUrl || '');
-    const previewButton = button('Xem đề', 'primary-btn', showDocumentPreview);
+    const sourceInput = field('url', 'Dán link chia sẻ tệp Google Drive / Google Docs / PDF (https://...)…', sourceOpenUrl || '');
+    const previewButton = button('Xem đề', 'primary-btn', () => syncSourceLink({ strict: false }));
     sourceRow.append(sourceInput, previewButton);
+    const drivePermHint = E('small', 'exam-drive-tip', 'Quan trọng: Trên Google Drive, hãy chọn Chia sẻ → “Bất kỳ ai có liên kết (Người xem)” để mọi học sinh vào thi đều hiện đề.');
 
-    const openDocument = E('a', 'exam-link', 'Mở tài liệu ở tab mới ↗');
+    const openDocument = E('a', 'exam-link', 'Mở kiểm tra tài liệu ở tab mới ↗');
     openDocument.hidden = !sourceOpenUrl; openDocument.target = '_blank'; openDocument.rel = 'noopener noreferrer';
     if (sourceOpenUrl) openDocument.href = sourceOpenUrl;
     const sourceMessage = E('p', 'exam-message', '');
     const emptyDocHint = E('div', 'exam-creator-doc-placeholder');
     emptyDocHint.append(
       icon('exam-paper', 34),
-      E('strong', '', 'Khung hiển thị đề thi bên trái'),
-      E('p', '', 'Dán liên kết file PDF hoặc Google Docs trên Google Drive rồi bấm “Xem đề” để kiểm tra trang đề ngay tại đây. Nếu bạn đã phát đề giấy cho học sinh, có thể để trống và chỉ tạo Phiếu OMR bên phải.')
+      E('strong', '', 'Dán liên kết Google Drive / PDF để hiện đề tại đây'),
+      E('p', '', 'Chỉ cần dán liên kết chia sẻ của tệp PDF hoặc Google Docs trên Google Drive vào ô phía trên, trang đề sẽ tự động hiển thị ngay ở khung bên trái này giống hệt lúc học sinh làm bài.')
     );
     emptyDocHint.hidden = Boolean(sourceEmbedUrl);
 
     const previewFrame = document.createElement('iframe');
     previewFrame.className = 'exam-source-document'; previewFrame.title = 'Bản xem trước tài liệu đề thi';
-    previewFrame.loading = 'lazy'; previewFrame.referrerPolicy = 'strict-origin-when-cross-origin';
+    previewFrame.loading = 'eager'; previewFrame.referrerPolicy = 'strict-origin-when-cross-origin';
+    previewFrame.allow = 'autoplay'; previewFrame.allowFullscreen = true;
     previewFrame.hidden = !sourceEmbedUrl;
     if (sourceEmbedUrl) previewFrame.src = sourceEmbedUrl;
 
-    function showDocumentPreview() {
+    let previewDebounce = null;
+    function syncSourceLink({ strict = false } = {}) {
+      const raw = sourceInput.value.trim();
+      if (!raw) {
+        sourceEmbedUrl = ''; sourceOpenUrl = '';
+        previewFrame.hidden = true; openDocument.hidden = true; emptyDocHint.hidden = false;
+        sourceMessage.textContent = '';
+        sourceMessage.classList.remove('exam-error');
+        return { embedUrl: '', openUrl: '' };
+      }
       try {
-        if (!sourceInput.value.trim()) {
-          sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true; emptyDocHint.hidden = false;
-          sourceMessage.textContent = 'Chế độ chỉ dùng Phiếu trả lời OMR (không đính kèm link đề).';
-          return;
+        const resource = resolveResourceLink(raw);
+        if (resource.type !== 'drive' && resource.type !== 'pdf') {
+          throw Error('Phòng thi chỉ nhận liên kết tệp Google Drive / Google Docs hoặc đường dẫn file .pdf (HTTPS).');
         }
-        const resource = resolveResourceLink(sourceInput.value);
-        if (resource.type !== 'drive') throw Error('Hãy dán liên kết tệp Google Drive / Docs / Slides.');
-        sourceEmbedUrl = resource.embedUrl; sourceOpenUrl = resource.openUrl;
-        previewFrame.src = resource.embedUrl; previewFrame.hidden = false; emptyDocHint.hidden = true;
+        sourceEmbedUrl = resource.embedUrl;
+        sourceOpenUrl = resource.openUrl;
+        if (previewFrame.src !== resource.embedUrl) previewFrame.src = resource.embedUrl;
+        previewFrame.hidden = false; emptyDocHint.hidden = true;
         openDocument.href = resource.openUrl; openDocument.hidden = false;
-        sourceMessage.textContent = '✓ Đã kết nối đề thi bên trái.';
+        sourceMessage.textContent = '✓ Đã kết nối đề thi bên trái — học sinh vào phòng sẽ thấy đúng tài liệu này.';
+        sourceMessage.classList.remove('exam-error');
+        return { embedUrl: resource.embedUrl, openUrl: resource.openUrl };
       } catch (error) {
-        sourceEmbedUrl = ''; sourceOpenUrl = ''; previewFrame.hidden = true; openDocument.hidden = true; emptyDocHint.hidden = false;
+        sourceEmbedUrl = ''; sourceOpenUrl = '';
+        previewFrame.hidden = true; openDocument.hidden = true; emptyDocHint.hidden = false;
         sourceMessage.textContent = error.message || String(error);
+        sourceMessage.classList.add('exam-error');
+        if (strict) throw error;
+        return { embedUrl: '', openUrl: '' };
       }
     }
-    sourceInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); showDocumentPreview(); } });
+    sourceInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); syncSourceLink({ strict: false }); }
+    });
+    sourceInput.addEventListener('paste', () => {
+      if (previewDebounce) clearTimeout(previewDebounce);
+      previewDebounce = setTimeout(() => syncSourceLink({ strict: false }), 40);
+    });
+    sourceInput.addEventListener('input', () => {
+      if (previewDebounce) clearTimeout(previewDebounce);
+      previewDebounce = setTimeout(() => syncSourceLink({ strict: false }), 280);
+    });
+    sourceInput.addEventListener('change', () => syncSourceLink({ strict: false }));
     const docControls = E('div', 'exam-creator-doc-controls');
-    docControls.append(sourceRow, openDocument, sourceMessage);
+    docControls.append(sourceRow, drivePermHint, openDocument, sourceMessage);
     leftDocPane.append(docHead, docControls, emptyDocHint, previewFrame);
 
     // === CỘT PHẢI: PHIẾU ĐÁP ÁN OMR TINH GỌN, DỄ KHOANH ===
@@ -1318,11 +1499,21 @@ function showCreator(host) {
 
     async function createRoomNow() {
       try {
-        if (sourceInput.value.trim() && !sourceEmbedUrl) showDocumentPreview();
+        totalError.textContent = '';
+        const { embedUrl, openUrl } = syncSourceLink({ strict: true });
+        if (!embedUrl) {
+          const okWithoutDoc = confirm('Bạn chưa dán link đề Google Drive / PDF ở khung bên trái.\n\nNếu tiếp tục, học sinh vào phòng sẽ KHÔNG thấy tờ đề trên màn hình (chỉ có Phiếu OMR bên phải cho đề phát giấy).\n\nNhấn Cancel (Hủy) để dán link đề trước, hoặc OK nếu chỉ muốn phát Phiếu OMR.');
+          if (!okWithoutDoc) {
+            sourceInput.focus();
+            return;
+          }
+        }
         const questions = collectRoomQuestions();
-        await publishExam(questions, sourceEmbedUrl, sourceOpenUrl);
+        await publishExam(questions, embedUrl, openUrl);
       } catch (error) {
-        message.textContent = error.message || String(error);
+        const errMsg = error.message || String(error);
+        totalError.textContent = errMsg;
+        message.textContent = errMsg;
       }
     }
 

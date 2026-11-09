@@ -183,12 +183,21 @@ function drawAccount() {
   } else { badge.append(element('span', 'avatar-fallback', (user.displayName || 'H').slice(0, 1).toUpperCase())); }
   const texts = element('div', 'user-meta'); texts.append(element('strong', '', user.displayName || 'Người học'), element('small', '', 'Tài khoản Google'));
   badge.append(texts);
-  frame.account.append(badge, makeButton('Thoát', 'logout-btn', () => signOutUser().catch((error) => AppStore.set('notice', error.message))));
+  frame.account.append(badge, makeButton('Thoát', 'logout-btn', () => {
+    if (AppStore.get('examLockdown')) {
+      AppStore.set('notice', 'Không thể đăng xuất khi đang làm bài thi. Hãy nộp bài trước.');
+      return;
+    }
+    signOutUser().catch((error) => AppStore.set('notice', error.message));
+  }));
 }
 async function drawRoute() {
-  const id = ++renderId;
   const state = AppStore.getState();
   const route = resolveRoute(state.route);
+  if (state.examLockdown && route.path === '/exam' && frame.main.querySelector('.exam-runner-shell')) {
+    return;
+  }
+  const id = ++renderId;
   document.getElementById('page-title').textContent = route.title;
   for (const link of frame.links.children) {
     const active = link.dataset.path === route.path;

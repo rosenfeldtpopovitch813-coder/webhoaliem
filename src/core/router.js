@@ -18,12 +18,22 @@ export function resolveRoute(pathname) {
   return { ...route, path: normalized, status: 200 };
 }
 export function navigate(path) {
+  if (AppStore.get('examLockdown') && path !== '/exam') {
+    AppStore.set('notice', 'Đang trong phòng thi khóa bảo mật — bạn cần Nộp bài mới được thoát ra ngoài.');
+    return;
+  }
   if (!Object.hasOwn(ROUTES, path)) path = '/';
   if (location.pathname !== path) history.pushState({}, '', path);
   AppStore.set('route', path);
 }
 export function startRouter() {
-  const listener = () => AppStore.set('route', location.pathname);
+  const listener = () => {
+    if (AppStore.get('examLockdown')) {
+      if (location.pathname !== '/exam') history.pushState({ examLockdown: true }, '', '/exam');
+      return;
+    }
+    AppStore.set('route', location.pathname);
+  };
   window.addEventListener('popstate', listener);
   listener();
   return () => window.removeEventListener('popstate', listener);

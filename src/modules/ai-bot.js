@@ -52,12 +52,29 @@ export function mountAIBot() {
     history.replaceChildren(makeMessage('assistant', nextUid ? 'Bạn đã đăng nhập. Hãy gửi câu hỏi đầu tiên.' : 'Bạn đã đăng xuất. Đăng nhập Google để tiếp tục trò chuyện.'));
   });
   function toggle(force) {
+    if (AppStore.get('examLockdown')) {
+      panel.hidden = true;
+      launcher.hidden = true;
+      launcher.classList.remove('is-open');
+      launcher.textContent = '✦';
+      return;
+    }
     const open = typeof force === 'boolean' ? force : panel.hidden;
     panel.hidden = !open;
     launcher.classList.toggle('is-open', open);
     launcher.textContent = open ? '×' : '✦';
     if (open) input.focus();
   }
+  AppStore.subscribe('examLockdown', (locked) => {
+    if (locked) {
+      panel.hidden = true;
+      launcher.hidden = true;
+      launcher.classList.remove('is-open');
+      launcher.textContent = '✦';
+    } else {
+      launcher.hidden = false;
+    }
+  });
   function add(role, text) {
     const safeText = String(text || '').trim();
     history.append(makeMessage(role, safeText));
@@ -66,6 +83,7 @@ export function mountAIBot() {
   }
   async function sendMessage(event) {
     event.preventDefault();
+    if (AppStore.get('examLockdown')) return;
     const question = input.value.trim();
     if (!question || busy) return;
     const user = auth?.currentUser;

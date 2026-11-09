@@ -25,23 +25,42 @@ export default async function handler(req,res) {
       let sourceUrl = '', sourceOpenUrl = '';
       if (req.body.sourceUrl) {
         const resource = resolveResourceLink(req.body.sourceUrl);
-        assert(resource.type === 'drive', 'Phòng thi chỉ nhận liên kết tài liệu Google Drive/Docs/Slides/Sheets.', 400);
+        assert(resource.type === 'drive' || resource.type === 'pdf', 'Phòng thi chỉ nhận liên kết Google Drive / Docs hoặc file PDF trực tiếp (HTTPS).', 400);
         sourceUrl = resource.embedUrl;
         if (req.body.sourceOpenUrl) {
-          try { const openResource = resolveResourceLink(req.body.sourceOpenUrl); if (openResource.type === 'drive' && openResource.embedUrl === sourceUrl) sourceOpenUrl = openResource.openUrl; } catch {}
+          try { const openResource = resolveResourceLink(req.body.sourceOpenUrl); if ((openResource.type === 'drive' || openResource.type === 'pdf') && openResource.embedUrl === sourceUrl) sourceOpenUrl = openResource.openUrl; } catch {}
         }
         sourceOpenUrl ||= resource.openUrl;
       }
       const counts={I:questions.filter(q=>q.part==='I').length, II:questions.filter(q=>q.part==='II').length,III:questions.filter(q=>q.part==='III').length};
-      const meta={id,title,durationMinutes,createdAt,status:'published',owner:user.uid,counts,...(sourceUrl ? {sourceUrl,sourceOpenUrl} : {})};
+      const meta={id,title,durationMinutes,createdAt,status:'published',owner:user.uid,ownerName:user.name,counts,...(sourceUrl ? {sourceUrl,sourceOpenUrl} : {})};
       await database.ref().update({[`exams_meta/${id}`]:meta,[`exams_private/${id}`]:questions,[`exams_public/${id}`]:publicQuestions(questions)});
-      return res.status(201).json({exam:meta});
+      return res.status(201).json({exam:{...meta,isOwner:true,hasSourceDocument:Boolean(sourceUrl)}});
+    }
+    if (action === 'delete') {
+      assert(req.method === 'POST', 'POST bắt buộc.');
+      const id = String(req.body.id || '').toUpperCase();
+      assert(/^[A-Z0-9]{12}$/.test(id), 'Mã đề không hợp lệ.');
+      const metaSnap = await database.ref(`exams_meta/${id}`).get();
+      assert(metaSnap.exists(), 'Không tìm thấy đề thi trong cơ sở dữ liệu.', 404);
+      const meta = metaSnap.val();
+      assert(meta.owner === user.uid, 'Chỉ người tạo đề mới có quyền xóa đề thi này.', 403);
+      const lockSnap = await database.ref(`active_exam_locks/${user.uid}`).get();
+      const clearOwnLock = lockSnap.exists() && lockSnap.val()?.examId === id;
+      await database.ref().update({
+        [`exams_meta/${id}`]: null,
+        [`exams_private/${id}`]: null,
+        [`exams_public/${id}`]: null,
+        [`exam_sessions/${id}`]: null,
+        ...(clearOwnLock ? { [`active_exam_locks/${user.uid}`]: null } : {})
+      });
+      return res.json({ deleted: true, id });
     }
     if (action === 'detail') {
       const id=String(req.query.id || '').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
       const snap=await database.ref(`exams_meta/${id}`).get(); assert(snap.exists(),'Không tìm thấy đề.',404);
       const meta=snap.val(); assert(meta.status==='published' || meta.owner===user.uid,'Đề chưa được phát hành.',403);
-      return res.json({exam:{id:meta.id,title:meta.title,durationMinutes:meta.durationMinutes,counts:meta.counts,status:meta.status,hasSourceDocument:Boolean(meta.sourceUrl)}});
+      return res.json({exam:{id:meta.id,title:meta.title,durationMinutes:meta.durationMinutes,counts:meta.counts,status:meta.status,isOwner:meta.owner===user.uid,hasSourceDocument:Boolean(meta.sourceUrl)}});
     }
     if (action==='start') {
       assert(req.method==='POST','POST bắt buộc.'); const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
@@ -50,8 +69,14 @@ export default async function handler(req,res) {
       const now=Date.now();
       const tx=await sessionRef.transaction(current => current || {startedAt:now,endsAt:now+meta.durationMinutes*60000,status:'active',name:user.name},undefined,false);
       const session=tx.snapshot.val(); assert(session,'Không khởi tạo được phiên thi.',500);
+      if (session.status === 'active' && session.endsAt > now) {
+        await database.ref(`active_exam_locks/${user.uid}`).set({ examId: id, title: meta.title, endsAt: session.endsAt, updatedAt: now });
+      } else if (session.status === 'submitted') {
+        const lockSnap = await database.ref(`active_exam_locks/${user.uid}`).get();
+        if (lockSnap.exists() && lockSnap.val()?.examId === id) await database.ref(`active_exam_locks/${user.uid}`).remove();
+      }
       const questions=(await database.ref(`exams_public/${id}`).get()).val();
-      return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes,sourceUrl:meta.sourceUrl || null,sourceOpenUrl:meta.sourceOpenUrl || meta.sourceUrl || null},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status,draftAnswers:session.draftAnswers||{},draftUpdatedAt:session.draftUpdatedAt||0,flaggedQuestions:session.flaggedQuestions||[]},serverNow:Date.now(),result:session.status==='submitted'?session.result:null});
+      return res.json({exam:{id,title:meta.title,durationMinutes:meta.durationMinutes,isOwner:meta.owner===user.uid,sourceUrl:meta.sourceUrl || null,sourceOpenUrl:meta.sourceOpenUrl || meta.sourceUrl || null},questions,session:{startedAt:session.startedAt,endsAt:session.endsAt,status:session.status,draftAnswers:session.draftAnswers||{},draftUpdatedAt:session.draftUpdatedAt||0,flaggedQuestions:session.flaggedQuestions||[]},serverNow:Date.now(),result:session.status==='submitted'?session.result:null});
     }
     if (action==='save-draft') {
       assert(req.method==='POST','POST bắt buộc.');
@@ -102,6 +127,7 @@ export default async function handler(req,res) {
         return {...rest,status:'submitted',submittedAt,result};
       },undefined,false);
       const saved=tx.snapshot.val(); assert(saved?.status==='submitted','Không thể ghi bài nộp.',409);
+      await database.ref(`active_exam_locks/${user.uid}`).remove().catch(()=>{});
       // Retries return the first committed result; no double grading.
       return res.json({result:saved.result,alreadySubmitted:!tx.committed});
     }

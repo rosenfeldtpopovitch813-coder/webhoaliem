@@ -17,5 +17,6 @@ export class ReactiveStore {
 export const AppStore = new ReactiveStore({
   user: null, role: 'user', roleVerified: false, authLoading: true,
   route: '/', activeTab: 'home', theme: 'aurora', focusActive: false,
+  examLockdown: false, activeExamId: null,
   timeSynced: false, notice: ''
 });

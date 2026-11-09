@@ -1,9 +1,18 @@
 import { element, button } from '../../core/dom.js';
 import { auth } from '../../core/firebase.js';
+import { AppStore } from '../../core/store.js';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 export function renderCommunityAI() {
+  if (AppStore.get('examLockdown')) {
+    const locked = element('section', 'exam-panel');
+    locked.append(
+      element('h3', 'exam-heading', 'Trợ lý AI đang bị khóa trong giờ thi'),
+      element('p', 'exam-message', 'Bạn không được phép sử dụng Trợ lý AI khi đang trong phòng thi. Hãy hoàn thành và nộp bài thi trước.')
+    );
+    return locked;
+  }
   const root = element('section', 'ai-root');
   const hero = element('section','hero ai-hero'); hero.append(element('div','eyebrow','HTVVM STUDIO • AI TUTOR'),element('h2','hero-title','Học cùng một trợ giảng biết giải thích.'),element('p','hero-subtitle','Đặt câu hỏi bằng văn bản hoặc gửi ảnh bài tập. AI ưu tiên hướng dẫn từng bước, công thức và cách tự kiểm tra kết quả.')); root.append(hero);
   const panel = element('section','exam-panel ai-panel');
