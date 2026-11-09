@@ -1,6 +1,8 @@
 import { AppStore } from './store.js';
 export const ROUTES = Object.freeze({
   '/': { title: 'Tổng quan', module: 'home' },
+  '/exam-paper': { title: 'Soạn đề A4', module: 'exam-paper' },
+  '/whiteboard': { title: 'Bảng vẽ Mực', module: 'whiteboard' },
   '/exam': { title: 'Phòng thi', module: 'exam-room' },
   '/arena': { title: 'Chem Arena', module: 'chem-arena' },
   '/handbook': { title: 'Sổ tay', module: 'handbook' },
@@ -35,6 +37,8 @@ export async function loadRouteView(route) {
     const mod = await import('../modules/home/index.js');
     return mod.renderHome();
   }
+  if (route.module === 'exam-paper') { const mod = await import('../modules/exam-paper/index.js'); return mod.renderExamPaperApp(); }
+  if (route.module === 'whiteboard') { const mod = await import('../modules/whiteboard/index.js'); return mod.renderWhiteboardApp(); }
   if (route.module === 'chem-arena') { const mod = await import('../modules/chem-arena/index.js'); return mod.renderArena(); }
   if (route.module === 'exam-room') { const mod = await import('../modules/exam-room/index.js'); return mod.renderExam(); }
   if (route.module === 'focus-zone') { const mod = await import('../modules/focus-zone/index.js'); return mod.renderFocus(); }

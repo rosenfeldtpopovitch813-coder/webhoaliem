@@ -268,7 +268,9 @@ export const MOLECULE_PRESETS: Record<string, {
 
 function convertCeToLatex(ceExpr: string): string {
   let s = ceExpr.trim();
-  // Arrows with condition: <=>[$cond$] or ->[cond]
+  // Arrows with condition: <=>[@LATEX:cond@] or <=>[$cond$] or ->[cond]
+  s = s.replace(/<=>\[@LATEX:([\s\S]+?)@\]/g, '\\xrightleftharpoons{$1}');
+  s = s.replace(/->\[@LATEX:([\s\S]+?)@\]/g, '\\xrightarrow{$1}');
   s = s.replace(/<=>\[\$([^$]+)\$\]/g, '\\xrightleftharpoons{$1}');
   s = s.replace(/<=>\[([^\]]+)\]/g, '\\xrightleftharpoons{\\text{$1}}');
   s = s.replace(/->\[\$([^$]+)\$\]/g, '\\xrightarrow{$1}');
@@ -299,19 +301,12 @@ export function renderRichExamText(source: string): string {
     return key;
   };
 
-  let text = String(source);
+  // Protect inner [$...$] inside \ce{...} arrows before math delimiter scanning
+  let text = String(source)
+    .replace(/<=>\[\$([^$]+)\$\]/g, '<=>[@LATEX:$1@]')
+    .replace(/->\[\$([^$]+)\$\]/g, '->[@LATEX:$1@]');
 
-  // Convert standalone \ce{...} outside or inside $...$
-  text = text.replace(/\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m, inner) => {
-    const tex = convertCeToLatex(inner);
-    try {
-      return stash(katex.renderToString(tex, { throwOnError: false, displayMode: false, strict: 'ignore' }));
-    } catch {
-      return inner;
-    }
-  });
-
-  // Render $$...$$ or \[...\] or $...$ or \(...\)
+  // 1) Render $$...$$ or \[...\] or $...$ or \(...\) first (expanding any \ce{...} inside math)
   text = text.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)/g, (all, b1, b2, i1, i2) => {
     let tex = (b1 ?? b2 ?? i1 ?? i2 ?? '').trim();
     const displayMode = b1 !== undefined || b2 !== undefined;
@@ -320,6 +315,16 @@ export function renderRichExamText(source: string): string {
       return stash(katex.renderToString(tex, { throwOnError: false, displayMode, strict: 'ignore' }));
     } catch {
       return escapeHtml(all);
+    }
+  });
+
+  // 2) Render standalone \ce{...} outside $...$
+  text = text.replace(/\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m, inner) => {
+    const tex = convertCeToLatex(inner);
+    try {
+      return stash(katex.renderToString(tex, { throwOnError: false, displayMode: false, strict: 'ignore' }));
+    } catch {
+      return inner;
     }
   });
 

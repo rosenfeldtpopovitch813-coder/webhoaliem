@@ -1,5 +1,6 @@
 import { element, button } from '../../core/dom.js';
 import { auth } from '../../core/firebase.js';
+import { AppStore } from '../../core/store.js';
 import { HEARTBEAT_MS, titleFor } from '../../../shared/study-core.js';
 import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, validFocusDuration } from '../../../shared/focus-timer.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
@@ -516,12 +517,12 @@ export function renderFocus() {
   // --- KHỐI B: BẢNG VIẾT LỚP HỌC MỰC ---
   const notesPane = element('div', 'focus-workspace-pane focus-notes-pane');
   const notesTopBar = element('div', 'focus-notes-topbar');
-  const notesStatus = element('span', 'focus-muted', 'Bảng viết nháp, vẽ hình 3D, đồ thị & soạn đề A4 ngay trong Góc tập trung.');
+  const notesStatus = element('span', 'focus-muted', 'Bảng nháp viết tay, vẽ hình 3D & đồ thị ngay trong Góc tập trung.');
   const notesActions = element('div', 'focus-actions');
   const notesFrame = document.createElement('iframe');
   notesFrame.className = 'focus-notes-frame';
-  notesFrame.title = 'Ứng dụng bảng viết Lớp học Mực';
-  notesFrame.src = '/focus-notes/index.html?embed=1';
+  notesFrame.title = 'Ứng dụng bảng vẽ Lớp học Mực';
+  notesFrame.src = '/focus-notes/index.html?app=board&embed=1';
   notesFrame.loading = 'lazy';
   notesFrame.referrerPolicy = 'strict-origin-when-cross-origin';
   notesFrame.allow = 'clipboard-read; clipboard-write; fullscreen';
@@ -535,7 +536,7 @@ export function renderFocus() {
       notesStatus.textContent = 'Trình duyệt không cho phép toàn màn hình tự động; hãy bấm Mở tab riêng.';
     }
   });
-  const popNotes = button('↗ Mở tab riêng', 'focus-btn is-sm', () => window.open('/focus-notes/index.html', '_blank', 'noopener,noreferrer'));
+  const popNotes = button('↗ Mở tab riêng', 'focus-btn is-sm', () => window.open('/focus-notes/index.html?app=board', '_blank', 'noopener,noreferrer'));
   notesActions.append(fullNotes, popNotes);
   notesTopBar.append(notesStatus, notesActions);
   notesPane.append(notesTopBar, notesFrame);
@@ -555,30 +556,74 @@ export function renderFocus() {
   }
   setWorkspaceMode('split');
 
-  // --- ĐỒNG BỘ GIỜ HỌC VỚI MÁY CHỦ ---
-  let sessionId = null, sessionOrigin = null, pingBusy = false, alive = true, trackingConnected = false, sessionStopping = false, sessionStarting = false;
-  let statsSnapshot = null, pendingMs = 0, lastStatsRenderPerf = performance.now(), lastTimerPersist = 0;
+  // --- ĐỒNG BỘ GIỜ HỌC VỚI MÁY CHỦ & BỘ ĐẾM ĐỊA PHƯƠNG KHÔNG BAO GIỜ NGẮT ---
   const SESSION_STORAGE_KEY = 'htvvm-study-session-v1';
+  const LOCAL_STUDY_KEY = 'htvvm-local-study-stats-v2';
+  const todayKey = () => new Date().toLocaleDateString('en-CA');
+
+  function readLocalStudy() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LOCAL_STUDY_KEY) || 'null');
+      if (raw && typeof raw === 'object') {
+        const isToday = raw.dayKey === todayKey();
+        return {
+          totalSeconds: Math.max(0, Math.floor(Number(raw.totalSeconds) || 0)),
+          todaySeconds: isToday ? Math.max(0, Math.floor(Number(raw.todaySeconds) || 0)) : 0,
+          streak: Math.max(0, Math.floor(Number(raw.streak) || 0)),
+          sharing: !!raw.sharing
+        };
+      }
+    } catch {}
+    return { totalSeconds: 0, todaySeconds: 0, streak: 0, sharing: false };
+  }
+
+  function writeLocalStudy(snap) {
+    try {
+      localStorage.setItem(
+        LOCAL_STUDY_KEY,
+        JSON.stringify({
+          dayKey: todayKey(),
+          totalSeconds: snap.totalSeconds || 0,
+          todaySeconds: snap.todaySeconds || 0,
+          streak: snap.streak || 0,
+          sharing: !!snap.sharing,
+          updatedAt: Date.now()
+        })
+      );
+    } catch {}
+  }
+
+  let sessionId = null, sessionOrigin = null, pingBusy = false, alive = true, sessionStopping = false, sessionStarting = false;
+  let manualActive = false;
+  let statsSnapshot = readLocalStudy();
+  let pendingMs = 0, lastStatsRenderPerf = performance.now(), lastTimerPersist = 0;
 
   async function request(path, method = 'GET', body, options = {}) {
     const user = auth?.currentUser;
-    if (!user) throw Error('Hãy đăng nhập Google để lưu và đồng bộ giờ học lên Bảng xếp hạng.');
+    if (!user) throw Error('Hãy đăng nhập Google để đồng bộ giờ học lên Bảng xếp hạng.');
     const token = await user.getIdToken();
-    const res = await fetch(path, {
-      method,
-      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
-      cache: 'no-store',
-      keepalive: !!options.keepalive
-    });
-    let json = {};
-    try { json = await res.json(); } catch {}
-    if (!res.ok) {
-      const error = Error(json.error || `Lỗi máy chủ ${res.status}`);
-      error.status = res.status;
-      throw error;
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 7000);
+    try {
+      const res = await fetch(path, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+        cache: 'no-store',
+        keepalive: !!options.keepalive,
+        signal: ctrl.signal
+      });
+      let json = {};
+      try { json = await res.json(); } catch {}
+      if (!res.ok) {
+        const error = Error(json.error || `Lỗi máy chủ ${res.status}`);
+        error.status = res.status;
+        throw error;
+      }
+      return json;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return json;
   }
 
   function saveSession(id, origin) {
@@ -597,16 +642,31 @@ export function renderFocus() {
     } catch { return null; }
   }
 
+  const isCountingStudy = () => (running && selectedMode === 'focus') || manualActive || Boolean(sessionId);
+
+  function flushPendingToSnapshot() {
+    const wholeSec = Math.floor(pendingMs / 1000);
+    if (wholeSec > 0) {
+      statsSnapshot = {
+        ...statsSnapshot,
+        totalSeconds: (statsSnapshot.totalSeconds || 0) + wholeSec,
+        todaySeconds: (statsSnapshot.todaySeconds || 0) + wholeSec,
+        streak: Math.max(1, statsSnapshot.streak || 0)
+      };
+      pendingMs -= wholeSec * 1000;
+      writeLocalStudy(statsSnapshot);
+    }
+  }
+
   function drawStats() {
-    if (!statsSnapshot) return;
-    const liveSeconds = sessionId && trackingConnected ? Math.floor(pendingMs / 1000) : 0;
+    const liveSeconds = isCountingStudy() ? Math.floor(pendingMs / 1000) : 0;
     const totalSeconds = (statsSnapshot.totalSeconds || 0) + liveSeconds;
     const todaySeconds = (statsSnapshot.todaySeconds || 0) + liveSeconds;
     stats.replaceChildren();
     for (const [label, val] of [
       ['Hôm nay', fmtFull(todaySeconds)],
       ['Tổng giờ', fmtFull(totalSeconds)],
-      ['Streak', `${statsSnapshot.streak || 0} ngày`],
+      ['Streak', `${statsSnapshot.streak || (todaySeconds > 0 ? 1 : 0)} ngày`],
       ['Danh hiệu', titleFor(totalSeconds)]
     ]) {
       const item = element('div', 'focus-stat');
@@ -616,8 +676,8 @@ export function renderFocus() {
     shareInput.checked = !!statsSnapshot.sharing;
     if (todaySeconds >= 18000) {
       stateLine.textContent = '🌟 Bạn đã học 5 giờ hôm nay. Hãy nghỉ ngơi và vận động nhẹ nhàng nhé!';
-    } else if (sessionId && trackingConnected) {
-      stateLine.textContent = '● Đang ghi nhận giờ học theo thời gian thực.';
+    } else if (isCountingStudy()) {
+      stateLine.textContent = '● Đang đếm giờ học liên tục theo thời gian thực.';
     } else {
       stateLine.textContent = 'Bắt đầu đồng hồ tập trung hoặc bấm "Ghi nhận giờ học" để tính giờ.';
     }
@@ -625,191 +685,168 @@ export function renderFocus() {
 
   function showStats(s, reconcile = true) {
     if (!s) return;
-    if (!statsSnapshot || reconcile) {
-      statsSnapshot = { ...s };
-      if (reconcile) pendingMs = 0;
+    if (reconcile) {
+      flushPendingToSnapshot();
+      statsSnapshot = {
+        totalSeconds: Math.max(statsSnapshot.totalSeconds || 0, s.totalSeconds || 0),
+        todaySeconds: Math.max(statsSnapshot.todaySeconds || 0, s.todaySeconds || 0),
+        streak: Math.max(statsSnapshot.streak || 0, s.streak || 0),
+        sharing: !!s.sharing
+      };
+      writeLocalStudy(statsSnapshot);
     } else {
       statsSnapshot = { ...statsSnapshot, sharing: !!s.sharing };
+      writeLocalStudy(statsSnapshot);
     }
     drawStats();
   }
 
   function updateSessionButtons() {
-    begin.disabled = !!sessionId || sessionStopping || sessionStarting;
-    end.disabled = !sessionId;
+    const activeAny = Boolean(sessionId) || manualActive;
+    begin.disabled = activeAny || sessionStopping || sessionStarting;
+    end.disabled = !activeAny;
   }
 
   async function startSession(source = 'manual') {
-    if (sessionStopping) { status.textContent = 'Đang lưu phiên học trước đó; hãy thử lại sau giây lát.'; return false; }
-    if (sessionStarting) { status.textContent = 'Đang mở phiên học…'; return false; }
-    if (sessionId) { status.textContent = '● Một phiên học đang được ghi nhận.'; return true; }
+    if (source === 'manual') {
+      manualActive = true;
+      updateSessionButtons();
+      drawStats();
+    }
+    if (!auth?.currentUser) {
+      status.textContent = '● Đang đếm giờ học trên thiết bị (đăng nhập Google để đồng bộ lên bảng xếp hạng).';
+      return true;
+    }
+    if (sessionStopping || sessionStarting || sessionId) return true;
     sessionStarting = true;
     updateSessionButtons();
     try {
-      const pendingStop = getSavedSession();
-      if (pendingStop?.origin === 'stopping') {
-        try {
-          const previous = await request('/api/study-tracker', 'POST', { action: 'stop', sessionId: pendingStop.id }, { keepalive: true });
-          showStats(previous.stats, true);
-          clearSavedSession();
-        } catch (e) {
-          if (e.status === 409) clearSavedSession();
-        }
-      }
       const data = await request('/api/study-tracker', 'POST', { action: 'start' });
-      if (!alive) {
-        request('/api/study-tracker', 'POST', { action: 'stop', sessionId: data.sessionId }, { keepalive: true }).catch(() => {});
-        return false;
-      }
+      if (!alive) return false;
       sessionId = data.sessionId;
       sessionOrigin = source;
-      trackingConnected = true;
-      pendingMs = 0;
       saveSession(sessionId, sessionOrigin);
-      updateSessionButtons();
       showStats(data.stats, true);
-      status.textContent = source === 'pomodoro' ? '● Đồng hồ đang chạy & tự ghi nhận giờ học.' : '● Đang ghi nhận giờ học.';
+      status.textContent = source === 'pomodoro' ? '● Đồng hồ đang chạy & đồng bộ giờ học.' : '● Đang ghi nhận giờ học trực tuyến.';
       return true;
-    } catch (e) {
-      status.textContent = `Đồng hồ vẫn chạy bình thường (chưa đồng bộ máy chủ: ${e.message})`;
-      return false;
+    } catch {
+      status.textContent = '● Đang đếm giờ học liên tục trên thiết bị (tự động đồng bộ lại khi mạng ổn định).';
+      return true;
     } finally {
       sessionStarting = false;
       updateSessionButtons();
     }
   }
 
-  async function resumeSavedSession(saved) {
-    const fresh = Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt < 80000;
-    if (saved.origin === 'stopping' || !fresh) {
-      try {
-        const data = await request('/api/study-tracker', 'POST', { action: 'stop', sessionId: saved.id }, { keepalive: true });
-        showStats(data.stats, true);
-        clearSavedSession();
-      } catch (e) {
-        if (e.status === 409) clearSavedSession();
-      }
-      return;
-    }
-    try {
-      const data = await request('/api/study-tracker', 'POST', { action: 'resume', sessionId: saved.id });
-      if (!alive) return;
-      sessionId = saved.id;
-      sessionOrigin = saved.origin || 'manual';
-      trackingConnected = true;
-      pendingMs = 0;
-      saveSession(sessionId, sessionOrigin);
-      updateSessionButtons();
-      showStats(data.stats, true);
-      status.textContent = '● Đã khôi phục phiên ghi nhận giờ học.';
-    } catch (e) {
-      if (e.status === 409) clearSavedSession();
-    }
-  }
-
   async function loadStatus() {
+    drawStats();
+    if (!auth?.currentUser) return;
     try {
       const data = await request('/api/study-tracker');
       if (!alive) return;
       showStats(data.stats, true);
       const saved = getSavedSession();
-      if (saved) await resumeSavedSession(saved);
-      else status.textContent = 'Sẵn sàng ghi nhận giờ học.';
-    } catch (e) {
-      if (alive) status.textContent = `Chế độ ngoại tuyến / khách: Đồng hồ Pomodoro và Bảng viết vẫn hoạt động đầy đủ.`;
-    }
-  }
-
-  async function resumeCurrentSession(id) {
-    try {
-      const data = await request('/api/study-tracker', 'POST', { action: 'resume', sessionId: id });
-      if (!alive) return false;
-      trackingConnected = true;
-      showStats(data.stats, true);
-      saveSession(id, sessionOrigin || 'manual');
-      status.textContent = '● Đã kết nối lại việc ghi nhận giờ học.';
-      return true;
-    } catch (e) {
-      if (e.status === 409) {
-        sessionId = null; sessionOrigin = null; trackingConnected = false; pendingMs = 0;
-        clearSavedSession(); updateSessionButtons();
+      if (saved && saved.origin !== 'stopping' && Date.now() - (saved.savedAt || 0) < 80000) {
+        const resumed = await request('/api/study-tracker', 'POST', { action: 'resume', sessionId: saved.id }).catch(() => null);
+        if (resumed && alive) {
+          sessionId = saved.id;
+          sessionOrigin = saved.origin || 'manual';
+          saveSession(sessionId, sessionOrigin);
+          updateSessionButtons();
+          showStats(resumed.stats, true);
+        }
       }
-      return false;
+    } catch {
+      // Giữ nguyên bộ đếm địa phương mượt mà
     }
   }
 
   async function ping() {
-    if (!sessionId || pingBusy || !alive) return;
+    if (!alive || pingBusy || !isCountingStudy()) return;
+    flushPendingToSnapshot();
+    if (!auth?.currentUser) return;
     pingBusy = true;
-    const id = sessionId;
     try {
-      const data = await request('/api/study-tracker', 'POST', { action: 'ping', sessionId: id });
-      if (alive && sessionId === id) {
-        trackingConnected = true;
-        showStats(data.stats, true);
-        touchSavedSession();
+      if (!sessionId) {
+        const started = await request('/api/study-tracker', 'POST', { action: 'start' });
+        if (alive && started?.sessionId) {
+          sessionId = started.sessionId;
+          sessionOrigin = running ? 'pomodoro' : 'manual';
+          saveSession(sessionId, sessionOrigin);
+          showStats(started.stats, true);
+        }
+      } else {
+        const id = sessionId;
+        const data = await request('/api/study-tracker', 'POST', { action: 'ping', sessionId: id });
+        if (alive && sessionId === id) {
+          showStats(data.stats, true);
+          touchSavedSession();
+        }
       }
     } catch (e) {
-      trackingConnected = false;
-      drawStats();
-      if (e.status === 409 && sessionId === id) await resumeCurrentSession(id);
+      if (e.status === 409) {
+        sessionId = null;
+        clearSavedSession();
+      }
+      // Không bao giờ ngắt bộ đếm giờ học khi mạng chập chờn
     } finally {
       pingBusy = false;
+      updateSessionButtons();
     }
   }
 
   async function stopSession(msg = 'Đã lưu phiên học.') {
+    manualActive = false;
+    flushPendingToSnapshot();
     const id = sessionId;
-    if (!id || sessionStopping) return !sessionStopping;
-    sessionStopping = true;
     sessionId = null;
-    trackingConnected = false;
-    pendingMs = 0;
-    saveSession(id, 'stopping');
+    sessionOrigin = null;
+    clearSavedSession();
     updateSessionButtons();
     drawStats();
+    if (!id || sessionStopping || !auth?.currentUser) {
+      status.textContent = msg;
+      return true;
+    }
+    sessionStopping = true;
+    updateSessionButtons();
     try {
       const data = await request('/api/study-tracker', 'POST', { action: 'stop', sessionId: id }, { keepalive: true });
-      clearSavedSession();
       if (alive) { showStats(data.stats, true); status.textContent = msg; }
       return true;
     } catch {
-      try {
-        const data = await request('/api/study-tracker', 'POST', { action: 'stop', sessionId: id }, { keepalive: true });
-        clearSavedSession();
-        if (alive) { showStats(data.stats, true); status.textContent = msg; }
-        return true;
-      } catch (secondError) {
-        if (secondError.status === 409) { clearSavedSession(); return true; }
-        return false;
-      }
+      if (alive) status.textContent = msg;
+      return true;
     } finally {
-      sessionOrigin = null;
       sessionStopping = false;
       updateSessionButtons();
     }
   }
 
   shareInput.addEventListener('change', async () => {
+    statsSnapshot = { ...statsSnapshot, sharing: shareInput.checked };
+    writeLocalStudy(statsSnapshot);
     try {
       const data = await request('/api/study-tracker', 'POST', { action: 'sharing', enabled: shareInput.checked });
       showStats(data.stats, false);
       status.textContent = shareInput.checked ? 'Đã bật hiển thị trên bảng xếp hạng.' : 'Đã ẩn khỏi bảng xếp hạng.';
     } catch (e) {
       status.textContent = e.message;
-      shareInput.checked = !shareInput.checked;
     }
   });
 
-  // Bộ đếm thời gian thực theo mốc endTimeMs — không bao giờ bị lệch hay tự tắt khi chuyển tab!
+  // Bộ đếm thời gian thực mượt từng giây — không bao giờ khựng ở mốc 10s!
   let lastUiTick = performance.now();
   const timerInterval = setInterval(() => {
     const nowPerf = performance.now();
-    const delta = Math.max(0, Math.min(1500, nowPerf - lastUiTick));
+    const delta = Math.max(0, Math.min(2000, nowPerf - lastUiTick));
     lastUiTick = nowPerf;
 
-    if (sessionId && trackingConnected) {
+    if (isCountingStudy()) {
       pendingMs += delta;
+      if (pendingMs >= 5000) {
+        flushPendingToSnapshot();
+      }
     }
 
     if (running) {
@@ -822,14 +859,15 @@ export function renderFocus() {
         saveTimerState();
         lastTimerPersist = nowPerf;
       }
-      if (seconds === 0) {
+      if (seconds <= 0) {
+        seconds = 0;
         running = false;
         endTimeMs = 0;
         saveTimerState();
         updateControls();
         playBellChime();
         timerHint.textContent = '🎉 Đã hoàn thành phiên đồng hồ! Hãy nghỉ ngơi hoặc bắt đầu phiên tiếp theo.';
-        if (sessionOrigin === 'pomodoro' && sessionId) {
+        if (sessionOrigin === 'pomodoro' || sessionId) {
           void stopSession('🎉 Hoàn thành phiên Pomodoro! Giờ học đã được lưu.');
         } else {
           status.textContent = '🎉 Đã hết giờ Pomodoro!';
@@ -841,20 +879,17 @@ export function renderFocus() {
       drawStats();
       lastStatsRenderPerf = nowPerf;
     }
-  }, 250);
+  }, 200);
 
   const heartbeat = setInterval(ping, HEARTBEAT_MS);
+  const unsubUser = AppStore.subscribe('user', () => {
+    if (alive && auth?.currentUser) void loadStatus();
+  });
 
-  // Khi quay lại tab, cập nhật ngay số giây thực tế mà KHÔNG dừng đồng hồ
   const onVisibility = () => {
-    if (!document.hidden) {
-      if (running) {
-        seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
-        updateProgressUI();
-      }
-      if (!sessionId && !sessionStopping && !sessionStarting && auth?.currentUser) {
-        void loadStatus();
-      }
+    if (!document.hidden && running) {
+      seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
+      updateProgressUI();
     }
   };
   document.addEventListener('visibilitychange', onVisibility);
@@ -867,23 +902,23 @@ export function renderFocus() {
   cleanup = () => {
     if (!alive) return;
     alive = false;
+    flushPendingToSnapshot();
     saveTimerState();
+    unsubUser();
     clearInterval(timerInterval);
     clearInterval(heartbeat);
     document.removeEventListener('visibilitychange', onVisibility);
     watcher.disconnect();
     if (pdfURL) URL.revokeObjectURL(pdfURL);
     if (audioURL) URL.revokeObjectURL(audioURL);
-    if (sessionId) {
+    if (sessionId && auth?.currentUser) {
       const id = sessionId;
       sessionId = null;
-      saveSession(id, 'stopping');
-      request('/api/study-tracker', 'POST', { action: 'stop', sessionId: id }, { keepalive: true })
-        .then(() => clearSavedSession())
-        .catch(() => {});
+      request('/api/study-tracker', 'POST', { action: 'stop', sessionId: id }, { keepalive: true }).catch(() => {});
     }
   };
 
-  loadStatus();
+  drawStats();
+  void loadStatus();
   return root;
 }

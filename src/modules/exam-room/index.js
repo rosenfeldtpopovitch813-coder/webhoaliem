@@ -1,4 +1,5 @@
 import { element, button } from '../../core/dom.js';
+import { navigate } from '../../core/router.js';
 import { AppStore } from '../../core/store.js';
 import { auth } from '../../core/firebase.js';
 import katex from 'katex';
@@ -212,9 +213,9 @@ export function renderExam() {
     ['Kho đề', showList],
     ['Vào bằng mã', showJoin],
     ['Lịch sử & thống kê', showHistory],
-    ['Sổ tay câu sai', showMistakes]
+    ['Sổ tay câu sai', showMistakes],
+    ['Tạo phòng thi', showCreator]
   ];
-  actions.push(['Tạo đề thi', showCreator]);
   for (const [name, action] of actions) {
     bar.append(button(name, 'exam-tab', () => {
       clearTimer();
@@ -222,8 +223,12 @@ export function renderExam() {
       body.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }));
   }
+  bar.append(button('📝 Khu Soạn đề A4 riêng →', 'exam-tab', () => navigate('/exam-paper')));
   wrap.append(showcase, bar, body);
-  showList(body);
+  let hasPendingPaper = false;
+  try { hasPendingPaper = Boolean(localStorage.getItem('htvvm_pending_exam_paper')); } catch { /* ignore */ }
+  if (hasPendingPaper) showCreator(body);
+  else showList(body);
   return wrap;
 }
 async function showList(host) {
@@ -528,10 +533,10 @@ function showCreator(host) {
   common.append(titleWrap, durationWrap);
 
   const tabs = E('div', 'exam-creator-tabs');
-  const a4Tab = button('1. 📝 Soạn đề khổ A4 (Như Word)', 'exam-creator-tab is-active', () => switchMode('a4'));
-  const roomTab = button('2. 🎯 Tạo phòng thi & Phiếu OMR', 'exam-creator-tab', () => switchMode('room'));
-  const authorTab = button('3. ⚡ Sửa từng câu / JSON', 'exam-creator-tab', () => switchMode('author'));
-  tabs.append(a4Tab, roomTab, authorTab);
+  const roomTab = button('1. 🎯 Tạo phòng thi & Phiếu OMR (PDF / Drive)', 'exam-creator-tab is-active', () => switchMode('room'));
+  const authorTab = button('2. ⚡ Danh sách câu hỏi / Đề chuyển từ Khu A4', 'exam-creator-tab', () => switchMode('author'));
+  const openA4SuiteBtn = button('📝 Mở Khu Soạn đề A4 riêng →', 'exam-tab', () => navigate('/exam-paper'));
+  tabs.append(roomTab, authorTab, openA4SuiteBtn);
 
   const content = E('div', 'exam-creator-content');
   const message = E('p', 'exam-message');
@@ -539,11 +544,11 @@ function showCreator(host) {
   host.replaceChildren(p);
 
   let data = [];
-  let mode = 'a4';
+  let mode = 'room';
   let sourceEmbedUrl = '';
   let sourceOpenUrl = '';
 
-  // Nạp đề vừa chuyển từ Trình soạn đề A4 nếu có
+  // Nạp đề vừa chuyển từ Khu Soạn đề A4 riêng nếu có
   try {
     const pendingRaw = localStorage.getItem('htvvm_pending_exam_paper');
     if (pendingRaw) {
@@ -551,24 +556,11 @@ function showCreator(host) {
       if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
         data = parsed.questions;
         if (parsed.title) title.value = parsed.title;
+        message.textContent = `✅ Đã nhận ${data.length} câu hỏi từ Khu Soạn đề A4! Kiểm tra bên dưới rồi bấm "Lưu & mở phòng thi".`;
         localStorage.removeItem('htvvm_pending_exam_paper');
       }
     }
   } catch { /* ignore */ }
-
-  const onWindowMessage = (event) => {
-    const payload = event?.data;
-    if (!payload || payload.type !== 'HTVVM_EXAM_PAPER_EXPORT') return;
-    if (payload.title && typeof payload.title === 'string') {
-      title.value = payload.title;
-    }
-    if (Array.isArray(payload.questions) && payload.questions.length) {
-      data = payload.questions;
-      message.textContent = `✅ Đã nhận ${data.length} câu hỏi từ Trình soạn đề khổ A4! Bạn có thể bấm "Lưu & Mở phòng thi ngay" bên dưới.`;
-      switchMode('author');
-    }
-  };
-  window.addEventListener('message', onWindowMessage);
 
   const getDuration = () => {
     const minutes = Number(duration.value);
@@ -605,51 +597,21 @@ function showCreator(host) {
     content.replaceChildren(result);
   }
   const updateModeTabs = () => {
-    a4Tab.classList.toggle('is-active', mode === 'a4');
     roomTab.classList.toggle('is-active', mode === 'room');
     authorTab.classList.toggle('is-active', mode === 'author');
   };
   function switchMode(next) {
     mode = next; updateModeTabs();
-    if (next === 'a4') renderA4WordStudio();
-    else if (next === 'room') renderRoomCreator();
+    if (next === 'room') renderRoomCreator();
     else renderAuthor();
-  }
-
-  function renderA4WordStudio() {
-    content.replaceChildren();
-    const banner = E('div', 'exam-a4-studio-banner');
-    const copy = E('div', 'exam-a4-studio-copy');
-    copy.append(
-      E('strong', '', '📝 Soạn đề trên trang A4 như trong Word — Vẽ hình 3D, đồ thị, phân tử rồi kéo thẳng vào đề'),
-      E('p', '', 'Gõ "Câu 1." tự đánh số lại câu; gõ "A. ... B. ... C. ... D. ..." liền 1 dòng tự thẳng cột; bấm chữ cái để chọn đáp án đúng; bấm 🖼 Vẽ hình để chia đôi màn hình và kéo hình sang đề; tải về file Word (.docx) hoặc PDF.')
-    );
-    const actions = E('div', 'exam-a4-studio-actions');
-    const openFullBtn = E('a', 'exam-tab', '↗ Mở toàn màn hình');
-    openFullBtn.href = '/focus-notes/index.html#/exam-paper';
-    openFullBtn.target = '_blank';
-    openFullBtn.rel = 'noopener noreferrer';
-    const toRoomBtn = button('Tiếp theo: Tạo phòng thi OMR →', 'primary-btn', () => switchMode('room'));
-    actions.append(openFullBtn, toRoomBtn);
-    banner.append(copy, actions);
-
-    const frameWrap = E('div', 'exam-a4-iframe-wrap');
-    const iframe = document.createElement('iframe');
-    iframe.className = 'exam-a4-studio-iframe';
-    iframe.src = '/focus-notes/index.html#/exam-paper';
-    iframe.title = 'Trình soạn đề thi khổ A4 như Word';
-    iframe.allow = 'clipboard-read; clipboard-write; fullscreen';
-    frameWrap.append(iframe);
-
-    content.append(banner, frameWrap);
   }
 
   function renderAuthor() {
     content.replaceChildren();
     const intro = E('div', 'exam-creator-intro');
-    intro.append(E('h4', '', 'Danh sách câu hỏi chi tiết & Nhập JSON'), E('p', '', 'Kiểm tra hoặc chỉnh sửa từng câu hỏi đã chuyển từ trang đề A4, hoặc thêm câu hỏi thủ công / dán JSON.'));
+    intro.append(E('h4', '', 'Danh sách câu hỏi chi tiết & Nhập JSON'), E('p', '', 'Kiểm tra hoặc chỉnh sửa từng câu hỏi đã chuyển từ Khu Soạn đề A4, hoặc thêm câu hỏi thủ công / dán JSON.'));
     const help = E('div', 'exam-markdown-help');
-    help.innerHTML = '<strong>Cú pháp nhanh:</strong> <code>**đậm**</code> · <code>*nghiêng*</code> · <code>$x^2$</code> · <code>\\ce{H2SO4}</code>. Bạn cũng có thể chuyển sang tab <strong>1. 📝 Soạn đề khổ A4 (Như Word)</strong> để gõ đề trực quan trên giấy A4.';
+    help.innerHTML = '<strong>Cú pháp nhanh:</strong> <code>**đậm**</code> · <code>*nghiêng*</code> · <code>$x^2$</code> · <code>\\ce{H2SO4}</code>. Muốn gõ đề trực quan trên giấy A4 nhiều trang như Word, hãy mở mục <strong>📝 Soạn đề A4</strong> ở thanh bên trái.';
     intro.append(help);
     const questions = E('div', 'exam-editor');
     const addButtons = E('div', 'exam-tabs');
@@ -665,7 +627,7 @@ function showCreator(host) {
 
     function renderQuestionEditors() {
       questions.replaceChildren();
-      if (!data.length) questions.append(E('p', 'exam-message', 'Chưa có câu hỏi nào. Hãy bấm nút thêm câu ở trên hoặc soạn bên tab "1. 📝 Soạn đề khổ A4".'));
+      if (!data.length) questions.append(E('p', 'exam-message', 'Chưa có câu hỏi nào. Hãy bấm nút thêm câu ở trên hoặc chuyển câu hỏi từ Khu Soạn đề A4 sang.'));
       data.forEach((q, idx) => {
         q.options = Array.isArray(q.options) ? q.options : ['', '', '', ''];
         const card = E('article', 'exam-question exam-author-question');
@@ -1058,8 +1020,8 @@ function showCreator(host) {
 
     const footerActions = E('div', 'exam-room-submit-bar');
     const createRoomBtn = button('🚀 Tạo phòng thi ngay', 'primary-btn', createRoomNow);
-    const backToA4Btn = button('← Quay lại Soạn đề khổ A4', 'exam-tab', () => switchMode('a4'));
-    footerActions.append(createRoomBtn, backToA4Btn);
+    const openA4Btn = button('📝 Mở Khu Soạn đề A4 riêng →', 'exam-tab', () => navigate('/exam-paper'));
+    footerActions.append(createRoomBtn, openA4Btn);
 
     function selectedCounts() {
       return Object.fromEntries(sectionDefs.map(({ part }) => [part, Number(sectionState[part].count.value)]));
@@ -1160,5 +1122,5 @@ function showCreator(host) {
     refreshTotal();
   }
 
-  switchMode(data.length ? 'room' : 'a4');
+  switchMode(data.length ? 'author' : 'room');
 }

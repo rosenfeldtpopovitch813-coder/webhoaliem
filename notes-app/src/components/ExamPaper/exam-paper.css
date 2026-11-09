@@ -241,20 +241,144 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 28px;
   background: #cbd5e1;
 }
 
-/* The A4 Sheet (210mm wide) */
+/* The A4 Sheet (210mm wide, multi-page stack, never shrinks!) */
 .exam-a4-sheet {
+  flex: 0 0 auto;
   width: min(210mm, 100%);
   min-height: 297mm;
+  height: auto;
   background: #ffffff;
   color: #111827;
   box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.06);
-  padding: 16mm 18mm 20mm;
+  padding: 16mm 18mm 14mm;
   position: relative;
+  display: flex;
+  flex-direction: column;
   transition: box-shadow 0.2s ease;
+}
+
+.exam-workspace.is-split .exam-a4-sheet {
+  padding: 14mm clamp(14px, 2.4vw, 18mm) 12mm;
+}
+
+.exam-inline-rendered {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+}
+
+.exam-inline-rendered:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.exam-a4-page-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #cbd5e1;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.exam-page-break-chip {
+  border: 1px dashed #a78bfa;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+
+.exam-page-break-chip:hover {
+  background: #ede9fe;
+}
+
+.exam-a4-footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10.5pt;
+  color: #475569;
+  user-select: none;
+}
+
+.exam-a4-end-mark {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #1e293b;
+}
+
+.exam-page-jump-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.exam-page-pill {
+  border: 0;
+  background: #ffffff;
+  color: #1e293b;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.exam-page-pill:hover {
+  background: #0d9488;
+  color: #ffffff;
+}
+
+.exam-add-page-below {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 99px;
+  border: 1.5px dashed #64748b;
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.exam-add-page-below:hover {
+  background: #ffffff;
+  border-color: #0d9488;
+  color: #0d9488;
 }
 
 /* Header on A4 Paper */
@@ -670,15 +794,25 @@
 }
 
 .exam-solution-row {
-  padding: 5px 8px;
+  padding: 6px 10px;
   background: #f8fafc;
   border-left: 3px solid #3b82f6;
   border-radius: 0 6px 6px 0;
+  align-items: flex-start;
 }
 
 .exam-solution-row strong {
   color: #1d4ed8;
   white-space: nowrap;
+  padding-top: 1px;
+}
+
+.exam-solution-rendered {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 /* Inline Figures inside Question (Click to resize, align left/center/right, Edit on board) */

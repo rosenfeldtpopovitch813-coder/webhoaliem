@@ -354,6 +354,15 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
 
   let qIndex = 0;
   for (const block of paper.blocks) {
+    if (block.type === 'page-break') {
+      bodyXml.push(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
+      continue;
+    }
+
+    if (block.pageBreakBefore) {
+      bodyXml.push(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
+    }
+
     if (block.type === 'section') {
       qIndex = 0; // Reset or continue numbering per section
       bodyXml.push(`<w:p><w:pPr><w:spacing w:before="200" w:after="60"/></w:pPr>${textWithMathToWordXml(block.title, true)}</w:p>`);
@@ -491,6 +500,13 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
   const bodyHtml: string[] = [];
 
   for (const block of paper.blocks) {
+    if (block.type === 'page-break') {
+      bodyHtml.push(`<div style="page-break-before:always;break-before:page;height:0"></div>`);
+      continue;
+    }
+    if (block.pageBreakBefore) {
+      bodyHtml.push(`<div style="page-break-before:always;break-before:page;height:0"></div>`);
+    }
     if (block.type === 'section') {
       qCounter = 0;
       bodyHtml.push(`<div class="pdf-section"><h3>${escapeHtml(block.title)}</h3>${block.subtitle ? `<p>${escapeHtml(block.subtitle)}</p>` : ''}</div>`);
@@ -526,7 +542,7 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
     } else if (block.questionType === 'short') {
       optionsHtml = `<div class="pdf-short-ans"><strong>Đáp án:</strong> ${
         isTeacher && block.shortAnswer
-          ? `<span class="pdf-short-filled">${escapeHtml(block.shortAnswer)}</span>`
+          ? `<span class="pdf-short-filled">${renderRichExamText(block.shortAnswer)}</span>`
           : `<span class="pdf-short-box">&nbsp;</span>`
       }</div>`;
     }

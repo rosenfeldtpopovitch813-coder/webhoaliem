@@ -74,9 +74,14 @@ export type ExamStatementTF={
 export type ExamBlock=
   | {
       id:string;
+      type:'page-break';
+    }
+  | {
+      id:string;
       type:'section';
       title:string;
       subtitle?:string;
+      pageBreakBefore?:boolean;
     }
   | {
       id:string;
@@ -92,6 +97,7 @@ export type ExamBlock=
       shortAnswer?:string;
       solution?:string;
       figures?:ExamInlineFigure[];
+      pageBreakBefore?:boolean;
     }
   | {
       id:string;
@@ -101,6 +107,7 @@ export type ExamBlock=
       bold?:boolean;
       italic?:boolean;
       figures?:ExamInlineFigure[];
+      pageBreakBefore?:boolean;
     };
 
 export type ExamPaperDocument={

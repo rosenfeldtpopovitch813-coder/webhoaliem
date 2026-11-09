@@ -4,10 +4,12 @@ import { auth } from '../../core/firebase.js';
 import { AppStore } from '../../core/store.js';
 
 const modules = [
-  ['✦', 'Khảo thí', 'Luyện thi, chấm điểm và sổ tay câu sai', '/exam'],
+  ['📝', 'Soạn đề A4', 'Soạn đề nhiều trang A4 như Word, công thức Toán/Hóa, xuất .docx & PDF', '/exam-paper'],
+  ['✎', 'Bảng vẽ Mực', 'Bảng viết tay độc lập, dựng hình 3D, vẽ đồ thị và viết lên PDF', '/whiteboard'],
+  ['✦', 'Phòng thi trực tuyến', 'Tạo phòng thi OMR, chấm điểm tự động và sổ tay câu sai', '/exam'],
   ['⚡', 'Chem Arena', 'Đấu trường Hóa học đối kháng thời gian thực', '/arena'],
   ['▦', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
-  ['◷', 'Góc tập trung', 'Đồng hồ Pomodoro, Lớp học Mực và nhạc học', '/focus'],
+  ['◷', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
   ['▧', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
   ['⌁', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển đại học', '/admissions']
 ];

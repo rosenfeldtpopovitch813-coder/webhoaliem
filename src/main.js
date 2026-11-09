@@ -10,7 +10,7 @@ import { element, button } from './core/dom.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'], ['/community', '✦', 'Trợ lý AI'] ];
+const nav = [ ['/', '⌂', 'Tổng quan'], ['/exam-paper', '📝', 'Soạn đề A4'], ['/whiteboard', '✎', 'Bảng vẽ Mực'], ['/exam', '▤', 'Phòng thi'], ['/arena', 'ϟ', 'Chem Arena'], ['/handbook', '▦', 'Sổ tay'], ['/focus', '◷', 'Góc tập trung'], ['/library', '▧', 'Thư viện học liệu'], ['/admissions', '⌁', 'Nguyện vọng'], ['/community', '✦', 'Trợ lý AI'] ];
 let renderId = 0;
 let frame;
 let sidebarOpen = false;

@@ -44,6 +44,8 @@ export default function ExamPaperStudio({
   );
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
+  const [editingSolutionId, setEditingSolutionId] = useState<string | null>(null);
+  const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
   const [selectedFigure, setSelectedFigure] = useState<{ blockId: string; figId: string } | null>(null);
   const [splitBoardOpen, setSplitBoardOpen] = useState(false);
   const [activeSourceId, setActiveSourceId] = useState<string>(() =>
@@ -56,7 +58,9 @@ export default function ExamPaperStudio({
   const [customLatex, setCustomLatex] = useState('\\int_{0}^{1} (3x^2 + 2x)\\,dx');
   const [smartText, setSmartText] = useState('');
   const [smartComposerOpen, setSmartComposerOpen] = useState(false);
-  const [saveBadge, setSaveBadge] = useState('✓ Tự lưu khi gõ');
+  const [saveBadge, setSaveBadge] = useState('✓ Tự động lưu khi gõ');
+  const isFirstRenderRef = useRef(true);
+  const imageUploadRef = useRef<HTMLInputElement | null>(null);
 
   // Freehand canvas state when source.kind === 'board'
   const freeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -65,19 +69,29 @@ export default function ExamPaperStudio({
 
   // Auto-save whenever paper changes
   useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
     setSaveBadge('Đang tự lưu…');
     const timer = window.setTimeout(() => {
-      void Promise.resolve(onSavePaper(paper, false)).then(() => {
-        setSaveBadge(
-          '✓ Đã tự lưu lúc ' +
-            new Date().toLocaleTimeString('vi-VN', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit'
-            })
-        );
-      });
-    }, 380);
+      Promise.resolve(
+        typeof onSavePaper === 'function' ? onSavePaper(paper, false) : undefined
+      )
+        .then(() => {
+          setSaveBadge(
+            '✓ Đã tự lưu lúc ' +
+              new Date().toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              })
+          );
+        })
+        .catch(() => {
+          setSaveBadge('⚠ Chưa lưu được bản nháp');
+        });
+    }, 350);
     return () => window.clearTimeout(timer);
   }, [paper]);
 
@@ -271,7 +285,7 @@ export default function ExamPaperStudio({
         prev.blocks[prev.blocks.length - 1]?.id;
 
       const nextBlocks = prev.blocks.map(b => {
-        if (b.id !== targetId || b.type === 'section') return b;
+        if (b.id !== targetId || (b.type !== 'question' && b.type !== 'paragraph')) return b;
         return {
           ...b,
           figures: [...(b.figures || []), newFig]
@@ -561,13 +575,25 @@ export default function ExamPaperStudio({
   };
 
   /**
-   * Push parsed questions to parent /exam Room Creator via postMessage or callback
+   * Push parsed questions to /exam Room Creator via localStorage + postMessage / navigation
    */
   const pushToOnlineExamRoom = () => {
     const questions = convertExamPaperToOnlineQuestions(paper);
     if (!questions.length) {
       alert('Đề chưa có câu hỏi nào để tạo phòng thi.');
       return;
+    }
+    try {
+      localStorage.setItem(
+        'htvvm_pending_exam_paper',
+        JSON.stringify({
+          title: paper.header.examTitle,
+          questions,
+          exportedAt: Date.now()
+        })
+      );
+    } catch {
+      /* ignore storage errors */
     }
     if (window.parent && window.parent !== window) {
       window.parent.postMessage(
@@ -580,16 +606,103 @@ export default function ExamPaperStudio({
       );
       setSaveBadge(`🚀 Đã chuyển ${questions.length} câu hỏi sang Phòng thi!`);
     } else {
-      navigator.clipboard
-        ?.writeText(JSON.stringify(questions, null, 2))
-        .then(() => {
-          alert(
-            `Đã sao chép ${questions.length} câu hỏi chuẩn JSON vào bộ nhớ tạm! Bạn có thể dán trực tiếp vào mục Tạo đề thi trong Phòng thi.`
-          );
-        })
-        .catch(() => {});
+      window.open('/exam', '_blank');
     }
     setDownloadMenuOpen(false);
+  };
+
+  /**
+   * Upload an image directly from disk into the currently focused question
+   */
+  const handleUploadLocalImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl.startsWith('data:image/')) return;
+      const newFig: ExamInlineFigure = {
+        id: crypto.randomUUID(),
+        sourceId: 'uploaded-image',
+        src: dataUrl,
+        width: 260,
+        align: 'center'
+      };
+      setPaper(prev => {
+        const targetId =
+          focusedBlockId ||
+          [...prev.blocks].reverse().find(b => b.type === 'question')?.id ||
+          prev.blocks.find(b => b.type === 'question')?.id;
+        if (!targetId) return prev;
+        return {
+          ...prev,
+          blocks: prev.blocks.map(b =>
+            b.id === targetId && (b.type === 'question' || b.type === 'paragraph')
+              ? { ...b, figures: [...(b.figures || []), newFig] }
+              : b
+          ),
+          updatedAt: Date.now()
+        };
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * Explicitly add a new A4 page (Trang 2, Trang 3, ...) and jump to it
+   */
+  const addNewPage = () => {
+    const breakBlock: ExamBlock = { id: crypto.randomUUID(), type: 'page-break' };
+    const starterQuestion: ExamBlock = {
+      id: crypto.randomUUID(),
+      type: 'question',
+      questionType: 'mcq',
+      prompt: 'Nhập nội dung câu hỏi trên trang mới:',
+      options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+      optionCols: 4,
+      correctChoice: 'A'
+    };
+    setPaper(prev => ({
+      ...prev,
+      blocks: [...prev.blocks, breakBlock, starterQuestion],
+      updatedAt: Date.now()
+    }));
+    setFocusedBlockId(starterQuestion.id);
+    setEditingPromptId(starterQuestion.id);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const allSheets = document.querySelectorAll('.exam-a4-sheet');
+        const lastSheet = allSheets[allSheets.length - 1];
+        lastSheet?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  };
+
+  const togglePageBreakBefore = (blockId: string) => {
+    setPaper(prev => ({
+      ...prev,
+      blocks: prev.blocks.map(b =>
+        b.id === blockId && b.type !== 'page-break'
+          ? { ...b, pageBreakBefore: !b.pageBreakBefore }
+          : b
+      ),
+      updatedAt: Date.now()
+    }));
+  };
+
+  const removeManualPageBreak = (breakId?: string, breakBeforeBlockId?: string) => {
+    setPaper(prev => ({
+      ...prev,
+      blocks: prev.blocks
+        .filter(b => !(breakId && b.id === breakId && b.type === 'page-break'))
+        .map(b =>
+          breakBeforeBlockId && b.id === breakBeforeBlockId && b.type !== 'page-break'
+            ? { ...b, pageBreakBefore: false }
+            : b
+        ),
+      updatedAt: Date.now()
+    }));
   };
 
   // Precompute automatic question numbering across sections
@@ -607,6 +720,103 @@ export default function ExamPaperStudio({
     return map;
   }, [paper.blocks]);
 
+  // Multi-page A4 Pagination (automatic overflow + manual page breaks, like Microsoft Word)
+  const pages = useMemo(() => {
+    type RenderableBlock = Exclude<ExamBlock, { type: 'page-break' }>;
+    type PageBucket = {
+      pageNumber: number;
+      blocks: RenderableBlock[];
+      manualBreakId?: string;
+      breakBeforeBlockId?: string;
+    };
+
+    const fontPt = paper.fontSizePt || 12;
+    const linePx = Math.round(fontPt * 1.333 * 1.55);
+    const charsPerLine = Math.max(42, Math.round(620 / (fontPt * 0.65)));
+
+    const estimateHeight = (block: RenderableBlock): number => {
+      if (block.type === 'section') {
+        return 54 + (block.subtitle ? 26 : 0);
+      }
+      if (block.type === 'paragraph') {
+        const lines = Math.max(1, Math.ceil((block.text?.length || 1) / charsPerLine));
+        const figsH = (block.figures || []).reduce(
+          (sum, f) => sum + Math.round((f.width || 250) * 0.76) + 18,
+          0
+        );
+        return lines * linePx + figsH + 16;
+      }
+      const promptLines = (block.prompt || '')
+        .split(/\r?\n/)
+        .reduce((sum, ln) => sum + Math.max(1, Math.ceil((ln.length + 10) / charsPerLine)), 0);
+      const figsH = (block.figures || []).reduce(
+        (sum, f) => sum + Math.round((f.width || 250) * 0.76) + 20,
+        0
+      );
+      let optsH = 0;
+      if (block.questionType === 'mcq' && block.options) {
+        const cols = block.optionCols || 4;
+        const maxOptLen = Math.max(...block.options.map(o => o.length), 1);
+        if (cols === 4) optsH = (maxOptLen > 18 ? 2 : 1) * linePx + 14;
+        else if (cols === 2) optsH = 2 * linePx + 18;
+        else optsH = 4 * linePx + 24;
+      } else if (block.questionType === 'tf' && block.statements) {
+        optsH = block.statements.length * (linePx + 8) + 12;
+      } else if (block.questionType === 'short') {
+        optsH = 36;
+      }
+      const solH =
+        block.solution !== undefined
+          ? Math.max(1, Math.ceil((block.solution.length + 12) / charsPerLine)) * linePx + 22
+          : 0;
+      return promptLines * linePx + figsH + optsH + solH + 24;
+    };
+
+    const result: PageBucket[] = [];
+    let current: PageBucket = { pageNumber: 1, blocks: [] };
+    let usedH = 0;
+
+    for (const block of paper.blocks) {
+      if (block.type === 'page-break') {
+        result.push(current);
+        current = {
+          pageNumber: result.length + 1,
+          blocks: [],
+          manualBreakId: block.id
+        };
+        usedH = 0;
+        continue;
+      }
+
+      const h = estimateHeight(block);
+      const isFirstPage = result.length === 0;
+      const budget = isFirstPage ? (paper.header.showStudentInfo ? 720 : 755) : 900;
+
+      if (block.pageBreakBefore && (current.blocks.length > 0 || result.length > 0)) {
+        result.push(current);
+        current = {
+          pageNumber: result.length + 1,
+          blocks: [],
+          breakBeforeBlockId: block.id
+        };
+        usedH = 0;
+      } else if (current.blocks.length > 0 && usedH + h > budget) {
+        result.push(current);
+        current = {
+          pageNumber: result.length + 1,
+          blocks: []
+        };
+        usedH = 0;
+      }
+
+      current.blocks.push(block);
+      usedH += h;
+    }
+
+    result.push(current);
+    return result;
+  }, [paper.blocks, paper.fontSizePt, paper.header.showStudentInfo]);
+
   return (
     <div className="exam-studio-shell">
       {/* TOP WORD-LIKE RIBBON */}
@@ -614,15 +824,21 @@ export default function ExamPaperStudio({
         <div className="exam-ribbon-group">
           <button
             className="exam-btn primary"
-            onClick={() => void onSavePaper(paper, true)}
-            title="Lưu đề và quay về bảng"
+            onClick={() => {
+              if (typeof onSavePaper === 'function') {
+                void onSavePaper(paper, true);
+              } else {
+                onClose();
+              }
+            }}
+            title="Lưu đề thi và quay về danh sách đề"
           >
-            💾 Lưu, về bảng
+            💾 Lưu & Về danh sách đề
           </button>
           <button
             className="exam-btn"
             onClick={handleRevertChanges}
-            title="Bỏ các thay đổi vừa gõ trên trang đề (hình đã vẽ trên bảng vẫn giữ)"
+            title="Bỏ các thay đổi vừa gõ trên trang đề (hình minh hoạ vẫn giữ)"
           >
             ↩ Bỏ thay đổi
           </button>
@@ -703,7 +919,8 @@ export default function ExamPaperStudio({
                 setPaper(prev => ({
                   ...prev,
                   blocks: prev.blocks.map(b =>
-                    b.id === focusedBlockId && b.type !== 'section'
+                    b.id === focusedBlockId &&
+                    (b.type === 'question' || b.type === 'paragraph')
                       ? { ...b, align: al }
                       : b
                   )
@@ -737,12 +954,26 @@ export default function ExamPaperStudio({
         </div>
 
         <div className="exam-ribbon-group">
+          <input
+            ref={imageUploadRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={handleUploadLocalImage}
+          />
+          <button
+            className="exam-btn"
+            onClick={() => imageUploadRef.current?.click()}
+            title="Chèn ảnh từ máy tính vào câu đang chọn"
+          >
+            📂 Chèn ảnh
+          </button>
           <button
             className={`exam-btn ${splitBoardOpen ? 'active' : 'purple'}`}
             onClick={() => setSplitBoardOpen(v => !v)}
-            title="Chia đôi màn hình: trang đề bên trái, bảng vẽ hình (3D, đồ thị, phân tử) bên phải"
+            title="Mở khung công cụ dựng hình minh hoạ (3D, đồ thị, phân tử) để kéo vào đề"
           >
-            🖼 Vẽ hình {splitBoardOpen ? '· Đang mở' : ''}
+            📐 Dựng hình minh hoạ {splitBoardOpen ? '· Đang mở' : ''}
           </button>
 
           <div className="exam-download-wrap">
@@ -819,7 +1050,7 @@ export default function ExamPaperStudio({
         </div>
       </header>
 
-      {/* SUB-BAR: QUICK INSERT & SMART TYPING */}
+      {/* SUB-BAR: QUICK INSERT, MULTI-PAGE CONTROLS & SMART TYPING */}
       <div className="exam-subbar">
         <div className="exam-subbar-left">
           <button className="exam-chip-btn" onClick={() => addBlock('section')}>
@@ -836,6 +1067,14 @@ export default function ExamPaperStudio({
           </button>
           <button
             className="exam-chip-btn"
+            style={{ borderColor: '#0d9488', color: '#0f766e', background: '#f0fdfa' }}
+            onClick={addNewPage}
+            title="Tạo ngay trang A4 tiếp theo (Trang 2, Trang 3…)"
+          >
+            📄 + Thêm trang mới
+          </button>
+          <button
+            className="exam-chip-btn"
             style={{
               borderColor: smartComposerOpen ? '#7c3aed' : undefined,
               color: smartComposerOpen ? '#6d28d9' : undefined
@@ -846,150 +1085,193 @@ export default function ExamPaperStudio({
           </button>
         </div>
         <div className="exam-subbar-right">
+          <div className="exam-page-jump-bar" title="Chuyển nhanh giữa các trang A4">
+            <span>{pages.length} trang:</span>
+            {pages.map(pg => (
+              <button
+                key={pg.pageNumber}
+                type="button"
+                className="exam-page-pill"
+                onClick={() =>
+                  document
+                    .getElementById(`exam-a4-page-${pg.pageNumber}`)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              >
+                {pg.pageNumber}
+              </button>
+            ))}
+          </div>
           <span className="exam-autosave-pill">{saveBadge}</span>
         </div>
       </div>
 
       {/* MAIN WORKSPACE: SINGLE OR SPLIT SCREEN */}
       <div className={`exam-workspace ${splitBoardOpen ? 'is-split' : ''}`}>
-        {/* LEFT PANE: A4 EXAM SHEET */}
+        {/* LEFT PANE: MULTI-PAGE A4 EXAM SHEETS */}
         <div
           className="exam-paper-viewport"
           onClick={e => {
             if (e.target === e.currentTarget) {
               setSelectedFigure(null);
               setEditingPromptId(null);
+              setEditingSolutionId(null);
             }
           }}
         >
+          {pages.map((pg, pageIdx) => (
           <article
+            key={pg.pageNumber}
+            id={`exam-a4-page-${pg.pageNumber}`}
             className="exam-a4-sheet"
             style={{
               fontFamily: paper.fontFamily,
               fontSize: `${paper.fontSizePt}pt`
             }}
           >
-            {/* A4 EXAM HEADER */}
-            <header className="exam-a4-header">
-              <div className="exam-a4-header-col">
-                <input
-                  className="exam-inline-input"
-                  value={paper.header.department}
-                  onChange={e =>
-                    setPaper(p => ({
-                      ...p,
-                      header: { ...p.header, department: e.target.value }
-                    }))
-                  }
-                />
-                <input
-                  className="exam-inline-input"
-                  style={{ fontWeight: 700, textDecoration: 'underline' }}
-                  value={paper.header.school}
-                  onChange={e =>
-                    setPaper(p => ({
-                      ...p,
-                      header: { ...p.header, school: e.target.value }
-                    }))
-                  }
-                />
-                <div className="exam-code-badge">
-                  <span>Mã đề:</span>
-                  <input
-                    className="exam-inline-input"
-                    style={{ width: 52, fontWeight: 700 }}
-                    value={paper.header.examCode}
-                    onChange={e =>
-                      setPaper(p => ({
-                        ...p,
-                        header: { ...p.header, examCode: e.target.value }
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div className="exam-a4-header-col">
-                <input
-                  className="exam-inline-input"
-                  style={{ fontWeight: 700, fontSize: '1.08em' }}
-                  value={paper.header.examTitle}
-                  onChange={e =>
-                    setPaper(p => ({
-                      ...p,
-                      header: { ...p.header, examTitle: e.target.value }
-                    }))
-                  }
-                />
-                <input
-                  className="exam-inline-input"
-                  style={{ fontWeight: 700 }}
-                  value={paper.header.subject}
-                  onChange={e =>
-                    setPaper(p => ({
-                      ...p,
-                      header: { ...p.header, subject: e.target.value }
-                    }))
-                  }
-                />
-                <input
-                  className="exam-inline-input"
-                  style={{ fontStyle: 'italic', fontSize: '0.95em' }}
-                  value={paper.header.duration}
-                  onChange={e =>
-                    setPaper(p => ({
-                      ...p,
-                      header: { ...p.header, duration: e.target.value }
-                    }))
-                  }
-                />
-              </div>
-            </header>
-
-            {paper.header.showStudentInfo && (
-              <div className="exam-student-line">
+            {pageIdx > 0 && (
+              <div className="exam-a4-page-top">
                 <span>
-                  Họ và tên thí sinh:
-                  ........................................................................
+                  {paper.header.examTitle} · <strong>Trang {pg.pageNumber}/{pages.length}</strong>
                 </span>
-                <span>Số báo danh: ..........................</span>
+                {(pg.manualBreakId || pg.breakBeforeBlockId) && (
+                  <button
+                    type="button"
+                    className="exam-page-break-chip"
+                    onClick={() => removeManualPageBreak(pg.manualBreakId, pg.breakBeforeBlockId)}
+                    title="Xoá ngắt trang thủ công để gộp lại với trang phía trên"
+                  >
+                    ✂ Ngắt trang thủ công · Bấm để gộp trang
+                  </button>
+                )}
               </div>
             )}
 
-            {/* OPTIONAL SMART COMPOSER BOX */}
-            {smartComposerOpen && (
-              <div className="exam-smart-composer">
-                <div className="exam-smart-composer-top">
-                  <strong>
-                    Gõ hoặc dán đề tự nhiên (tự nhận diện PHẦN I, Câu 1., A. ... B. ... C. ... D. ..., a) b) c) d), Đáp án:, Lời giải:)
-                  </strong>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className="exam-chip-btn"
-                      onClick={parseSmartTextToBlocks}
-                    >
-                      ✓ Đưa vào trang A4
-                    </button>
-                    <button
-                      className="exam-chip-btn"
-                      onClick={() => setSmartComposerOpen(false)}
-                    >
-                      Đóng
-                    </button>
+            {pageIdx === 0 && (
+              <>
+                {/* A4 EXAM HEADER (PAGE 1) */}
+                <header className="exam-a4-header">
+                  <div className="exam-a4-header-col">
+                    <input
+                      className="exam-inline-input"
+                      value={paper.header.department}
+                      onChange={e =>
+                        setPaper(p => ({
+                          ...p,
+                          header: { ...p.header, department: e.target.value }
+                        }))
+                      }
+                    />
+                    <input
+                      className="exam-inline-input"
+                      style={{ fontWeight: 700, textDecoration: 'underline' }}
+                      value={paper.header.school}
+                      onChange={e =>
+                        setPaper(p => ({
+                          ...p,
+                          header: { ...p.header, school: e.target.value }
+                        }))
+                      }
+                    />
+                    <div className="exam-code-badge">
+                      <span>Mã đề:</span>
+                      <input
+                        className="exam-inline-input"
+                        style={{ width: 52, fontWeight: 700 }}
+                        value={paper.header.examCode}
+                        onChange={e =>
+                          setPaper(p => ({
+                            ...p,
+                            header: { ...p.header, examCode: e.target.value }
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
-                <textarea
-                  className="exam-smart-textarea"
-                  value={smartText}
-                  onChange={e => setSmartText(e.target.value)}
-                  placeholder={
-                    'Ví dụ:\nCâu 1. Cho hàm số $y = x^3 - 3x$. Giá trị cực đại bằng:\nA. 2   B. -2   C. 1   D. 0\nĐáp án: A\nLời giải: Đạo hàm y\' = 3x^2 - 3 = 0...'
-                  }
-                />
-              </div>
+                  <div className="exam-a4-header-col">
+                    <input
+                      className="exam-inline-input"
+                      style={{ fontWeight: 700, fontSize: '1.08em' }}
+                      value={paper.header.examTitle}
+                      onChange={e =>
+                        setPaper(p => ({
+                          ...p,
+                          header: { ...p.header, examTitle: e.target.value }
+                        }))
+                      }
+                    />
+                    <input
+                      className="exam-inline-input"
+                      style={{ fontWeight: 700 }}
+                      value={paper.header.subject}
+                      onChange={e =>
+                        setPaper(p => ({
+                          ...p,
+                          header: { ...p.header, subject: e.target.value }
+                        }))
+                      }
+                    />
+                    <input
+                      className="exam-inline-input"
+                      style={{ fontStyle: 'italic', fontSize: '0.95em' }}
+                      value={paper.header.duration}
+                      onChange={e =>
+                        setPaper(p => ({
+                          ...p,
+                          header: { ...p.header, duration: e.target.value }
+                        }))
+                      }
+                    />
+                  </div>
+                </header>
+
+                {paper.header.showStudentInfo && (
+                  <div className="exam-student-line">
+                    <span>
+                      Họ và tên thí sinh:
+                      ........................................................................
+                    </span>
+                    <span>Số báo danh: ..........................</span>
+                  </div>
+                )}
+
+                {/* OPTIONAL SMART COMPOSER BOX */}
+                {smartComposerOpen && (
+                  <div className="exam-smart-composer">
+                    <div className="exam-smart-composer-top">
+                      <strong>
+                        Gõ hoặc dán đề tự nhiên (tự nhận diện PHẦN I, Câu 1., A. ... B. ... C. ... D. ..., a) b) c) d), Đáp án:, Lời giải:)
+                      </strong>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="exam-chip-btn"
+                          onClick={parseSmartTextToBlocks}
+                        >
+                          ✓ Đưa vào trang A4
+                        </button>
+                        <button
+                          className="exam-chip-btn"
+                          onClick={() => setSmartComposerOpen(false)}
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      className="exam-smart-textarea"
+                      value={smartText}
+                      onChange={e => setSmartText(e.target.value)}
+                      placeholder={
+                        'Ví dụ:\nCâu 1. Cho hàm số $y = x^3 - 3x$. Giá trị cực đại bằng:\nA. 2   B. -2   C. 1   D. 0\nĐáp án: A\nLời giải: Đạo hàm y\' = 3x^2 - 3 = 0...'
+                      }
+                    />
+                  </div>
+                )}
+              </>
             )}
 
-            {/* BLOCKS ON THE A4 PAGE */}
-            {paper.blocks.map((block, bIdx) => {
+            {/* BLOCKS ON THIS A4 PAGE */}
+            {pg.blocks.map((block, bIdx) => {
               const isFocused = focusedBlockId === block.id;
               const isDropTarget = dropTargetBlockId === block.id;
 
@@ -1002,6 +1284,13 @@ export default function ExamPaperStudio({
                   >
                     <div className="exam-block-controls">
                       <button
+                        className={`exam-mini-action ${block.pageBreakBefore ? 'active' : ''}`}
+                        title="Đẩy phần này sang đầu trang A4 tiếp theo"
+                        onClick={() => togglePageBreakBefore(block.id)}
+                      >
+                        ↵ Sang trang
+                      </button>
+                      <button
                         className="exam-mini-action danger"
                         onClick={() =>
                           setPaper(p => ({
@@ -1013,37 +1302,69 @@ export default function ExamPaperStudio({
                         🗑 Xoá phần
                       </button>
                     </div>
-                    <input
-                      className="exam-section-title-input"
-                      value={block.title}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setPaper(p => ({
-                          ...p,
-                          blocks: p.blocks.map(x =>
-                            x.id === block.id && x.type === 'section'
-                              ? { ...x, title: val }
-                              : x
+                    {editingFieldKey === `sec-title:${block.id}` ? (
+                      <textarea
+                        autoFocus
+                        rows={1}
+                        className="exam-q-textarea"
+                        style={{ fontWeight: 700, textTransform: 'uppercase' }}
+                        value={block.title}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPaper(p => ({
+                            ...p,
+                            blocks: p.blocks.map(x =>
+                              x.id === block.id && x.type === 'section'
+                                ? { ...x, title: val }
+                                : x
+                            )
+                          }));
+                        }}
+                        onBlur={() => setEditingFieldKey(null)}
+                      />
+                    ) : (
+                      <div
+                        className="exam-inline-rendered"
+                        style={{ fontWeight: 700, textTransform: 'uppercase' }}
+                        onClick={() => setEditingFieldKey(`sec-title:${block.id}`)}
+                        dangerouslySetInnerHTML={{
+                          __html: renderRichExamText(block.title || 'PHẦN MỚI')
+                        }}
+                      />
+                    )}
+                    {editingFieldKey === `sec-sub:${block.id}` ? (
+                      <textarea
+                        autoFocus
+                        rows={1}
+                        className="exam-q-textarea"
+                        style={{ fontStyle: 'italic', fontSize: '0.94em' }}
+                        value={block.subtitle || ''}
+                        placeholder="Ghi chú hướng dẫn phần (tùy chọn)…"
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPaper(p => ({
+                            ...p,
+                            blocks: p.blocks.map(x =>
+                              x.id === block.id && x.type === 'section'
+                                ? { ...x, subtitle: val }
+                                : x
+                            )
+                          }));
+                        }}
+                        onBlur={() => setEditingFieldKey(null)}
+                      />
+                    ) : (
+                      <div
+                        className="exam-inline-rendered"
+                        style={{ fontStyle: 'italic', fontSize: '0.94em', color: '#334155' }}
+                        onClick={() => setEditingFieldKey(`sec-sub:${block.id}`)}
+                        dangerouslySetInnerHTML={{
+                          __html: renderRichExamText(
+                            block.subtitle || 'Nhấp để thêm hướng dẫn phần…'
                           )
-                        }));
-                      }}
-                    />
-                    <input
-                      className="exam-section-sub-input"
-                      value={block.subtitle || ''}
-                      placeholder="Ghi chú hướng dẫn phần (tùy chọn)…"
-                      onChange={e => {
-                        const val = e.target.value;
-                        setPaper(p => ({
-                          ...p,
-                          blocks: p.blocks.map(x =>
-                            x.id === block.id && x.type === 'section'
-                              ? { ...x, subtitle: val }
-                              : x
-                          )
-                        }));
-                      }}
-                    />
+                        }}
+                      />
+                    )}
                   </section>
                 );
               }
@@ -1141,7 +1462,7 @@ export default function ExamPaperStudio({
                         setSplitBoardOpen(true);
                       }}
                     >
-                      🖼 Chèn hình
+                      📐 Dựng hình
                     </button>
                     <button
                       className="exam-mini-action"
@@ -1154,9 +1475,17 @@ export default function ExamPaperStudio({
                               : x
                           )
                         }));
+                        setEditingSolutionId(block.id);
                       }}
                     >
                       + Lời giải
+                    </button>
+                    <button
+                      className={`exam-mini-action ${block.pageBreakBefore ? 'active' : ''}`}
+                      title="Đẩy câu này sang đầu trang A4 tiếp theo"
+                      onClick={() => togglePageBreakBefore(block.id)}
+                    >
+                      ↵ Sang trang
                     </button>
                     <button
                       className="exam-mini-action danger"
@@ -1505,46 +1834,61 @@ export default function ExamPaperStudio({
                               >
                                 {letter}.
                               </button>
-                              <input
-                                className="exam-option-input"
-                                value={block.options![idx] || ''}
-                                placeholder={`Phương án ${letter} (hoặc gõ A. ... B. ... C. ... D. ...)`}
-                                onChange={e => {
-                                  const raw = e.target.value;
-                                  const inlineAll = parseInlineOptionsLine(raw);
-                                  if (inlineAll) {
+                              {editingFieldKey === `opt:${block.id}:${idx}` ? (
+                                <input
+                                  autoFocus
+                                  className="exam-option-input"
+                                  value={block.options![idx] || ''}
+                                  placeholder={`Phương án ${letter} (hoặc gõ A. ... B. ... C. ... D. ...)`}
+                                  onChange={e => {
+                                    const raw = e.target.value;
+                                    const inlineAll = parseInlineOptionsLine(raw);
+                                    if (inlineAll) {
+                                      setPaper(p => ({
+                                        ...p,
+                                        blocks: p.blocks.map(x =>
+                                          x.id === block.id &&
+                                          x.type === 'question'
+                                            ? { ...x, options: inlineAll }
+                                            : x
+                                        )
+                                      }));
+                                      return;
+                                    }
                                     setPaper(p => ({
                                       ...p,
-                                      blocks: p.blocks.map(x =>
-                                        x.id === block.id &&
-                                        x.type === 'question'
-                                          ? { ...x, options: inlineAll }
-                                          : x
-                                      )
+                                      blocks: p.blocks.map(x => {
+                                        if (
+                                          x.id !== block.id ||
+                                          x.type !== 'question' ||
+                                          !x.options
+                                        )
+                                          return x;
+                                        const nextOpts = [...x.options] as [
+                                          string,
+                                          string,
+                                          string,
+                                          string
+                                        ];
+                                        nextOpts[idx] = raw;
+                                        return { ...x, options: nextOpts };
+                                      })
                                     }));
-                                    return;
-                                  }
-                                  setPaper(p => ({
-                                    ...p,
-                                    blocks: p.blocks.map(x => {
-                                      if (
-                                        x.id !== block.id ||
-                                        x.type !== 'question' ||
-                                        !x.options
-                                      )
-                                        return x;
-                                      const nextOpts = [...x.options] as [
-                                        string,
-                                        string,
-                                        string,
-                                        string
-                                      ];
-                                      nextOpts[idx] = raw;
-                                      return { ...x, options: nextOpts };
-                                    })
-                                  }));
-                                }}
-                              />
+                                  }}
+                                  onBlur={() => setEditingFieldKey(null)}
+                                />
+                              ) : (
+                                <div
+                                  className="exam-inline-rendered"
+                                  title="Nhấp để sửa phương án"
+                                  onClick={() => setEditingFieldKey(`opt:${block.id}:${idx}`)}
+                                  dangerouslySetInnerHTML={{
+                                    __html: renderRichExamText(
+                                      block.options![idx] || `Phương án ${letter}`
+                                    )
+                                  }}
+                                />
+                              )}
                             </div>
                           );
                         })}
@@ -1613,28 +1957,42 @@ export default function ExamPaperStudio({
                               S
                             </button>
                           </div>
-                          <input
-                            className="exam-option-input"
-                            value={st.text}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setPaper(p => ({
-                                ...p,
-                                blocks: p.blocks.map(x => {
-                                  if (
-                                    x.id !== block.id ||
-                                    x.type !== 'question' ||
-                                    !x.statements
-                                  )
-                                    return x;
-                                  const nextSt = x.statements.map((item, i) =>
-                                    i === sIdx ? { ...item, text: val } : item
-                                  );
-                                  return { ...x, statements: nextSt };
-                                })
-                              }));
-                            }}
-                          />
+                          {editingFieldKey === `tf:${block.id}:${sIdx}` ? (
+                            <textarea
+                              autoFocus
+                              rows={1}
+                              className="exam-q-textarea"
+                              value={st.text}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setPaper(p => ({
+                                  ...p,
+                                  blocks: p.blocks.map(x => {
+                                    if (
+                                      x.id !== block.id ||
+                                      x.type !== 'question' ||
+                                      !x.statements
+                                    )
+                                      return x;
+                                    const nextSt = x.statements.map((item, i) =>
+                                      i === sIdx ? { ...item, text: val } : item
+                                    );
+                                    return { ...x, statements: nextSt };
+                                  })
+                                }));
+                              }}
+                              onBlur={() => setEditingFieldKey(null)}
+                            />
+                          ) : (
+                            <div
+                              className="exam-inline-rendered"
+                              title="Nhấp để sửa mệnh đề"
+                              onClick={() => setEditingFieldKey(`tf:${block.id}:${sIdx}`)}
+                              dangerouslySetInnerHTML={{
+                                __html: renderRichExamText(st.text || `Khẳng định ${st.label}`)
+                              }}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1665,32 +2023,88 @@ export default function ExamPaperStudio({
                     </div>
                   )}
 
-                  {/* Solution Row (Lời giải: ...) */}
+                  {/* Solution Row (Lời giải: ... with rich KaTeX / mhchem formula rendering!) */}
                   {block.solution !== undefined && (
                     <div className="exam-solution-row">
                       <strong>Lời giải:</strong>
-                      <input
-                        className="exam-option-input"
-                        value={block.solution}
-                        placeholder="Nhập lời giải (bản phát học sinh sẽ tự ẩn dòng này)…"
-                        onChange={e => {
-                          const val = e.target.value;
-                          setPaper(p => ({
-                            ...p,
-                            blocks: p.blocks.map(x =>
-                              x.id === block.id && x.type === 'question'
-                                ? { ...x, solution: val }
-                                : x
+                      {editingSolutionId === block.id ? (
+                        <div style={{ flex: 1, display: 'grid', gap: 4 }}>
+                          <textarea
+                            autoFocus
+                            className="exam-q-textarea"
+                            rows={2}
+                            value={block.solution}
+                            placeholder="Nhập lời giải (hỗ trợ $công thức$ và \ce{Hóa}, bản Học sinh sẽ tự ẩn dòng này)…"
+                            onChange={e => {
+                              const val = e.target.value;
+                              setPaper(p => ({
+                                ...p,
+                                blocks: p.blocks.map(x =>
+                                  x.id === block.id && x.type === 'question'
+                                    ? { ...x, solution: val }
+                                    : x
+                                )
+                              }));
+                            }}
+                            onBlur={() => setEditingSolutionId(null)}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="exam-solution-rendered"
+                          title="Nhấp để sửa lời giải (tự hiển thị đẹp công thức Toán & Hóa)"
+                          onClick={() => setEditingSolutionId(block.id)}
+                          dangerouslySetInnerHTML={{
+                            __html: renderRichExamText(
+                              block.solution || 'Nhấp vào đây để nhập lời giải chi tiết…'
                             )
-                          }));
-                        }}
-                      />
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                 </article>
               );
             })}
+
+            {pg.blocks.length === 0 && (
+              <div
+                style={{
+                  padding: '28px 16px',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: 10,
+                  textAlign: 'center',
+                  color: '#64748b',
+                  fontFamily: '"Be Vietnam Pro", system-ui, sans-serif',
+                  fontSize: 13
+                }}
+              >
+                Trang {pg.pageNumber} đang trống — bấm <strong>+ Câu trắc nghiệm</strong>,{' '}
+                <strong>+ Câu Đúng / Sai</strong> hoặc <strong>+ Câu Tự luận</strong> trên thanh công cụ để thêm câu hỏi vào trang này.
+              </div>
+            )}
+
+            <footer className="exam-a4-footer">
+              <span>Mã đề {paper.header.examCode}</span>
+              {pageIdx === pages.length - 1 ? (
+                <span className="exam-a4-end-mark">—————— HẾT ——————</span>
+              ) : (
+                <span>(Xem tiếp Trang {pg.pageNumber + 1})</span>
+              )}
+              <strong>
+                Trang {pg.pageNumber} / {pages.length}
+              </strong>
+            </footer>
           </article>
+          ))}
+
+          <button
+            type="button"
+            className="exam-add-page-below"
+            onClick={addNewPage}
+          >
+            📄 + Thêm Trang {pages.length + 1} (Khổ A4)
+          </button>
         </div>
 
         {/* RIGHT PANE: INTERACTIVE DRAWING BOARD (SPLIT SCREEN) */}
