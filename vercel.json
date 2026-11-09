@@ -6,7 +6,11 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|images/|icons/|exam-visual/|focus-notes/|favicon\\.ico|manifest\\.webmanifest|sw\\.js).*)",
+      "source": "/focus-notes",
+      "destination": "/focus-notes/index.html"
+    },
+    {
+      "source": "/((?!api/|assets/|images/|icons/|exam-visual/|focus-notes/|favicon\\.(?:ico|png)|manifest\\.webmanifest|sw\\.js).*)",
       "destination": "/index.html"
     }
   ]

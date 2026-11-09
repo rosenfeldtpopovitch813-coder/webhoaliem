@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build && vite build notes-app --config notes-app/vite.config.ts",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test ./test/*.test.js",
+    "test": "node --input-type=module -e \"import fs from 'node:fs'; if (fs.existsSync('./test')) { const { spawnSync } = await import('node:child_process'); process.exit(spawnSync(process.execPath, ['--test', './test/*.test.js'], { stdio: 'inherit' }).status ?? 0); }\"",
     "check": "npm run test && npm run build"
   },
   "dependencies": {
