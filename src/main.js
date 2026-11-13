@@ -4,7 +4,7 @@ import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
 import { startRouter, ROUTES, resolveRoute, loadRouteView, navigate } from './core/router.js';
 import { initializeTheme, THEMES, changeTheme } from './core/theme.js';
-import { firebaseReady, databaseReady, signInGoogle, signOutUser } from './core/firebase.js';
+import { firebaseReady, databaseReady, signInGoogle, signOutUser, detectInAppBrowser, describeAuthError } from './core/firebase.js';
 import { startAuth } from './core/auth.js';
 import { element, button } from './core/dom.js';
 import { icon } from './core/icons.js';
@@ -104,13 +104,65 @@ function drawEntryScreen() {
     intro.append(featureList);
     const login = element('div', 'entry-login-card');
     login.append(element('span','entry-google-mark','G'), element('h2','entry-login-title','Đăng nhập để bắt đầu'), element('p','entry-login-copy','Dùng tài khoản Google để đồng bộ hồ sơ và lưu tiến trình học tập của bạn.'));
-    const loginButton = makeButton('Tiếp tục với Google', 'entry-google-button', async () => {
-      loginButton.disabled = true; loginButton.textContent = 'Đang chuyển đến Google…';
-      try { await signInGoogle(); }
-      catch (error) { const message = error.message || 'Không thể đăng nhập Google.'; authError.textContent = message; AppStore.set('notice', `Không thể đăng nhập: ${message}`); loginButton.disabled = false; loginButton.textContent = 'Tiếp tục với Google'; }
-    });
+    const inApp = detectInAppBrowser();
+    if (inApp.isInApp) {
+      const tip = element('div', 'entry-webview-tip');
+      tip.append(
+        element('strong', '', `Đang mở bằng ${inApp.name}`),
+        element('p', '', inApp.isIOS
+          ? 'Google thường chặn hoặc làm mất phiên đăng nhập trong ứng dụng. Hãy bấm ⋯ hoặc biểu tượng chia sẻ → Mở bằng Safari.'
+          : 'Google thường chặn đăng nhập trong ứng dụng. Hãy bấm Mở bằng Chrome hoặc dấu ⋮ → Mở bằng trình duyệt.')
+      );
+      const actions = element('div', 'entry-webview-actions');
+      if (inApp.isAndroid) {
+        const scheme = location.protocol.replace(':', '') || 'https';
+        const chromeLink = element('a', 'entry-webview-btn', 'Mở bằng Chrome');
+        chromeLink.href = `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=${scheme};package=com.android.chrome;end`;
+        actions.append(chromeLink);
+      }
+      const copyBtn = makeButton('Sao chép liên kết', 'entry-webview-btn is-secondary', async () => {
+        try {
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(location.href);
+          copyBtn.textContent = 'Đã chép liên kết';
+        } catch {
+          copyBtn.textContent = 'Hãy chép trên thanh địa chỉ';
+        }
+      });
+      actions.append(copyBtn);
+      tip.append(actions);
+      login.append(tip);
+    }
     const authError = element('p', 'entry-auth-error', '');
-    login.append(loginButton, authError, element('p','entry-privacy-note','Thông tin xác thực được xử lý qua Firebase Authentication.'));
+    const resetLoginButton = () => {
+      loginButton.disabled = false;
+      loginButton.textContent = 'Tiếp tục với Google';
+    };
+    const redirectFallbackBtn = makeButton('Thử đăng nhập chuyển hướng', 'entry-redirect-fallback', async () => {
+      redirectFallbackBtn.disabled = true;
+      redirectFallbackBtn.textContent = 'Đang chuyển trang Google…';
+      try { await signInGoogle({ preferRedirect: true }); }
+      catch (error) {
+        const message = describeAuthError(error);
+        authError.textContent = message;
+        AppStore.set('notice', `Không thể đăng nhập: ${message}`);
+        redirectFallbackBtn.disabled = false;
+        redirectFallbackBtn.textContent = 'Thử đăng nhập chuyển hướng';
+      }
+    });
+    redirectFallbackBtn.hidden = true;
+    const loginButton = makeButton('Tiếp tục với Google', 'entry-google-button', async () => {
+      authError.textContent = '';
+      loginButton.disabled = true; loginButton.textContent = 'Đang mở đăng nhập Google…';
+      try { await signInGoogle(); }
+      catch (error) {
+        const message = describeAuthError(error);
+        authError.textContent = message;
+        AppStore.set('notice', `Không thể đăng nhập: ${message}`);
+        resetLoginButton();
+        if (!inApp.isInApp && error?.code !== 'auth/popup-closed-by-user') redirectFallbackBtn.hidden = false;
+      }
+    });
+    login.append(loginButton, redirectFallbackBtn, authError, element('p','entry-privacy-note','Thông tin xác thực được xử lý qua Firebase Authentication.'));
     layout.append(intro, login); screen.append(layout);
   } else if (!safeWelcomeSeen(user.uid)) {
     const card = element('div', 'entry-welcome-card');
@@ -174,7 +226,7 @@ function drawAccount() {
   if (!firebaseReady) { frame.account.append(element('span', 'setup-pill', 'Chưa cấu hình Firebase')); return; }
   if (!user) {
     frame.account.append(makeButton('Đăng nhập Google', 'login-btn', async () => {
-      try { await signInGoogle(); } catch (error) { AppStore.set('notice', `Không thể đăng nhập: ${error.message}`); }
+      try { await signInGoogle(); } catch (error) { AppStore.set('notice', `Không thể đăng nhập: ${describeAuthError(error)}`); }
     })); return;
   }
   const badge = element('div', 'user-chip');

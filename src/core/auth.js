@@ -1,11 +1,18 @@
 import { AppStore } from './store.js';
-import { observeAuth, settleRedirect, upsertUserProfile, auth } from './firebase.js';
-import { getUserTheme } from './firebase.js';
+import { observeAuth, settleRedirect, upsertUserProfile, getUserTheme, consumeRedirectPending, describeAuthError, auth } from './firebase.js';
 import { applyTheme } from './theme.js';
 
 let generation = 0;
 export function startAuth() {
-  settleRedirect().catch((error) => AppStore.set('notice', `Đăng nhập: ${error.code || error.message}`));
+  let pendingRedirect = consumeRedirectPending();
+  let redirectError = null;
+  const redirectSettlement = (auth?.authStateReady ? auth.authStateReady() : Promise.resolve())
+    .then(() => settleRedirect())
+    .catch((error) => {
+      redirectError = error;
+      AppStore.set('notice', describeAuthError(error));
+      return null;
+    });
   return observeAuth(async (user) => {
     const current = ++generation;
     AppStore.set('authLoading', true);
@@ -14,7 +21,24 @@ export function startAuth() {
     // confirms the user identity; server APIs still verify Firebase ID tokens individually.
     AppStore.set('role', 'user');
     AppStore.set('roleVerified', Boolean(user));
-    if (!user) { AppStore.set('authLoading', false); return; }
+    if (!user) {
+      const redirectResult = await redirectSettlement;
+      if (current !== generation) return;
+      const recoveredUser = redirectResult?.user || auth?.currentUser || null;
+      if (recoveredUser) {
+        pendingRedirect = false;
+        user = recoveredUser;
+        AppStore.set('user', { uid: user.uid, displayName: user.displayName, photoURL: user.photoURL, email: user.email });
+      } else {
+        if (pendingRedirect && !redirectError) {
+          AppStore.set('notice', 'Trình duyệt di động không giữ được phiên đăng nhập (thường do WebView Zalo/Messenger hoặc chặn cookie chéo trang). Hãy mở bằng Chrome hoặc Safari.');
+        }
+        pendingRedirect = false;
+        AppStore.set('authLoading', false);
+        return;
+      }
+    }
+    pendingRedirect = false;
     try {
       await upsertUserProfile(user);
       const theme = await getUserTheme(user.uid);

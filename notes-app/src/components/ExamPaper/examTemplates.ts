@@ -133,8 +133,8 @@ export function createDefaultExamPaper(title = 'ĐỀ KIỂM TRA ĐỊNH KỲ'):
     fontFamily: '"Times New Roman", Times, Georgia, serif',
     fontSizePt: 12,
     header: {
-      department: 'SỞ GD&ĐT TP. HỒ CHÍ MINH',
-      school: 'TRƯỜNG THPT CHUYÊN HTVVM',
+      department: 'TÊN SỞ GD&ĐT',
+      school: 'TÊN TRƯỜNG',
       examTitle: title.toUpperCase(),
       subject: 'Môn: TOÁN – HÓA HỌC · Khối 12',
       duration: 'Thời gian làm bài: 50 phút (không kể thời gian phát đề)',

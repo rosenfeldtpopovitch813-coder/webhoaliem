@@ -1195,6 +1195,7 @@ export default function ExamPaperStudio({
                   <div className="exam-a4-header-col">
                     <input
                       className="exam-inline-input"
+                      placeholder="TÊN SỞ GD&ĐT"
                       value={paper.header.department}
                       onChange={e =>
                         setPaper(p => ({
@@ -1206,6 +1207,7 @@ export default function ExamPaperStudio({
                     <input
                       className="exam-inline-input"
                       style={{ fontWeight: 700, textDecoration: 'underline' }}
+                      placeholder="TÊN TRƯỜNG"
                       value={paper.header.school}
                       onChange={e =>
                         setPaper(p => ({
