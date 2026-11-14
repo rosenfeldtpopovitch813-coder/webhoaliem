@@ -20,9 +20,9 @@ export function renderHome() {
   const wrap = element('div', 'home-page');
   const hero = element('section', 'hero home-hero');
   hero.append(
-    element('div', 'eyebrow', 'KHÔNG GIAN HỌC TẬP'),
-    element('h2', 'hero-title', 'Học tập theo cách của bạn.'),
-    element('p', 'hero-subtitle', 'Một nơi để luyện thi, hệ thống kiến thức, tập trung và theo dõi hành trình học tập của bạn.')
+    element('div', 'eyebrow', 'KHÔNG GIAN HỌC TẬP HTVVM'),
+    element('h2', 'hero-title', 'Luyện thi & Học tập trực tuyến'),
+    element('p', 'hero-subtitle', 'Soạn đề A4, làm bài thi theo thời gian thực, tra cứu 118 nguyên tố, theo dõi giờ tự học và hỏi đáp bài tập.')
   );
   wrap.append(hero);
 

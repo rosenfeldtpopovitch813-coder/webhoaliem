@@ -100,7 +100,7 @@ export function describeAuthError(error) {
     case 'auth/popup-closed-by-user':
       return 'Bạn đã đóng cửa sổ đăng nhập trước khi hoàn tất. Hãy bấm Đăng nhập lại.';
     case 'auth/cancelled-popup-request':
-      return 'Yêu cầu đăng nhập trước đó đã bị huỷ. Vui lòng thử lại.';
+      return 'Yêu cầu đăng nhập trước đó đã bị hủy. Vui lòng thử lại.';
     case 'auth/network-request-failed':
       return 'Lỗi kết nối mạng khi đăng nhập Google. Vui lòng kiểm tra Wi-Fi/4G và thử lại.';
     case 'auth/unauthorized-domain':
@@ -108,7 +108,7 @@ export function describeAuthError(error) {
     case 'auth/web-storage-unsupported':
       return 'Trình duyệt đang tắt cookie hoặc bộ nhớ cục bộ. Hãy bật cookie hoặc mở bằng Chrome/Safari.';
     case 'auth/user-disabled':
-      return 'Tài khoản Google này hiện đang bị vô hiệu hoá.';
+      return 'Tài khoản Google này hiện đang bị vô hiệu hóa.';
     default:
       return rawMessage || 'Không thể đăng nhập Google. Vui lòng thử mở bằng Chrome hoặc Safari.';
   }

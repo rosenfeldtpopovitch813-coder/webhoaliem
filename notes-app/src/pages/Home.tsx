@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {BookOpen,MoreHorizontal,Plus,Search,Copy,PenLine,Trash2,X,Download,Upload,ImagePlus,Sparkles,ArrowUpRight,Clock3,PanelsTopLeft,Check,Camera,FileText} from 'lucide-react';
+import {BookOpen,MoreHorizontal,Plus,Search,Copy,PenLine,Trash2,X,Download,Upload,ImagePlus,ArrowUpRight,Clock3,PanelsTopLeft,Check,Camera,FileText} from 'lucide-react';
 import {ProjectSummary} from '../services/projectStore';
 import './home.css';
 
@@ -95,7 +95,7 @@ export default function Home({projects,error,notice,onOpen,onCreate,onRename,onD
 
       <div className="home-content">
         <section className="home-welcome">
-          <div className="home-welcome-copy"><div className="home-kicker"><Sparkles size={14}/> BẢNG VIẾT TAY · HÌNH HỌC 3D · ĐỒ THỊ HÀM SỐ · NHẬP PDF</div>
+          <div className="home-welcome-copy"><div className="home-kicker"><FileText size={14}/> BẢNG VIẾT TAY · HÌNH HỌC 3D · ĐỒ THỊ HÀM SỐ · NHẬP PDF</div>
             <h2>Chào {greeting()},<br/><span>{profile.name}.</span></h2>
             <p>Không gian bảng vẽ chuyên biệt để giảng bài, ghi chú viết tay mượt mà, dựng hình không gian 3D, vẽ đồ thị hàm số và viết trực tiếp lên tài liệu PDF.</p>
             <div className="home-welcome-actions">

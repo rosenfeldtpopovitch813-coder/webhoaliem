@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { adminApp } from '../lib/firebase-admin.js';
 import { db, identity, fail, assert } from '../lib/exam-server.js';
-import { applyHeartbeat, resumeHeartbeat, titleFor } from '../shared/study-core.js';
+import { applyHeartbeat, resumeHeartbeat, claimFocusAway, titleFor } from '../shared/study-core.js';
 import { getVNDayIndex } from '../shared/time-utils.js';
 
 const summarize = (s = {}, now = Date.now()) => ({
@@ -108,11 +108,14 @@ export default async function handler(req, res) {
       const baseCur = !cur?.session || cur.session.id !== id
         ? { ...cur, session: { id, lastPing: cur?.session?.lastPing || now } }
         : cur;
-      const updated = applyHeartbeat(baseCur, now, id, user.name);
+      const focusAwayMs = Number(body.focusAwayMs);
+      const updated = (action === 'ping' && body.focusMode === true && Number.isFinite(focusAwayMs) && focusAwayMs > 0)
+        ? claimFocusAway(baseCur, now, id, user.name, focusAwayMs)
+        : applyHeartbeat(baseCur, now, id, user.name);
       const nextState = { ...updated.state };
       if (action === 'stop') delete nextState.session;
       const saved = await writeUserNode(user.uid, nextState);
-      return res.json({ stats: summarize(saved, now) });
+      return res.json({ stats: summarize(saved, now), awayAddedSeconds: Math.floor((updated.added || 0) / 1000) });
     }
 
     if (action === 'sharing') {

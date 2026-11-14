@@ -10,7 +10,6 @@ import {
   X,
   Download,
   Upload,
-  Sparkles,
   ArrowUpRight,
   Clock3
 } from 'lucide-react';
@@ -261,7 +260,7 @@ export default function ExamSuite() {
           <section className="home-welcome">
             <div className="home-welcome-copy" style={{ maxWidth: 620 }}>
               <div className="home-kicker" style={{ color: '#6d28d9' }}>
-                <Sparkles size={14} /> SOẠN ĐỀ NHIỀU TRANG A4 NHƯ TRONG MICROSOFT WORD
+                <FileText size={14} /> SOẠN ĐỀ THI NHIỀU TRANG KHỔ A4
               </div>
               <h2>
                 Tạo đề thi chuẩn <span style={{ color: '#6d28d9' }}>khổ A4.</span>
@@ -280,7 +279,7 @@ export default function ExamSuite() {
                   type="text"
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
-                  placeholder="Gõ tên đề thi mới (VD: Đề kiểm tra giữa kì 1 Hóa học 12)…"
+                  placeholder="Gõ tên đề thi mới (VD: Đề kiểm tra giữa kỳ 1 Hóa học 12)…"
                 />
                 <button type="submit" className="home-exam-quick-btn">
                   <FileText size={16} /> Mở trang A4 soạn ngay
@@ -419,7 +418,7 @@ export default function ExamSuite() {
                               setMenu(null);
                             }}
                           >
-                            <Trash2 size={15} /> Xoá đề thi
+                            <Trash2 size={15} /> Xóa đề thi
                           </button>
                         </div>
                       )}
@@ -467,13 +466,13 @@ export default function ExamSuite() {
             }}
           >
             <div className="home-dialog-top">
-              <h2>{dialog.kind === 'rename' ? 'Đổi tên đề thi' : 'Xoá đề thi?'}</h2>
+              <h2>{dialog.kind === 'rename' ? 'Đổi tên đề thi' : 'Xóa đề thi?'}</h2>
               <button type="button" onClick={() => setDialog(null)}>
                 <X size={18} />
               </button>
             </div>
             {dialog.kind === 'delete' ? (
-              <p>Xoá vĩnh viễn đề “{dialog.title}”? Thao tác này không thể hoàn tác.</p>
+              <p>Xóa vĩnh viễn đề “{dialog.title}”? Thao tác này không thể hoàn tác.</p>
             ) : (
               <label>
                 Tên đề thi
@@ -487,13 +486,13 @@ export default function ExamSuite() {
             )}
             <div className="home-dialog-actions">
               <button type="button" onClick={() => setDialog(null)}>
-                Huỷ
+                Hủy
               </button>
               <button
                 className={dialog.kind === 'delete' ? 'danger' : 'primary'}
                 type="submit"
               >
-                {dialog.kind === 'delete' ? 'Xoá đề' : 'Lưu tên mới'}
+                {dialog.kind === 'delete' ? 'Xóa đề' : 'Lưu tên mới'}
               </button>
             </div>
           </form>

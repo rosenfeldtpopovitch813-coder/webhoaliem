@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent, RefObject } from 'react';
-import { Activity, Check, ChevronDown, Eraser, LoaderCircle, MousePointer2, PenLine, Plus, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Activity, Check, ChevronDown, Eraser, LoaderCircle, MousePointer2, PenLine, Plus, RotateCcw, X } from 'lucide-react';
 import katex from 'katex';
 import { InferenceEngine, isStrokeMeaningful, loadVocab, preprocessStrokes } from 'ink-on/core';
 import type { Stroke as InkStroke, Vocab } from 'ink-on/core';
@@ -167,7 +167,7 @@ export default function GraphPanel({ onClose, onInsertGraph }: Props) {
         <div className="ink-section">
           <div className="section-heading"><div><PenLine size={17}/><b>1. Viết công thức bằng bút</b></div><span>Chuột / bút cảm ứng / màn hình cảm ứng</span></div>
           <canvas ref={canvasRef} className="math-ink-canvas" width={900} height={190} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp} aria-label="Vùng viết công thức toán học" />
-          <div className="ink-actions"><div className="recognition-status" aria-live="polite"><span className={`status-dot ${modelStatus}`}/>{status}</div><div className="ink-buttons"><button onClick={undoInk} disabled={!strokes.length} className="secondary-action"><RotateCcw size={15}/> Hoàn tác nét</button><button onClick={clearInk} disabled={!strokes.length} className="secondary-action"><Eraser size={15}/> Xóa nét</button><button onClick={recognize} disabled={busy || !strokes.length} className="recognize-action">{busy ? <LoaderCircle className="spin" size={16}/> : <Sparkles size={16}/>} Nhận diện</button></div></div>
+          <div className="ink-actions"><div className="recognition-status" aria-live="polite"><span className={`status-dot ${modelStatus}`}/>{status}</div><div className="ink-buttons"><button onClick={undoInk} disabled={!strokes.length} className="secondary-action"><RotateCcw size={15}/> Hoàn tác nét</button><button onClick={clearInk} disabled={!strokes.length} className="secondary-action"><Eraser size={15}/> Xóa nét</button><button onClick={recognize} disabled={busy || !strokes.length} className="recognize-action">{busy ? <LoaderCircle className="spin" size={16}/> : <Activity size={16}/>} Nhận diện</button></div></div>
         </div>
         <div className="formula-section">
           <div className="section-heading"><div><Check size={17}/><b>2. Kiểm tra công thức</b></div><span>Nhận diện có thể nhầm; hãy sửa trước khi vẽ.</span></div>

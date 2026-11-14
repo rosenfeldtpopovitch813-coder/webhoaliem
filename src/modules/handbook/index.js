@@ -4,7 +4,7 @@ import { element, button } from '../../core/dom.js';
 
 export function renderHandbook() {
   const root = element('div', 'handbook-root'), hero = element('div', 'hero exam-hero');
-  hero.append(element('div', 'eyebrow', 'SỔ TAY HỌC TẬP'), element('h1', 'hero-title', 'Sổ tay khoa học & Máy vẽ đồ thị'), element('p', 'hero-subtitle', 'Tra cứu đủ 118 nguyên tố, xem mô hình nguyên tử và ảnh mẫu thực tế, tra phổ hồng ngoại IR và vẽ nhiều hàm số với trục tuỳ chỉnh.'));
+  hero.append(element('div', 'eyebrow', 'SỔ TAY HỌC TẬP'), element('h1', 'hero-title', 'Sổ tay khoa học & Máy vẽ đồ thị'), element('p', 'hero-subtitle', 'Tra cứu đủ 118 nguyên tố, xem mô hình nguyên tử và ảnh mẫu thực tế, tra phổ hồng ngoại IR và vẽ nhiều hàm số với trục tùy chỉnh.'));
   const tabs = element('div', 'exam-tabs'), panel = element('section', 'exam-panel'); root.append(hero, tabs, panel);
   const names = [['element', 'Bảng tuần hoàn'], ['ir', 'Phổ hồng ngoại IR'], ['graph', 'Máy vẽ đồ thị']];
   let elementModal = null;
@@ -16,7 +16,7 @@ export function renderHandbook() {
     const toolbar = element('div', 'element-toolbar'), filter = document.createElement('input'); filter.className = 'exam-input'; filter.placeholder = 'Tìm tên, ký hiệu hoặc số hiệu nguyên tử…'; filter.setAttribute('aria-label', 'Tìm nguyên tố');
     const count = element('span', 'element-count', '118 nguyên tố'); toolbar.append(filter, count);
     const grid = element('div', 'element-grid'), selectedLine = element('p', 'exam-message', 'Chọn một nguyên tố để xem cấu hình electron, mô hình Rutherford và ảnh mẫu thực tế.');
-    const sourceNote = element('p', 'exam-message', 'Dữ liệu nguyên tố: StaticData / Periodic-Table-JSON. Ảnh mẫu và ảnh minh hoạ được lấy từ Wikimedia Commons hoặc trang Wikipedia tương ứng khi có mạng.');
+    const sourceNote = element('p', 'exam-message', 'Dữ liệu nguyên tố: StaticData / Periodic-Table-JSON. Ảnh mẫu và ảnh minh họa được lấy từ Wikimedia Commons hoặc trang Wikipedia tương ứng khi có mạng.');
     const dataSource = document.createElement('a'); dataSource.href = 'https://staticdata.dev/datasets/periodic-table/'; dataSource.target = '_blank'; dataSource.rel = 'noopener noreferrer'; dataSource.textContent = 'Nguồn bộ dữ liệu 118 nguyên tố ↗'; dataSource.className = 'element-source-link';
     panel.append(toolbar, grid, selectedLine, sourceNote, dataSource);
     const modal = element('div', 'element-modal-backdrop'); modal.hidden = true;
@@ -43,14 +43,14 @@ export function renderHandbook() {
     const headline = element('div', 'element-detail-head'), number = element('span', 'element-number', `Z = ${row.z}`), nameBox = element('div', 'element-detail-name'), title = element('h3', '', `${row.name} (${row.symbol})`), subtitle = element('p', '', `${row.category} · Trạng thái chuẩn: ${row.phase}`);
     nameBox.append(title, subtitle); headline.append(number, nameBox); detail.append(headline);
     const info = element('div', 'element-facts'); const mass = row.mass; const neutrons = Math.max(0, Math.round(mass) - row.z);
-    const facts = [['Số proton', String(row.z)], ['Số electron (nguyên tử trung hoà)', String(row.z)], ['Số neutron ước tính', `${neutrons}*`], ['Nguyên tử khối tương đối', String(mass)], ['Chu kì', String(row.period)], ['Nhóm', row.row >= 8 ? 'Khối f' : String(row.group)]];
+    const facts = [['Số proton', String(row.z)], ['Số electron (nguyên tử trung hòa)', String(row.z)], ['Số neutron ước tính', `${neutrons}*`], ['Nguyên tử khối tương đối', String(mass)], ['Chu kỳ', String(row.period)], ['Nhóm', row.row >= 8 ? 'Khối f' : String(row.group)]];
     for (const [label, value] of facts) { const card = element('div', 'element-fact'); card.append(element('small', '', label), element('strong', '', value)); info.append(card); }
     detail.append(info);
     const lower = element('div', 'element-detail-grid'), modelCard = element('article', 'element-visual-card'), specimenCard = element('article', 'element-visual-card');
-    modelCard.append(element('h4', '', 'Mô hình Rutherford'), element('p', 'element-visual-note', 'Hạt nhân ở tâm, electron chuyển động xung quanh — sơ đồ minh hoạ, không theo tỉ lệ.'));
+    modelCard.append(element('h4', '', 'Mô hình Rutherford'), element('p', 'element-visual-note', 'Hạt nhân ở tâm, electron chuyển động xung quanh — sơ đồ minh họa, không theo tỉ lệ.'));
     const modelSlot = element('div', 'atom-model-slot'); modelCard.append(modelSlot);
     modelCard.append(element('p', 'element-visual-note', 'Các vòng biểu diễn lớp electron để dễ quan sát; không phải quỹ đạo chính xác của electron.'));
-    specimenCard.append(element('h4', '', 'Hình dạng thực tế / mẫu nguyên tố'), element('p', 'element-visual-note', 'Ảnh mẫu sẽ tải từ nguồn tham khảo khi có kết nối mạng. Với nguyên tố tổng hợp, ảnh có thể là minh hoạ hoặc không có mẫu vĩ mô.'));
+    specimenCard.append(element('h4', '', 'Hình dạng thực tế / mẫu nguyên tố'), element('p', 'element-visual-note', 'Ảnh mẫu sẽ tải từ nguồn tham khảo khi có kết nối mạng. Với nguyên tố tổng hợp, ảnh có thể là minh họa hoặc không có mẫu vĩ mô.'));
     const imageSlot = element('div', 'element-specimen-slot'); imageSlot.append(element('div', 'element-image-loading', 'Đang tải ảnh mẫu…')); specimenCard.append(imageSlot);
     lower.append(modelCard, specimenCard); detail.append(lower);
     const configLine = element('div', 'element-config-line', `Phân bố electron theo lớp (ước tính): ${estimateShells(row.z).join(' – ')}`); detail.append(configLine);
@@ -69,7 +69,7 @@ export function renderHandbook() {
       imageSlot.replaceChildren();
       if (imageInfo.image) {
         const link = document.createElement('a'); link.href = imageInfo.page; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'element-specimen-link'; link.title = 'Mở trang nguồn ảnh';
-        const img = document.createElement('img'); img.src = imageInfo.image; img.alt = `Ảnh mẫu hoặc hình ảnh minh hoạ cho nguyên tố ${row.name}`; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+        const img = document.createElement('img'); img.src = imageInfo.image; img.alt = `Ảnh mẫu hoặc hình ảnh minh họa cho nguyên tố ${row.name}`; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
         img.addEventListener('error', () => { link.replaceChildren(); imageFallback(link, row); }, { once: true }); link.append(img); imageSlot.append(link);
         imageSlot.append(element('small', 'element-image-caption', imageInfo.description || imageInfo.title || `Ảnh tham khảo của ${row.name}`));
         if (imageInfo.attribution) imageSlot.append(element('small', 'element-image-attribution', imageInfo.attribution));
@@ -88,7 +88,7 @@ export function renderHandbook() {
   }
 
   function buildAtomSvg(shells, z, neutrons) {
-    const ns = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 360 280'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `Mô hình nguyên tử minh hoạ ${z} proton, ${z} electron`); svg.classList.add('atom-model-svg');
+    const ns = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 360 280'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `Mô hình nguyên tử minh họa ${z} proton, ${z} electron`); svg.classList.add('atom-model-svg');
     const add = (tag, attrs, text = '') => { const n = document.createElementNS(ns, tag); for (const [key, value] of Object.entries(attrs)) n.setAttribute(key, String(value)); if (text) n.textContent = text; svg.append(n); return n; };
     const cx = 180, cy = 132, maxR = Math.min(112, 20 + Math.max(1, shells.length) * 13.4);
     (shells.length ? shells : [z]).forEach((electrons, shellIndex) => {

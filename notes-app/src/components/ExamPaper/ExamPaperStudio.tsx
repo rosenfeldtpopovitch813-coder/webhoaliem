@@ -4,10 +4,13 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Bold,
   Check,
   ChevronDown,
+  Copy,
   CornerDownLeft,
   Download,
   FilePlus2,
@@ -28,6 +31,11 @@ import {
   Trash2,
   X
 } from 'lucide-react';
+import {
+  duplicateExamBlock,
+  getFocusedSelectionLabel,
+  moveExamBlock
+} from './examBlockUtils';
 import {
   ExamBlock,
   ExamFigureSource,
@@ -123,6 +131,25 @@ export default function ExamPaperStudio({
     }, 350);
     return () => window.clearTimeout(timer);
   }, [paper]);
+
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        Promise.resolve(
+          typeof onSavePaper === 'function' ? onSavePaper(paper, false) : undefined
+        )
+          .then(() => setSaveBadge('✓ Đã lưu đề (Ctrl+S)'))
+          .catch(() => setSaveBadge('⚠ Chưa lưu được bản nháp'));
+      } else if (event.key === 'Escape') {
+        if (formulaModal) setFormulaModal(null);
+        else if (downloadMenuOpen) setDownloadMenuOpen(false);
+        else if (editingPromptId) setEditingPromptId(null);
+      }
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, [paper, formulaModal, downloadMenuOpen, editingPromptId, onSavePaper]);
 
   const activeSource = useMemo(() => {
     return (
@@ -400,6 +427,25 @@ export default function ExamPaperStudio({
     if (newBlock.type === 'question') setEditingPromptId(newBlock.id);
   };
 
+  const moveBlock = (blockId: string, direction: -1 | 1) => {
+    setPaper(prev => ({
+      ...prev,
+      blocks: moveExamBlock(prev.blocks, blockId, direction),
+      updatedAt: Date.now()
+    }));
+    setFocusedBlockId(blockId);
+  };
+
+  const duplicateBlock = (blockId: string) => {
+    let createdId: string | null = null;
+    setPaper(prev => {
+      const res = duplicateExamBlock(prev.blocks, blockId);
+      createdId = res.createdId;
+      return { ...prev, blocks: res.blocks, updatedAt: Date.now() };
+    });
+    if (createdId) setFocusedBlockId(createdId);
+  };
+
   /**
    * Parse freeform Word-like text pasted/typed into the Smart Composer
    * Supports:
@@ -633,7 +679,7 @@ export default function ExamPaperStudio({
         },
         '*'
       );
-      setSaveBadge(`🚀 Đã chuyển ${questions.length} câu hỏi sang Phòng thi!`);
+      setSaveBadge(`Đã chuyển ${questions.length} câu hỏi sang Phòng thi!`);
     } else {
       window.open('/exam', '_blank');
     }
@@ -867,7 +913,7 @@ export default function ExamPaperStudio({
           <button
             className="exam-btn"
             onClick={handleRevertChanges}
-            title="Bỏ các thay đổi vừa gõ trên trang đề (hình minh hoạ vẫn giữ)"
+            title="Bỏ các thay đổi vừa gõ trên trang đề (hình minh họa vẫn giữ)"
           >
             <RotateCcw size={15} /> Bỏ thay đổi
           </button>
@@ -906,6 +952,7 @@ export default function ExamPaperStudio({
           <span className="exam-ribbon-sep" />
           <button
             className="exam-icon-btn"
+            onMouseDown={e => e.preventDefault()}
             title="In đậm (**chữ**)"
             onClick={() => {
               if (!focusedBlockId) return;
@@ -923,6 +970,7 @@ export default function ExamPaperStudio({
           </button>
           <button
             className="exam-icon-btn"
+            onMouseDown={e => e.preventDefault()}
             title="In nghiêng (*chữ*)"
             onClick={() => {
               if (!focusedBlockId) return;
@@ -942,6 +990,7 @@ export default function ExamPaperStudio({
             <button
               key={al}
               className="exam-icon-btn"
+              onMouseDown={e => e.preventDefault()}
               title={`Căn lề: ${al}`}
               onClick={() => {
                 if (!focusedBlockId) return;
@@ -970,6 +1019,7 @@ export default function ExamPaperStudio({
           <span className="exam-ribbon-sep" />
           <button
             className="exam-btn"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => setFormulaModal('math')}
             title="Chèn công thức Toán học (phân số, căn, hệ PT, tích phân, giới hạn, vectơ...)"
           >
@@ -977,6 +1027,7 @@ export default function ExamPaperStudio({
           </button>
           <button
             className="exam-btn"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => setFormulaModal('chem')}
             title="Chèn phương trình Hóa học & vẽ công thức cấu tạo phân tử"
           >
@@ -994,6 +1045,7 @@ export default function ExamPaperStudio({
           />
           <button
             className="exam-btn"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => imageUploadRef.current?.click()}
             title="Chèn ảnh từ máy tính vào câu đang chọn"
           >
@@ -1001,10 +1053,11 @@ export default function ExamPaperStudio({
           </button>
           <button
             className={`exam-btn ${splitBoardOpen ? 'active' : 'purple'}`}
+            onMouseDown={e => e.preventDefault()}
             onClick={() => setSplitBoardOpen(v => !v)}
-            title="Mở khung công cụ dựng hình minh hoạ (3D, đồ thị, phân tử) để kéo vào đề"
+            title="Mở khung công cụ dựng hình minh họa (3D, đồ thị, phân tử) để kéo hoặc bấm chèn vào đề"
           >
-            <Shapes size={15} /> Dựng hình minh hoạ {splitBoardOpen ? '· Đang mở' : ''}
+            <Shapes size={15} /> Dựng hình minh họa {splitBoardOpen ? '· Đang mở' : ''}
           </button>
 
           <div className="exam-download-wrap">
@@ -1126,6 +1179,9 @@ export default function ExamPaperStudio({
           </button>
         </div>
         <div className="exam-subbar-right">
+          <span className="exam-selection-badge" title="Mọi nút chèn công thức, ảnh hoặc thêm câu sẽ đặt tại khối này">
+            {getFocusedSelectionLabel(paper.blocks, focusedBlockId, questionNumbers)}
+          </span>
           <div className="exam-page-jump-bar" title="Chuyển nhanh giữa các trang A4">
             <span>{pages.length} trang:</span>
             {pages.map(pg => (
@@ -1180,7 +1236,7 @@ export default function ExamPaperStudio({
                     type="button"
                     className="exam-page-break-chip"
                     onClick={() => removeManualPageBreak(pg.manualBreakId, pg.breakBeforeBlockId)}
-                    title="Xoá ngắt trang thủ công để gộp lại với trang phía trên"
+                    title="Xóa ngắt trang thủ công để gộp lại với trang phía trên"
                   >
                     <Scissors size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Ngắt trang thủ công · Bấm để gộp trang
                   </button>
@@ -1327,7 +1383,24 @@ export default function ExamPaperStudio({
                   >
                     <div className="exam-block-controls">
                       <button
+                        className="exam-mini-action"
+                        onMouseDown={e => e.preventDefault()}
+                        title="Di chuyển phần này lên"
+                        onClick={() => moveBlock(block.id, -1)}
+                      >
+                        <ArrowUp size={11} />
+                      </button>
+                      <button
+                        className="exam-mini-action"
+                        onMouseDown={e => e.preventDefault()}
+                        title="Di chuyển phần này xuống"
+                        onClick={() => moveBlock(block.id, 1)}
+                      >
+                        <ArrowDown size={11} />
+                      </button>
+                      <button
                         className={`exam-mini-action ${block.pageBreakBefore ? 'active' : ''}`}
+                        onMouseDown={e => e.preventDefault()}
                         title="Đẩy phần này sang đầu trang A4 tiếp theo"
                         onClick={() => togglePageBreakBefore(block.id)}
                       >
@@ -1342,7 +1415,7 @@ export default function ExamPaperStudio({
                           }))
                         }
                       >
-                        <Trash2 size={11} /> Xoá phần
+                        <Trash2 size={11} /> Xóa phần
                       </button>
                     </div>
                     {editingFieldKey === `sec-title:${block.id}` ? (
@@ -1430,7 +1503,7 @@ export default function ExamPaperStudio({
                           }))
                         }
                       >
-                        <Trash2 size={11} /> Xoá dòng
+                        <Trash2 size={11} /> Xóa dòng
                       </button>
                     </div>
                     <input
@@ -1524,7 +1597,32 @@ export default function ExamPaperStudio({
                       <Plus size={11} /> Lời giải
                     </button>
                     <button
+                      className="exam-mini-action"
+                      onMouseDown={e => e.preventDefault()}
+                      title="Đẩy câu lên trên"
+                      onClick={() => moveBlock(block.id, -1)}
+                    >
+                      <ArrowUp size={11} />
+                    </button>
+                    <button
+                      className="exam-mini-action"
+                      onMouseDown={e => e.preventDefault()}
+                      title="Đẩy câu xuống dưới"
+                      onClick={() => moveBlock(block.id, 1)}
+                    >
+                      <ArrowDown size={11} />
+                    </button>
+                    <button
+                      className="exam-mini-action"
+                      onMouseDown={e => e.preventDefault()}
+                      title="Nhân bản câu này ngay bên dưới"
+                      onClick={() => duplicateBlock(block.id)}
+                    >
+                      <Copy size={11} /> Nhân bản
+                    </button>
+                    <button
                       className={`exam-mini-action ${block.pageBreakBefore ? 'active' : ''}`}
+                      onMouseDown={e => e.preventDefault()}
                       title="Đẩy câu này sang đầu trang A4 tiếp theo"
                       onClick={() => togglePageBreakBefore(block.id)}
                     >
@@ -1532,7 +1630,7 @@ export default function ExamPaperStudio({
                     </button>
                     <button
                       className="exam-mini-action danger"
-                      title="Xoá câu này (các câu sau sẽ tự đánh số lại)"
+                      title="Xóa câu này (các câu sau sẽ tự đánh số lại)"
                       onClick={() =>
                         setPaper(p => ({
                           ...p,
@@ -1540,7 +1638,7 @@ export default function ExamPaperStudio({
                         }))
                       }
                     >
-                      <Trash2 size={11} /> Xoá câu
+                      <Trash2 size={11} /> Xóa câu
                     </button>
                   </div>
 
@@ -1747,7 +1845,7 @@ export default function ExamPaperStudio({
                               </button>
                               <button
                                 className="danger"
-                                title="Xoá hình này"
+                                title="Xóa hình này"
                                 onClick={() => {
                                   setPaper(p => ({
                                     ...p,
@@ -1774,7 +1872,7 @@ export default function ExamPaperStudio({
                           <img
                             src={fig.src}
                             style={{ width: `${fig.width || 250}px` }}
-                            alt="Hình minh hoạ câu hỏi"
+                            alt="Hình minh họa câu hỏi"
                             draggable={false}
                           />
                           <span
@@ -2457,7 +2555,7 @@ export default function ExamPaperStudio({
                             }))
                           }
                         >
-                          Xoá bảng vẽ
+                          Xóa bảng vẽ
                         </button>
                       </div>
                     )}
@@ -2572,7 +2670,7 @@ export default function ExamPaperStudio({
                     title="Kéo ô này thả sang câu hỏi bên trang đề A4 (hoặc bấm để chèn vào câu đang chọn)"
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <ArrowLeft size={15} /> Kéo hình sang trang (hoặc bấm để chèn ngay)
+                      <ArrowLeft size={15} /> Chèn hình vào đề ({getFocusedSelectionLabel(paper.blocks, focusedBlockId, questionNumbers).replace('Đang chọn: ', '')})
                     </span>
                     <small style={{ opacity: 0.9 }}>
                       Hình trong đề luôn tự cập nhật theo bảng

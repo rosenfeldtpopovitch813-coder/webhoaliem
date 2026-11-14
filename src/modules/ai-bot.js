@@ -1,4 +1,5 @@
 import { element, button } from '../core/dom.js';
+import { icon } from '../core/icons.js';
 import { auth } from '../core/firebase.js';
 import { AppStore } from '../core/store.js';
 
@@ -10,7 +11,8 @@ const makeMessage = (role, text) => {
 
 export function mountAIBot() {
   if (document.getElementById('ai-chat-launcher')) return;
-  const launcher = button('✦', 'ai-chat-launcher', () => toggle());
+  const launcher = button('', 'ai-chat-launcher', () => toggle());
+  launcher.append(icon('ai', 20));
   launcher.id = 'ai-chat-launcher';
   launcher.type = 'button';
   launcher.setAttribute('aria-label', 'Mở trợ lý AI');
@@ -56,13 +58,13 @@ export function mountAIBot() {
       panel.hidden = true;
       launcher.hidden = true;
       launcher.classList.remove('is-open');
-      launcher.textContent = '✦';
+      launcher.replaceChildren(icon('ai', 20));
       return;
     }
     const open = typeof force === 'boolean' ? force : panel.hidden;
     panel.hidden = !open;
     launcher.classList.toggle('is-open', open);
-    launcher.textContent = open ? '×' : '✦';
+    launcher.replaceChildren(open ? document.createTextNode('×') : icon('ai', 20));
     if (open) input.focus();
   }
   AppStore.subscribe('examLockdown', (locked) => {
@@ -70,7 +72,7 @@ export function mountAIBot() {
       panel.hidden = true;
       launcher.hidden = true;
       launcher.classList.remove('is-open');
-      launcher.textContent = '✦';
+      launcher.replaceChildren(icon('ai', 20));
     } else {
       launcher.hidden = false;
     }

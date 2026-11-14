@@ -14,7 +14,7 @@ export function renderCommunityAI() {
     return locked;
   }
   const root = element('section', 'ai-root');
-  const hero = element('section','hero ai-hero'); hero.append(element('div','eyebrow','HTVVM STUDIO • AI TUTOR'),element('h2','hero-title','Học cùng một trợ giảng biết giải thích.'),element('p','hero-subtitle','Đặt câu hỏi bằng văn bản hoặc gửi ảnh bài tập. AI ưu tiên hướng dẫn từng bước, công thức và cách tự kiểm tra kết quả.')); root.append(hero);
+  const hero = element('section','hero ai-hero'); hero.append(element('div','eyebrow','TRỢ GIẢNG HTVVM'),element('h2','hero-title','Hỏi đáp bài tập Hóa học & Toán'),element('p','hero-subtitle','Đặt câu hỏi bằng văn bản hoặc gửi ảnh bài tập. Trợ giảng hướng dẫn từng bước, công thức và cách tự kiểm tra kết quả.')); root.append(hero);
   const panel = element('section','exam-panel ai-panel');
   panel.append(element('h3','exam-heading','Bạn đang cần trợ giúp điều gì?'));
   const prompts = element('div','ai-prompts');

@@ -1,7 +1,15 @@
 import { element, button } from '../../core/dom.js';
+import { icon } from '../../core/icons.js';
 import { auth } from '../../core/firebase.js';
 import { AppStore } from '../../core/store.js';
-import { HEARTBEAT_MS, titleFor } from '../../../shared/study-core.js';
+import {
+  HEARTBEAT_MS,
+  MAX_ALLOWLIST_ITEMS,
+  MAX_FOCUS_AWAY_MS,
+  normalizeFocusTarget,
+  isUrlAllowedInFocus,
+  titleFor
+} from '../../../shared/study-core.js';
 import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, validFocusDuration } from '../../../shared/focus-timer.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
 
@@ -58,8 +66,8 @@ export function renderFocus() {
 
   const heading = element('section', 'focus-hero');
   heading.append(
-    element('h2', 'hero-title', '◷ Góc tập trung'),
-    element('p', 'hero-subtitle', 'Đồng hồ Pomodoro chuẩn thời gian thực, thống kê giờ học, nhạc nền tập trung và không gian học tập đa năng.')
+    element('h2', 'hero-title', 'Góc tập trung'),
+    element('p', 'hero-subtitle', 'Đồng hồ Pomodoro thời gian thực, chế độ Focus Mode chọn 2–3 web hoặc ứng dụng học song song, bảng viết tay và nhạc nền.')
   );
   root.append(heading);
 
@@ -322,6 +330,149 @@ export function renderFocus() {
   shareInput.type = 'checkbox';
   shareLabel.append(shareInput, document.createTextNode(' Hiện tôi trên bảng xếp hạng Chăm chỉ'));
 
+  // --- FOCUS MODE: ALLOWLIST 2–3 WEB / ỨNG DỤNG ĐƯỢC PHÉP ---
+  const FOCUS_MODE_KEY = 'htvvm-focus-mode-v1';
+  const PRESET_FOCUS_TARGETS = [
+    ['youtube.com', 'YouTube'],
+    ['drive.google.com', 'Drive / Docs'],
+    ['desmos.com', 'Desmos'],
+    ['geogebra.org', 'GeoGebra'],
+    ['Ứng dụng trên máy (Word/Anki)', 'App trên máy']
+  ];
+  const loadFocusConfig = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FOCUS_MODE_KEY) || 'null');
+      if (parsed && typeof parsed === 'object') {
+        const items = Array.isArray(parsed.allowlist) ? parsed.allowlist.slice(0, MAX_ALLOWLIST_ITEMS) : [];
+        return { enabled: Boolean(parsed.enabled), allowlist: items };
+      }
+    } catch {}
+    return {
+      enabled: false,
+      allowlist: [normalizeFocusTarget('youtube.com'), normalizeFocusTarget('drive.google.com')]
+    };
+  };
+  let focusConfig = loadFocusConfig();
+  let pendingAwayMs = 0;
+  let focusHiddenAt = 0;
+  const saveFocusConfig = () => {
+    try { localStorage.setItem(FOCUS_MODE_KEY, JSON.stringify(focusConfig)); } catch {}
+  };
+
+  const focusModeBox = element('div', 'focus-allowlist-box');
+  const focusModeHead = element('div', 'focus-allowlist-head');
+  const focusModeTitle = element('div', 'focus-allowlist-title');
+  focusModeTitle.append(
+    icon('lock', 15),
+    element('strong', '', 'Focus Mode (tối đa 3 web / app học)')
+  );
+  const focusToggleBtn = button('', 'focus-btn is-sm', () => {
+    if (!focusConfig.enabled && !focusConfig.allowlist.length) {
+      status.textContent = 'Hãy chọn 1–3 trang web hoặc ứng dụng trước khi bật Focus Mode.';
+      return;
+    }
+    focusConfig.enabled = !focusConfig.enabled;
+    saveFocusConfig();
+    renderFocusAllowlist();
+    status.textContent = focusConfig.enabled
+      ? `Đã bật Focus Mode (${focusConfig.allowlist.map(x => x.label).join(', ')}). Chặn liên kết ngoài danh sách.`
+      : 'Đã tắt Focus Mode.';
+  });
+  focusModeHead.append(focusModeTitle, focusToggleBtn);
+
+  const presetRow = element('div', 'focus-allowlist-presets');
+  const selectedRow = element('div', 'focus-allowlist-selected');
+  const addRow = element('div', 'focus-inline-input-row focus-allowlist-add');
+  const customTargetInput = field('text', 'Thêm web (vd: khanacademy.org) hoặc app…');
+  customTargetInput.maxLength = 80;
+  const addTargetBtn = button('Thêm', 'focus-btn is-sm primary', () => addFocusTarget(customTargetInput.value));
+  addRow.append(customTargetInput, addTargetBtn);
+  customTargetInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addFocusTarget(customTargetInput.value); }
+  });
+
+  const focusReturnBanner = element('div', 'focus-return-banner');
+  focusReturnBanner.hidden = true;
+  const focusHonestyNote = element(
+    'small',
+    'focus-honesty-note',
+    'Giới hạn trình duyệt: Web không khóa được phím Alt+Tab của hệ điều hành hay app khác trên điện thoại; HTVVM sẽ chặn link ngoài danh sách ngay trên trang học và giữ giờ khi bạn sang 2–3 web/app đã chọn.'
+  );
+
+  function addFocusTarget(raw) {
+    try {
+      const normalized = normalizeFocusTarget(raw);
+      if (focusConfig.allowlist.some(x => x.id === normalized.id)) {
+        status.textContent = `“${normalized.label}” đã nằm trong danh sách.`;
+        return;
+      }
+      if (focusConfig.allowlist.length >= MAX_ALLOWLIST_ITEMS) {
+        status.textContent = `Focus Mode chỉ cho phép tối đa ${MAX_ALLOWLIST_ITEMS} trang web hoặc ứng dụng.`;
+        return;
+      }
+      focusConfig.allowlist = [...focusConfig.allowlist, normalized];
+      customTargetInput.value = '';
+      saveFocusConfig();
+      renderFocusAllowlist();
+      status.textContent = `Đã thêm “${normalized.label}” vào Focus Mode.`;
+    } catch (err) {
+      status.textContent = err.message || String(err);
+    }
+  }
+
+  function renderFocusAllowlist() {
+    focusModeBox.classList.toggle('is-active', focusConfig.enabled);
+    focusToggleBtn.textContent = focusConfig.enabled ? 'Đang bật · Tắt' : 'Bật Focus Mode';
+    focusToggleBtn.classList.toggle('primary', focusConfig.enabled);
+
+    presetRow.replaceChildren();
+    for (const [rawVal, shortLabel] of PRESET_FOCUS_TARGETS) {
+      const normalized = normalizeFocusTarget(rawVal);
+      const selected = focusConfig.allowlist.some(x => x.id === normalized.id);
+      const chip = button(selected ? `✓ ${shortLabel}` : `+ ${shortLabel}`, `focus-preset-chip${selected ? ' is-picked' : ''}`, () => {
+        if (selected) {
+          focusConfig.allowlist = focusConfig.allowlist.filter(x => x.id !== normalized.id);
+          if (!focusConfig.allowlist.length && focusConfig.enabled) focusConfig.enabled = false;
+          saveFocusConfig();
+          renderFocusAllowlist();
+        } else {
+          addFocusTarget(rawVal);
+        }
+      });
+      presetRow.append(chip);
+    }
+
+    selectedRow.replaceChildren();
+    if (!focusConfig.allowlist.length) {
+      selectedRow.append(element('small', 'focus-muted', 'Chưa chọn mục nào (bấm gợi ý hoặc tự thêm tối đa 3 mục).'));
+    } else {
+      for (const item of focusConfig.allowlist) {
+        const pill = element('span', 'focus-allowed-pill');
+        pill.append(element('span', '', `${item.kind === 'web' ? 'Web' : 'App'}: ${item.label}`));
+        if (item.kind === 'web' && item.openUrl) {
+          const openAllowed = button('↗', 'focus-pill-action', () => {
+            if (!isCountingStudy()) void startSession(running ? 'pomodoro' : 'manual');
+            focusHiddenAt = Date.now();
+            window.open(item.openUrl, '_blank', 'noopener,noreferrer');
+          });
+          openAllowed.title = `Mở ${item.label} (vẫn tính giờ khi bật Focus Mode)`;
+          pill.append(openAllowed);
+        }
+        const rm = button('×', 'focus-pill-remove', () => {
+          focusConfig.allowlist = focusConfig.allowlist.filter(x => x.id !== item.id);
+          if (!focusConfig.allowlist.length && focusConfig.enabled) focusConfig.enabled = false;
+          saveFocusConfig();
+          renderFocusAllowlist();
+        });
+        rm.title = `Gỡ ${item.label}`;
+        pill.append(rm);
+        selectedRow.append(pill);
+      }
+    }
+  }
+  renderFocusAllowlist();
+  focusModeBox.append(focusModeHead, presetRow, selectedRow, addRow, focusReturnBanner, focusHonestyNote);
+
   // Khung Nhạc học tích hợp gọn gàng ngay trong trạm phải
   const musicBox = element('div', 'focus-music-compact');
   const musicHead = element('div', 'focus-music-head');
@@ -359,7 +510,7 @@ export function renderFocus() {
   });
   musicBox.append(musicHead, audioInput, music);
 
-  statsBox.append(stats, stateLine, status, actions, shareLabel, musicBox);
+  statsBox.append(stats, stateLine, status, actions, shareLabel, focusModeBox, musicBox);
 
   // TẦNG 2: KHÔNG GIAN LÀM VIỆC TOÀN CHIỀU RỘNG (TAB CHUYỂN ĐỔI LINH HOẠT)
   const workspaceHub = element('section', 'focus-card focus-workspace-hub');
@@ -420,17 +571,26 @@ export function renderFocus() {
     try {
       const resource = resolveResourceLink(youtubeInput.value);
       if (resource.type !== 'youtube') throw Error('Khung này chỉ nhận link YouTube.');
+      if (focusConfig.enabled && !isUrlAllowedInFocus(resource.openUrl, focusConfig.allowlist)) {
+        throw Error('Focus Mode đang bật — hãy thêm YouTube vào danh sách tối đa 3 mục trước khi mở.');
+      }
       youtubeFrame.src = resource.embedUrl;
       youtubeFrame.hidden = false;
       youtubeOpen.href = resource.openUrl;
       youtubeOpen.hidden = false;
-      resourceStatus.textContent = '✅ Đã mở video YouTube.';
+      resourceStatus.textContent = 'Đã mở video YouTube.';
     } catch (error) {
       youtubeFrame.hidden = true;
       youtubeOpen.hidden = true;
       resourceStatus.textContent = error.message;
     }
   }
+  youtubeOpen.addEventListener('click', (event) => {
+    if (focusConfig.enabled && !isUrlAllowedInFocus(youtubeOpen.href, focusConfig.allowlist)) {
+      event.preventDefault();
+      resourceStatus.textContent = 'Focus Mode đang chặn mở tab YouTube ngoài danh sách cho phép.';
+    }
+  });
   youtubeInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') { event.preventDefault(); playYoutube(); }
   });
@@ -477,18 +637,27 @@ export function renderFocus() {
     try {
       const resource = resolveResourceLink(documentInput.value);
       if (resource.type !== 'drive') throw Error('Hãy dán liên kết Google Drive/Docs/Sheets/Slides.');
+      if (focusConfig.enabled && !isUrlAllowedInFocus(resource.openUrl, focusConfig.allowlist)) {
+        throw Error('Focus Mode đang bật — hãy thêm Drive / Docs vào danh sách tối đa 3 mục trước khi mở.');
+      }
       if (pdfURL) { URL.revokeObjectURL(pdfURL); pdfURL = ''; }
       documentFrame.src = resource.embedUrl;
       documentFrame.hidden = false;
       documentOpen.href = resource.openUrl;
       documentOpen.hidden = false;
-      resourceStatus.textContent = '✅ Đã mở bản xem trước tài liệu.';
+      resourceStatus.textContent = 'Đã mở bản xem trước tài liệu.';
     } catch (error) {
       documentFrame.hidden = true;
       documentOpen.hidden = true;
       resourceStatus.textContent = error.message;
     }
   }
+  documentOpen.addEventListener('click', (event) => {
+    if (focusConfig.enabled && documentOpen.href && !documentOpen.href.startsWith('blob:') && !isUrlAllowedInFocus(documentOpen.href, focusConfig.allowlist)) {
+      event.preventDefault();
+      resourceStatus.textContent = 'Focus Mode đang chặn mở liên kết tài liệu ngoài danh sách cho phép.';
+    }
+  });
   documentInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') { event.preventDefault(); openDocumentLink(); }
   });
@@ -675,9 +844,11 @@ export function renderFocus() {
     }
     shareInput.checked = !!statsSnapshot.sharing;
     if (todaySeconds >= 18000) {
-      stateLine.textContent = '🌟 Bạn đã học 5 giờ hôm nay. Hãy nghỉ ngơi và vận động nhẹ nhàng nhé!';
+      stateLine.textContent = 'Bạn đã hoàn thành 5 giờ học hôm nay. Hãy nghỉ ngơi và vận động nhẹ.';
     } else if (isCountingStudy()) {
-      stateLine.textContent = '● Đang đếm giờ học liên tục theo thời gian thực.';
+      stateLine.textContent = focusConfig.enabled
+        ? `● Focus Mode đang chạy (${focusConfig.allowlist.map(x => x.label).join(', ')}).`
+        : '● Đang đếm giờ học liên tục theo thời gian thực.';
     } else {
       stateLine.textContent = 'Bắt đầu đồng hồ tập trung hoặc bấm "Ghi nhận giờ học" để tính giờ.';
     }
@@ -866,11 +1037,11 @@ export function renderFocus() {
         saveTimerState();
         updateControls();
         playBellChime();
-        timerHint.textContent = '🎉 Đã hoàn thành phiên đồng hồ! Hãy nghỉ ngơi hoặc bắt đầu phiên tiếp theo.';
+        timerHint.textContent = 'Đã hoàn thành phiên đồng hồ. Hãy nghỉ ngơi hoặc bắt đầu phiên tiếp theo.';
         if (sessionOrigin === 'pomodoro' || sessionId) {
-          void stopSession('🎉 Hoàn thành phiên Pomodoro! Giờ học đã được lưu.');
+          void stopSession('Hoàn thành phiên Pomodoro — giờ học đã được lưu.');
         } else {
-          status.textContent = '🎉 Đã hết giờ Pomodoro!';
+          status.textContent = 'Đã hết giờ Pomodoro.';
         }
       }
     }
@@ -886,13 +1057,80 @@ export function renderFocus() {
     if (alive && auth?.currentUser) void loadStatus();
   });
 
+  const showReturnConfirm = (awayMs) => {
+    pendingAwayMs = awayMs;
+    const mins = Math.floor(awayMs / 60000);
+    const secs = Math.floor((awayMs % 60000) / 1000);
+    const labelTime = mins > 0 ? `${mins} phút ${secs} giây` : `${secs} giây`;
+    focusReturnBanner.hidden = false;
+    focusReturnBanner.replaceChildren(
+      element('p', '', `Bạn vừa rời tab ${labelTime} trong Focus Mode (${focusConfig.allowlist.map(x => x.label).join(', ')}). Bạn có đang học trên các web/ứng dụng đã chọn không?`)
+    );
+    const btnRow = element('div', 'focus-return-actions');
+    const keepBtn = button(`✓ Có, cộng +${labelTime}`, 'focus-btn is-sm primary', async () => {
+      const claim = pendingAwayMs;
+      pendingAwayMs = 0;
+      focusReturnBanner.hidden = true;
+      pendingMs += claim;
+      flushPendingToSnapshot();
+      drawStats();
+      if (sessionId && auth?.currentUser) {
+        try {
+          const res = await request('/api/study-tracker', 'POST', {
+            action: 'ping',
+            sessionId,
+            focusMode: true,
+            focusAwayMs: claim
+          });
+          if (alive && res?.stats) showStats(res.stats, true);
+        } catch {}
+      }
+      status.textContent = `Đã giữ ${labelTime} thời gian học trong Focus Mode.`;
+    });
+    const dropBtn = button('✕ Không cộng khoảng này', 'focus-btn is-sm', () => {
+      pendingAwayMs = 0;
+      focusReturnBanner.hidden = true;
+      status.textContent = 'Đã bỏ qua thời gian ngoài trang HTVVM.';
+    });
+    btnRow.append(keepBtn, dropBtn);
+    focusReturnBanner.append(btnRow);
+  };
+
   const onVisibility = () => {
-    if (!document.hidden && running) {
+    if (document.hidden) {
+      if (focusConfig.enabled && isCountingStudy()) focusHiddenAt = Date.now();
+      return;
+    }
+    if (running) {
       seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
       updateProgressUI();
     }
+    if (focusConfig.enabled && focusHiddenAt > 0 && isCountingStudy()) {
+      const awayMs = Math.min(MAX_FOCUS_AWAY_MS, Math.max(0, Date.now() - focusHiddenAt));
+      focusHiddenAt = 0;
+      if (awayMs >= 15000) {
+        showReturnConfirm(awayMs);
+      } else if (awayMs > 2000) {
+        pendingMs += awayMs;
+        flushPendingToSnapshot();
+        drawStats();
+      }
+    } else {
+      focusHiddenAt = 0;
+    }
+  };
+  const onSidebarGuard = (event) => {
+    const link = event.target?.closest?.('.sidebar a');
+    if (!link || !focusConfig.enabled || !isCountingStudy()) return;
+    const allowContinue = confirm('Focus Mode đang bật trong Góc tập trung. Tắt Focus Mode để chuyển sang mục khác?');
+    if (!allowContinue) {
+      event.preventDefault();
+      event.stopPropagation();
+      status.textContent = 'Đã giữ bạn ở lại Focus Mode.';
+    }
   };
   document.addEventListener('visibilitychange', onVisibility);
+  document.addEventListener('click', onSidebarGuard, true);
 
   const watcher = new MutationObserver(() => {
     if (!root.isConnected) cleanup();
@@ -908,6 +1146,7 @@ export function renderFocus() {
     clearInterval(timerInterval);
     clearInterval(heartbeat);
     document.removeEventListener('visibilitychange', onVisibility);
+    document.removeEventListener('click', onSidebarGuard, true);
     watcher.disconnect();
     if (pdfURL) URL.revokeObjectURL(pdfURL);
     if (audioURL) URL.revokeObjectURL(audioURL);
