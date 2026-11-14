@@ -1315,3 +1315,28 @@ body.is-exam-lockdown .exam-pdf-pages{max-height:calc(100vh - 134px)}
 .focus-return-banner p{margin:0;font-weight:600}
 .focus-return-actions{display:flex;gap:7px;flex-wrap:wrap}
 .focus-honesty-note{font-size:10.5px;line-height:1.45;color:var(--muted)}
+
+.focus-audio-bar{display:grid;gap:8px;padding:10px 12px;border-radius:12px;border:1px solid var(--stroke);background:var(--panel-2)}
+.focus-audio-row{display:flex;align-items:center;gap:9px;min-width:0}
+.focus-audio-toggle{display:inline-grid;place-items:center;width:32px;height:32px;flex:none;border-radius:50%;border:1px solid var(--stroke);background:var(--accent);color:var(--accent-text);padding:0}
+.focus-audio-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex:1;min-width:0}
+.focus-audio-title{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.focus-audio-time{font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted);flex:none}
+.focus-audio-controls{display:flex;align-items:center;gap:10px}
+.focus-audio-seek{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
+.focus-audio-vol{width:76px;flex:none;accent-color:var(--accent);cursor:pointer}
+.focus-audio-err{margin:0;font-size:11px;color:#fb7185}
+
+.bg-music-mini{position:fixed;left:18px;bottom:18px;z-index:760;display:inline-flex;align-items:center;gap:8px;max-width:min(320px,calc(100vw - 98px));padding:7px 10px 7px 7px;border-radius:999px;border:1px solid var(--stroke);background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow-card)}
+.bg-music-mini[hidden]{display:none!important}
+.bg-music-mini.is-playing{border-color:color-mix(in srgb,var(--accent) 55%,var(--stroke))}
+.bg-music-mini-toggle,.bg-music-mini-close{display:inline-grid;place-items:center;width:30px;height:30px;flex:none;border-radius:50%;border:0;padding:0}
+.bg-music-mini-toggle{background:var(--accent);color:var(--accent-text)}
+.bg-music-mini-close{background:transparent;color:var(--muted)}
+.bg-music-mini-close:hover{color:var(--text);background:var(--panel-2)}
+.bg-music-mini-meta{display:flex;align-items:center;gap:7px;min-width:0;border:0;background:transparent;color:var(--text);padding:2px 4px;text-align:left}
+.bg-music-mini-meta svg{color:var(--accent);flex:none}
+.bg-music-mini-title{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px}
+.bg-music-mini-time{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--muted);flex:none}
+body.is-exam-lockdown .bg-music-mini{display:none!important}
+@media(max-width:720px){.bg-music-mini{left:12px;bottom:16px;max-width:calc(100vw - 86px)}.bg-music-mini-title{max-width:98px}}

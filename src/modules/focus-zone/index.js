@@ -1,5 +1,14 @@
 import { element, button } from '../../core/dom.js';
 import { icon } from '../../core/icons.js';
+import {
+  subscribeMusic,
+  playPresetMusic,
+  loadLocalMusicFile,
+  toggleMusicPlay,
+  seekMusic,
+  setMusicVolume,
+  formatAudioTime
+} from '../../core/music-player.js';
 import { auth } from '../../core/firebase.js';
 import { AppStore } from '../../core/store.js';
 import {
@@ -473,42 +482,96 @@ export function renderFocus() {
   renderFocusAllowlist();
   focusModeBox.append(focusModeHead, presetRow, selectedRow, addRow, focusReturnBanner, focusHonestyNote);
 
-  // Khung Nhạc học tích hợp gọn gàng ngay trong trạm phải
+  // Khung Nhạc nền giữ phát xuyên suốt khi đổi tab trong ứng dụng
   const musicBox = element('div', 'focus-music-compact');
   const musicHead = element('div', 'focus-music-head');
+  const musicHeading = element('strong', 'focus-allowlist-title');
+  musicHeading.append(icon('music', 15), document.createTextNode(' Nhạc nền tập trung'));
   musicHead.append(
-    element('strong', '', '🎵 Nhạc nền tập trung'),
-    button('▶ Phát nhạc nền có sẵn', 'focus-btn is-sm', () => {
-      music.src = '/study-break-music.wav';
-      music.play().catch(() => {});
+    musicHeading,
+    button('Phát nhạc có sẵn', 'focus-btn is-sm', () => {
+      playPresetMusic();
+      status.textContent = 'Đang phát nhạc nền tập trung.';
     }),
-    button('📂 Chọn nhạc từ máy', 'focus-btn is-sm', () => audioInput.click())
+    button('Chọn nhạc từ máy', 'focus-btn is-sm', () => audioInput.click())
   );
-  const music = document.createElement('audio');
-  music.controls = true;
-  music.loop = true;
-  music.src = '/study-break-music.wav';
-  music.className = 'focus-audio';
+
+  const audioBar = element('div', 'focus-audio-bar');
+  const audioRow = element('div', 'focus-audio-row');
+  const audioToggle = button('', 'focus-audio-toggle', () => toggleMusicPlay());
+  const audioMeta = element('div', 'focus-audio-meta');
+  const audioTitle = element('span', 'focus-audio-title', 'Nhạc nền tập trung');
+  const audioTime = element('span', 'focus-audio-time', '00:00 / 00:00');
+  audioMeta.append(audioTitle, audioTime);
+  audioRow.append(audioToggle, audioMeta);
+
+  const audioControls = element('div', 'focus-audio-controls');
+  const seekInput = document.createElement('input');
+  seekInput.type = 'range';
+  seekInput.min = '0';
+  seekInput.max = '1000';
+  seekInput.value = '0';
+  seekInput.className = 'focus-audio-seek';
+  seekInput.setAttribute('aria-label', 'Tua nhạc nền');
+  let isScrubbing = false;
+  seekInput.addEventListener('pointerdown', () => { isScrubbing = true; });
+  seekInput.addEventListener('pointerup', () => { isScrubbing = false; });
+  seekInput.addEventListener('blur', () => { isScrubbing = false; });
+  seekInput.addEventListener('input', () => {
+    seekMusic(Number(seekInput.value) / 1000);
+  });
+
+  const volInput = document.createElement('input');
+  volInput.type = 'range';
+  volInput.min = '0';
+  volInput.max = '100';
+  volInput.value = '100';
+  volInput.className = 'focus-audio-vol';
+  volInput.setAttribute('aria-label', 'Âm lượng nhạc nền');
+  volInput.addEventListener('input', () => {
+    setMusicVolume(Number(volInput.value) / 100);
+  });
+  audioControls.append(seekInput, volInput);
+
+  const audioErr = element('p', 'focus-audio-err');
+  audioErr.hidden = true;
+  audioBar.append(audioRow, audioControls, audioErr);
+
   const audioInput = document.createElement('input');
   audioInput.type = 'file';
   audioInput.accept = 'audio/*';
   audioInput.hidden = true;
-  let audioURL = '';
   audioInput.addEventListener('change', () => {
-    if (audioURL) { URL.revokeObjectURL(audioURL); audioURL = ''; }
     const file = audioInput.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('audio/')) {
-      status.textContent = 'Tệp đã chọn không phải tệp âm thanh.';
+    const res = loadLocalMusicFile(file);
+    if (!res.ok) {
+      status.textContent = res.error || 'Tệp đã chọn không phải tệp âm thanh.';
       audioInput.value = '';
       return;
     }
-    audioURL = URL.createObjectURL(file);
-    music.src = audioURL;
-    music.play().catch(() => {});
-    status.textContent = `🎵 Đang phát nhạc: ${file.name}`;
+    status.textContent = `Đang phát nhạc: ${res.title}`;
   });
-  musicBox.append(musicHead, audioInput, music);
+
+  let lastMusicPlaying = null;
+  const unsubMusic = subscribeMusic((mState) => {
+    audioTitle.textContent = mState.title;
+    audioTime.textContent = `${formatAudioTime(mState.currentTime)} / ${formatAudioTime(mState.duration)}`;
+    if (!isScrubbing) {
+      const ratio = mState.duration > 0 ? Math.round((mState.currentTime / mState.duration) * 1000) : 0;
+      seekInput.value = String(Math.max(0, Math.min(1000, ratio)));
+    }
+    seekInput.disabled = !(mState.duration > 0);
+    volInput.value = String(Math.round((mState.volume ?? 1) * 100));
+    audioErr.hidden = !mState.errorMsg;
+    audioErr.textContent = mState.errorMsg || '';
+    if (lastMusicPlaying !== mState.playing) {
+      lastMusicPlaying = mState.playing;
+      audioToggle.replaceChildren(icon(mState.playing ? 'pause' : 'play', 14));
+      audioToggle.setAttribute('aria-label', mState.playing ? 'Tạm dừng nhạc nền' : 'Phát nhạc nền');
+    }
+  });
+  musicBox.append(musicHead, audioInput, audioBar);
 
   statsBox.append(stats, stateLine, status, actions, shareLabel, focusModeBox, musicBox);
 
@@ -1143,13 +1206,13 @@ export function renderFocus() {
     flushPendingToSnapshot();
     saveTimerState();
     unsubUser();
+    unsubMusic();
     clearInterval(timerInterval);
     clearInterval(heartbeat);
     document.removeEventListener('visibilitychange', onVisibility);
     document.removeEventListener('click', onSidebarGuard, true);
     watcher.disconnect();
     if (pdfURL) URL.revokeObjectURL(pdfURL);
-    if (audioURL) URL.revokeObjectURL(audioURL);
     if (sessionId && auth?.currentUser) {
       const id = sessionId;
       sessionId = null;

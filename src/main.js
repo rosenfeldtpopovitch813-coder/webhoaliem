@@ -8,6 +8,7 @@ import { firebaseReady, databaseReady, signInGoogle, signOutUser, detectInAppBro
 import { startAuth } from './core/auth.js';
 import { element, button } from './core/dom.js';
 import { icon } from './core/icons.js';
+import { mountPersistentMusicPlayer } from './core/music-player.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
@@ -282,7 +283,7 @@ function updateNotice() {
 function setSyncBadge() { frame.status.textContent = AppClock.isSynced ? '● Giờ máy chủ đã đồng bộ' : '◌ Giờ máy chủ chưa đồng bộ'; frame.status.classList.toggle('synced', AppClock.isSynced); }
 async function syncClock() { await AppClock.syncWithServer(); AppStore.set('timeSynced', AppClock.isSynced); setSyncBadge(); }
 
-initializeTheme(); createShell(); mountAIBot(); startRouter(); startAuth();
+initializeTheme(); createShell(); mountAIBot(); mountPersistentMusicPlayer(); startRouter(); startAuth();
 frame.select.value = AppStore.get('theme');
 AppStore.subscribe('theme', value => { frame.select.value = value; });
 AppStore.subscribe('route', drawRoute);
