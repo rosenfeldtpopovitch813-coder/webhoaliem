@@ -1,15 +1,29 @@
 import { AppStore } from './store.js';
 import { element, button } from './dom.js';
 import { icon } from './icons.js';
-import { navigate } from './router.js';
 
 export const DEFAULT_TRACK_URL = '/study-break-music.wav';
 export const DEFAULT_TRACK_TITLE = 'Nhạc nền học tập';
+
+const FAB_POS_KEY = 'htvvm_music_fab_pos';
+const FAB_SIZE = 44;
+const FAB_MARGIN = 10;
 
 export function clampUnit(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+export function clampMiniPosition(x, y, viewportWidth, viewportHeight, size = FAB_SIZE, margin = FAB_MARGIN) {
+  const vw = Math.max(size + margin * 2, Number(viewportWidth) || 0);
+  const vh = Math.max(size + margin * 2, Number(viewportHeight) || 0);
+  const maxX = vw - size - margin;
+  const maxY = vh - size - margin;
+  return {
+    x: Math.round(Math.max(margin, Math.min(maxX, Number(x) || margin))),
+    y: Math.round(Math.max(margin, Math.min(maxY, Number(y) || margin)))
+  };
 }
 
 export function formatAudioTime(seconds) {
@@ -182,27 +196,94 @@ export function mountPersistentMusicPlayer() {
   const host = element('div', 'bg-music-host');
   host.id = 'bg-music-host';
 
-  const mini = element('aside', 'bg-music-mini');
-  mini.setAttribute('aria-label', 'Trình phát nhạc nền');
+  const mini = element('div', 'bg-music-mini');
+  mini.setAttribute('role', 'region');
+  mini.setAttribute('aria-label', 'Nút phát nhạc nền');
   mini.hidden = true;
 
-  const toggleBtn = button('', 'bg-music-mini-toggle', () => toggleMusicPlay());
-  const metaBtn = button('', 'bg-music-mini-meta', () => {
-    if (!AppStore.get('examLockdown')) navigate('/focus');
+  let suppressClickUntil = 0;
+  const toggleBtn = button('', 'bg-music-mini-toggle', () => {
+    if (Date.now() < suppressClickUntil) return;
+    toggleMusicPlay();
   });
-  metaBtn.title = 'Mở Góc tập trung';
-  const titleEl = element('strong', 'bg-music-mini-title', currentTitle);
-  const timeEl = element('span', 'bg-music-mini-time', '00:00');
-  metaBtn.append(icon('music', 14), titleEl, timeEl);
+  toggleBtn.append(icon('play', 17));
 
-  const stopBtn = button('', 'bg-music-mini-close', () => stopAndResetMusic());
+  const stopBtn = button('', 'bg-music-mini-close', (e) => {
+    e.stopPropagation();
+    stopAndResetMusic();
+  });
   stopBtn.setAttribute('aria-label', 'Tắt nhạc nền');
   stopBtn.title = 'Tắt nhạc nền';
-  stopBtn.append(icon('close', 14));
+  stopBtn.append(icon('close', 11));
 
-  mini.append(toggleBtn, metaBtn, stopBtn);
+  mini.append(toggleBtn, stopBtn);
   host.append(audio, mini);
   document.body.append(host);
+
+  let savedPos = null;
+  const applyMiniPos = (x, y) => {
+    const pos = clampMiniPosition(x, y, window.innerWidth, window.innerHeight);
+    savedPos = pos;
+    mini.style.left = `${pos.x}px`;
+    mini.style.top = `${pos.y}px`;
+    mini.style.bottom = 'auto';
+    mini.style.right = 'auto';
+    return pos;
+  };
+  try {
+    const raw = localStorage.getItem(FAB_POS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) {
+      applyMiniPos(parsed.x, parsed.y);
+    }
+  } catch {}
+
+  let dragState = null;
+  const finishDrag = (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    const moved = dragState.moved;
+    const pos = dragState.pos;
+    dragState = null;
+    mini.classList.remove('is-dragging');
+    document.body.classList.remove('is-dragging-music-fab');
+    try { mini.releasePointerCapture(e.pointerId); } catch {}
+    if (moved) {
+      suppressClickUntil = Date.now() + 250;
+      if (pos) {
+        try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch {}
+      }
+    }
+  };
+  mini.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.target.closest('.bg-music-mini-close')) return;
+    const rect = mini.getBoundingClientRect();
+    dragState = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: rect.left,
+      startTop: rect.top,
+      moved: false,
+      pos: null
+    };
+    try { mini.setPointerCapture(e.pointerId); } catch {}
+  });
+  mini.addEventListener('pointermove', (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if (!dragState.moved && Math.hypot(dx, dy) <= 5) return;
+    dragState.moved = true;
+    mini.classList.add('is-dragging');
+    document.body.classList.add('is-dragging-music-fab');
+    dragState.pos = applyMiniPos(dragState.startLeft + dx, dragState.startTop + dy);
+  });
+  mini.addEventListener('pointerup', finishDrag);
+  mini.addEventListener('pointercancel', finishDrag);
+  window.addEventListener('resize', () => {
+    if (savedPos) applyMiniPos(savedPos.x, savedPos.y);
+  });
 
   let lastPlaying = null;
   const renderMini = () => {
@@ -210,18 +291,17 @@ export function mountPersistentMusicPlayer() {
     const route = AppStore.get('route');
     const locked = Boolean(AppStore.get('examLockdown'));
     mini.hidden = !state.activated || route === '/focus' || locked;
-    titleEl.textContent = state.title || DEFAULT_TRACK_TITLE;
     const statusText = state.playing
       ? (state.duration > 0
         ? `${formatAudioTime(state.currentTime)} / ${formatAudioTime(state.duration)}`
         : formatAudioTime(state.currentTime))
       : 'Đang tạm dừng';
-    timeEl.textContent = statusText;
+    toggleBtn.title = `${state.title || DEFAULT_TRACK_TITLE} (${statusText}) • Kéo để di chuyển`;
     mini.classList.toggle('is-playing', state.playing);
     if (lastPlaying !== state.playing) {
       lastPlaying = state.playing;
-      toggleBtn.replaceChildren(icon(state.playing ? 'pause' : 'play', 14));
-      toggleBtn.setAttribute('aria-label', state.playing ? 'Tạm dừng nhạc' : 'Tiếp tục phát nhạc');
+      toggleBtn.replaceChildren(icon(state.playing ? 'pause' : 'play', 17));
+      toggleBtn.setAttribute('aria-label', state.playing ? 'Tạm dừng nhạc nền' : 'Tiếp tục phát nhạc nền');
     }
   };
 
