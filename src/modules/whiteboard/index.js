@@ -5,7 +5,7 @@ export function renderWhiteboardApp() {
   const wrap = element('section', 'standalone-suite-wrap');
   const bar = element('div', 'standalone-suite-bar');
   const info = element('span', 'standalone-suite-caption');
-  info.append(icon('whiteboard', 15), document.createTextNode(' Bảng vẽ Lớp học Mực độc lập — Viết tay mượt mà, dựng hình không gian 3D, vẽ đồ thị & viết lên PDF.'));
+  info.append(icon('whiteboard', 15), document.createTextNode(' Bảng vẽ Mực — Viết tay, dựng hình không gian, vẽ đồ thị và ghi chú lên PDF.'));
   const actions = element('div', 'standalone-suite-actions');
 
   const iframe = document.createElement('iframe');

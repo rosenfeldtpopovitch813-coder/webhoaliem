@@ -53,7 +53,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
   const titleGroup = element('div', 'eng-title-group');
   titleGroup.append(
     element('span', 'arena-eyebrow', 'Tiếng Anh THPT & Đánh giá năng lực'),
-    element('h2', 'eng-title', 'Từ vựng, Flashcard 3D, Viết lại câu & Ngữ pháp')
+    element('h2', 'eng-title', 'Từ vựng, Thẻ ghi nhớ, Viết lại câu & Ngữ pháp')
   );
   const heroActions = element('div', 'eng-hero-actions');
   const masteryPill = element('span', 'eng-mastery-pill', '');
@@ -76,7 +76,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
 
   const tabsRow = element('div', 'eng-subtabs');
   const subTabs = [
-    ['flashcards', 'Flashcard 3D'],
+    ['flashcards', 'Thẻ ghi nhớ'],
     ['vocab', 'Sổ từ vựng'],
     ['grammar', 'Cấu trúc ngữ pháp'],
     ['quiz', 'Trắc nghiệm'],
@@ -373,7 +373,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
       o.value = v;
       statusSel.append(o);
     }
-    const launchFcBtn = button('Ôn nhóm này bằng Flashcard', 'primary-btn', () => switchSubTab('flashcards', { theme }));
+    const launchFcBtn = button('Ôn nhóm này bằng Thẻ ghi nhớ', 'primary-btn', () => switchSubTab('flashcards', { theme }));
     filterRow.append(qInput, statusSel, launchFcBtn);
 
     const grid = element('div', 'eng-vocab-grid');

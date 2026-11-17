@@ -1346,10 +1346,10 @@ function showCreator(host) {
     result.append(
       E('h4', '', 'Đã tạo phòng thi thành công!'),
       E('p', '', `Mã phòng thi: ${response.exam.id}`),
-      E('p', 'exam-message', sourceUrl ? '✓ Đã gắn file đề bên trái — thí sinh vào phòng sẽ thấy ngay đề Drive/PDF bên trái và Phiếu trả lời OMR bên phải (khóa thoát & khóa AI).' : 'Đề đã được lưu trong kho đề chung, sẵn sàng cho học sinh vào thi.')
+      E('p', 'exam-message', sourceUrl ? 'Đã gắn tài liệu đề ở khung bên trái; khi vào phòng học sinh sẽ thấy đề song song với phiếu trả lời OMR.' : 'Đề đã được lưu trong kho đề chung, sẵn sàng cho học sinh vào thi.')
     );
     const actRow = E('div', 'exam-tabs');
-    const openNowBtn = button('Mở phòng thi ngay →', 'primary-btn', () => begin(host, response.exam.id));
+    const openNowBtn = button('Mở phòng thi', 'primary-btn', () => begin(host, response.exam.id));
     const copyCodeBtn = button('', 'exam-tab', () => {
       navigator.clipboard?.writeText(response.exam.id);
       message.textContent = `Đã sao chép mã phòng ${response.exam.id}`;

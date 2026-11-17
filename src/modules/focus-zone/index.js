@@ -77,7 +77,7 @@ export function renderFocus() {
   const heading = element('section', 'focus-hero');
   heading.append(
     element('h2', 'hero-title', 'Góc tập trung'),
-    element('p', 'hero-subtitle', 'Đồng hồ Pomodoro thời gian thực, chế độ Focus Mode chọn 2–3 web hoặc ứng dụng học song song, bảng viết tay và nhạc nền.')
+    element('p', 'hero-subtitle', 'Đồng hồ Pomodoro, chế độ tập trung chọn 2–3 trang web hoặc ứng dụng học song song, bảng viết tay và nhạc nền.')
   );
   root.append(heading);
 
@@ -925,10 +925,10 @@ export function renderFocus() {
     rankRageBox.classList.toggle('is-charging', isCountingStudy());
     rankRageBox.classList.toggle('is-max', rp.isMax);
     if (rp.isMax) {
-      rankRageTitle.textContent = `${rp.currentTitle} · Đỉnh cao tối đa`;
-      rankRageRemain.textContent = '100% đầy thanh nộ';
+      rankRageTitle.textContent = `${rp.currentTitle} · Cấp cao nhất`;
+      rankRageRemain.textContent = '100% · Đã đạt mức tối đa';
     } else {
-      rankRageTitle.textContent = `Thanh nộ hạng: ${rp.currentTitle} → ${rp.nextTitle}`;
+      rankRageTitle.textContent = `Thanh tiến độ hạng: ${rp.currentTitle} → ${rp.nextTitle}`;
       rankRageRemain.textContent = `${pct}% · Còn ${fmtFull(rp.remainingSeconds)}`;
     }
     rankRageFill.style.width = `${pct}%`;
@@ -937,8 +937,8 @@ export function renderFocus() {
       stateLine.textContent = 'Bạn đã hoàn thành 5 giờ học hôm nay. Hãy nghỉ ngơi và vận động nhẹ.';
     } else if (isCountingStudy()) {
       stateLine.textContent = focusConfig.enabled
-        ? `● Focus Mode đang chạy (${focusConfig.allowlist.map(x => x.label).join(', ')}).`
-        : '● Đang đếm giờ học liên tục theo thời gian thực.';
+        ? `Focus Mode đang chạy (${focusConfig.allowlist.map(x => x.label).join(', ')}).`
+        : 'Đang đếm giờ học liên tục.';
     } else {
       stateLine.textContent = 'Bắt đầu đồng hồ tập trung hoặc bấm "Ghi nhận giờ học" để tính giờ.';
     }

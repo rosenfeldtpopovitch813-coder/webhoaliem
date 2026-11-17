@@ -36,11 +36,11 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
     return { wrap, tabs, content };
   };
 
-  const { tabs, content } = buildShell('Đối kháng 200 HP (Online đa người & Offline Bot)');
-  const tabBot = button('Đấu Bot Offline (Vào ngay)', 'exam-tab', () => showBotSetup());
-  const tabJoin = button('Vào phòng Online (Mã / QR)', 'exam-tab', () => showJoin());
-  const tabCreate = button('Tạo phòng Online (2–8 người)', 'exam-tab', () => showCreate());
-  const tabRules = button('Luật chơi', 'exam-tab', () => showRules());
+  const { tabs, content } = buildShell('Đối kháng');
+  const tabBot = button('Tự luyện với máy', 'exam-tab', () => showBotSetup());
+  const tabJoin = button('Vào phòng', 'exam-tab', () => showJoin());
+  const tabCreate = button('Tạo phòng', 'exam-tab', () => showCreate());
+  const tabRules = button('Cách chơi', 'exam-tab', () => showRules());
   tabs.append(tabJoin, tabCreate, tabBot, tabRules);
 
   function markTab(btn) {
@@ -52,8 +52,8 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
     markTab(tabRules);
     const card = element('section', 'exam-panel');
     card.append(
-      element('h4', '', 'Luật chơi Đối kháng 200 HP'),
-      element('p', 'exam-message', 'Mỗi người chơi bắt đầu với 200 HP. Mỗi vòng kéo dài 20 giây: trả lời đúng càng nhanh, sát thương gây lên đối thủ còn nhiều HP nhất càng lớn (tối đa 45 sát thương/lượt). Trận kết thúc khi hết bộ câu hỏi hoặc chỉ còn 1 người còn HP > 0.')
+      element('h4', '', 'Cách chơi Đối kháng'),
+      element('p', 'exam-message', 'Mỗi người chơi bắt đầu với 200 điểm lực. Mỗi vòng có 20 giây: trả lời đúng càng nhanh, điểm trừ vào đối thủ còn nhiều lực nhất càng cao; trận kết thúc khi hết câu hỏi hoặc chỉ còn một người.')
     );
     content.replaceChildren(card);
   }
@@ -75,16 +75,16 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
     }
     const diffSel = document.createElement('select');
     diffSel.className = 'exam-input';
-    for (const [val, lbl] of [['normal', 'Bot Cơ bản (chính xác 65%)'], ['hard', 'Bot Nâng cao (chính xác 85%, phản xạ nhanh)']]) {
+    for (const [val, lbl] of [['normal', 'Mức cơ bản'], ['hard', 'Mức nâng cao']]) {
       const o = element('option', '', lbl);
       o.value = val;
       diffSel.append(o);
     }
     p.append(
-      element('p', 'exam-message', 'Luyện đối kháng tốc độ 1v1 với máy ngay lập tức, không cần đăng nhập hay chờ người khác.'),
+      element('p', 'exam-message', 'Luyện trả lời nhanh với máy theo bộ đề đã chọn.'),
       deckSel,
       diffSel,
-      button('Bắt đầu đấu với Bot →', 'primary-btn', () => {
+      button('Bắt đầu', 'primary-btn', () => {
         const deck = mcqsDecks.find((d) => d.id === deckSel.value) || mcqsDecks[0];
         if (deck) runBotMatch(deck, diffSel.value);
       })
@@ -110,11 +110,11 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
       if (!board.isConnected) { stop(); return; }
       if (round >= questions.length || playerHp <= 0 || botHp <= 0) {
         const winText = playerHp > botHp || (playerHp === botHp && playerScore >= botScore)
-          ? 'BẠN ĐÃ CHIẾN THẮNG BOT!'
-          : 'BOT THẮNG VÁN NÀY!';
+          ? 'Bạn đã thắng ván này'
+          : 'Máy đã thắng ván này';
         board.replaceChildren(
           element('h3', 'exam-heading', winText),
-          element('p', 'exam-message', `HP cuối: Bạn ${playerHp} HP (${playerScore} dmg) · Bot ${botHp} HP (${botScore} dmg)`),
+          element('p', 'exam-message', `Kết quả: Bạn còn ${playerHp} lực (${playerScore} điểm) · Máy còn ${botHp} lực (${botScore} điểm)`),
           button('Đấu ván mới', 'primary-btn', () => runBotMatch(deck, difficulty)),
           button('Chọn đề khác', 'exam-tab', () => showBotSetup())
         );
@@ -128,7 +128,7 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
 
       const statusGrid = element('div', 'arena-players');
       const pCard = element('article', 'arena-player');
-      pCard.append(element('strong', '', 'Bạn (Offline)'), element('span', '', `${playerHp} / 200 HP · ${playerScore} sát thương`));
+      pCard.append(element('strong', '', 'Bạn'), element('span', '', `${playerHp} lực · ${playerScore} điểm`));
       const pBar = element('div', 'arena-hp');
       const pFill = element('div', 'arena-hp-fill');
       pFill.style.width = `${playerHp / 2}%`;
@@ -136,7 +136,7 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
       pCard.append(pBar);
 
       const bCard = element('article', 'arena-player');
-      bCard.append(element('strong', '', `AI Bot (${difficulty === 'hard' ? 'Khó' : 'Thường'})`), element('span', '', `${botHp} / 200 HP · ${botScore} sát thương`));
+      bCard.append(element('strong', '', `Máy (${difficulty === 'hard' ? 'Nâng cao' : 'Cơ bản'})`), element('span', '', `${botHp} lực · ${botScore} điểm`));
       const bBar = element('div', 'arena-hp');
       const bFill = element('div', 'arena-hp-fill');
       bFill.style.width = `${botHp / 2}%`;
@@ -180,8 +180,8 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
         const ri = 'ABCD'.indexOf(q.answer);
         if (opts.children[ri]) opts.children[ri].classList.add('is-correct');
 
-        feedback.textContent = `${pOk ? `✓ Bạn gây ${pDmg} sát thương!` : `✗ Đáp án đúng là ${q.answer}.`} · ${botOk ? `Bot đánh trả ${bDmg} sát thương` : 'Bot trả lời sai!'}`;
-        logs.unshift(`Vòng ${round + 1}: Bạn ${pOk ? `+${pDmg}dmg` : 'trượt'} | Bot ${botOk ? `+${bDmg}dmg` : 'trượt'}`);
+        feedback.textContent = `${pOk ? `Chính xác (+${pDmg} điểm)` : `Chưa đúng, đáp án là ${q.answer}`} · ${botOk ? `Máy đúng (+${bDmg} điểm)` : 'Máy trả lời sai'}`;
+        logs.unshift(`Vòng ${round + 1}: Bạn ${pOk ? `+${pDmg}` : 'sai'} | Máy ${botOk ? `+${bDmg}` : 'sai'}`);
 
         setTimeout(() => {
           round++;
@@ -237,7 +237,7 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
         joinBtn.disabled = false;
       }
     });
-    p.append(element('h4', '', 'Tham gia phòng Đối kháng Online'), codeIn, joinBtn, msg);
+    p.append(element('h4', '', 'Vào phòng Đối kháng'), codeIn, joinBtn, msg);
     content.replaceChildren(p);
 
     if (prefill && auth?.currentUser) {
@@ -314,7 +314,7 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
     };
 
     const status = element('p', 'exam-message', 'Chọn nhanh bộ đề có sẵn/do giáo viên giao ở trên hoặc tự thêm từ 2–20 câu.');
-    const createBtn = button('Tạo phòng Online (tối đa 8 người)', 'primary-btn', async () => {
+    const createBtn = button('Tạo phòng (tối đa 8 người)', 'primary-btn', async () => {
       createBtn.disabled = true;
       status.textContent = 'Đang tạo phòng…';
       try {
@@ -402,7 +402,7 @@ export function renderBattleMode(host, { apiCall, availableDecks = [], initialCo
         const card = element('article', 'arena-player');
         card.append(
           element('strong', '', `${pl.name}${pl.uid === uid ? ' (Bạn)' : ''}${pl.uid === room.hostUid ? ' ★' : ''}`),
-          element('span', '', `${pl.hp} / 200 HP • ${pl.score} sát thương`)
+          element('span', '', `${pl.hp} lực · ${pl.score} điểm`)
         );
         const bar = element('div', 'arena-hp');
         const fill = element('div', 'arena-hp-fill');

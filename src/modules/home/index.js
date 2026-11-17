@@ -6,9 +6,9 @@ import { AppStore } from '../../core/store.js';
 
 const modules = [
   ['exam-paper', 'Soạn đề A4', 'Soạn đề nhiều trang A4 như Word, công thức Toán/Hóa, xuất .docx & PDF', '/exam-paper'],
-  ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay độc lập, dựng hình 3D, vẽ đồ thị và viết lên PDF', '/whiteboard'],
-  ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR tinh gọn bên phải, chấm điểm tự động', '/exam'],
-  ['arena', 'Đấu trường học tập', 'Đối kháng đa môn, Tiếng Anh Quizlet, Ai là Triệu Phú & Đấu trường 100', '/arena'],
+  ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay, dựng hình không gian, vẽ đồ thị và ghi chú lên PDF', '/whiteboard'],
+  ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR bên phải, chấm điểm tự động', '/exam'],
+  ['arena', 'Đấu trường học tập', 'Đối kháng theo vòng, ôn Tiếng Anh, Ai là Triệu Phú và Đấu trường 100', '/arena'],
   ['handbook', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
   ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
   ['library', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
@@ -21,7 +21,7 @@ export function renderHome() {
   const hero = element('section', 'hero home-hero');
   hero.append(
     element('h2', 'hero-title', 'Luyện thi & Học tập trực tuyến'),
-    element('p', 'hero-subtitle', 'Soạn đề A4, làm bài thi theo thời gian thực, tra cứu 118 nguyên tố, theo dõi giờ tự học và hỏi đáp bài tập.')
+    element('p', 'hero-subtitle', 'Soạn đề A4, làm bài kiểm tra tính giờ, tra cứu bảng tuần hoàn, theo dõi giờ học và hỏi đáp bài tập.')
   );
   wrap.append(hero);
 

@@ -19,15 +19,15 @@ export function renderHundredArena(host, { apiCall, availableDecks = [], initial
 
   const wrap = element('section', 'arena-mode-wrap');
   const head = element('div', 'arena-mode-head');
-  head.append(element('h3', 'exam-heading', 'Đấu trường 100 — Quét QR Loại trực tiếp'));
+  head.append(element('h3', 'exam-heading', 'Đấu trường 100'));
   if (onBack) head.append(button('← Hub Arena', 'exam-tab', () => { stop(); onBack(); }));
   const tabs = element('div', 'exam-tabs');
   const content = element('div', 'arena-mode-body');
   wrap.append(head, tabs, content);
   host.replaceChildren(wrap);
 
-  const tabJoin = button('Quét QR / Nhập mã vào phòng', 'exam-tab', () => showJoin());
-  const tabCreate = button('Giáo viên mở phòng Đấu trường 100', 'exam-tab', () => showCreate());
+  const tabJoin = button('Vào phòng', 'exam-tab', () => showJoin());
+  const tabCreate = button('Tạo phòng', 'exam-tab', () => showCreate());
   tabs.append(tabJoin, tabCreate);
 
   const markTab = (active) => {
@@ -49,7 +49,7 @@ export function renderHundredArena(host, { apiCall, availableDecks = [], initial
       ? 'Trả lời sai hoặc hết giờ bạn sẽ chuyển sang chế độ khán giả cho đến khi còn 1 người thắng!'
       : 'Đăng nhập Google trên thiết bị để tham gia phòng Đấu trường 100.');
 
-    const joinBtn = button('Tham gia Đấu trường 100 →', 'primary-btn', async () => {
+    const joinBtn = button('Vào phòng', 'primary-btn', async () => {
       const code = codeIn.value.trim().toUpperCase();
       if (!code) { msg.textContent = 'Hãy nhập mã phòng.'; return; }
       joinBtn.disabled = true;
@@ -179,7 +179,7 @@ export function renderHundredArena(host, { apiCall, availableDecks = [], initial
     };
 
     const status = element('p', 'exam-message', 'Hỗ trợ cả câu trắc nghiệm A/B/C/D và câu nhập đáp án trực tiếp (tối đa 100 học sinh quét QR vào phòng).');
-    const createBtn = button('Mở phòng Đấu trường 100 & Tạo mã QR →', 'primary-btn', async () => {
+    const createBtn = button('Mở phòng & Tạo mã QR', 'primary-btn', async () => {
       createBtn.disabled = true;
       status.textContent = 'Đang khởi tạo phòng Đấu trường 100…';
       try {
@@ -283,7 +283,7 @@ export function renderHundredArena(host, { apiCall, availableDecks = [], initial
       if (room.status === 'LOBBY') {
         notice.textContent = `Đã có ${room.totalPlayers} thí sinh trong sảnh. Khi sẵn sàng, chủ phòng bấm Bắt đầu.`;
         if (isHost) {
-          const startBtn = button('Bắt đầu Câu 1 ngay →', 'primary-btn', async () => {
+          const startBtn = button('Bắt đầu Câu 1', 'primary-btn', async () => {
             startBtn.disabled = true;
             try { await apiCall('h100-start', { code: room.id }); refresh(); }
             catch (e) { notice.textContent = e.message; startBtn.disabled = false; }
@@ -294,7 +294,7 @@ export function renderHundredArena(host, { apiCall, availableDecks = [], initial
         const winners = (room.players || []).filter((p) => (room.winnerUids || []).includes(p.uid));
         const winNames = winners.map((w) => w.name).join(', ') || 'Chưa có thí sinh vượt qua câu cuối';
         stageArea.append(
-          element('h3', 'exam-heading', `CHÚC MỪNG NGƯỜI THẮNG CUỘC: ${winNames}`),
+          element('h3', 'exam-heading', `Người thắng cuộc: ${winNames}`),
           element('p', 'exam-message', room.lastRoundSummary ? `Đáp án câu cuối: ${room.lastRoundSummary.correctAnswer} · Còn trụ lại: ${room.lastRoundSummary.survivedCount} người.` : '')
         );
         notice.textContent = 'Trận Đấu trường 100 đã hoàn tất!';
@@ -308,7 +308,7 @@ export function renderHundredArena(host, { apiCall, availableDecks = [], initial
           stageArea.append(element('p', 'exam-auto-banner', `Bạn đã dừng bước ở Câu ${me.eliminatedRound || room.round} — tiếp tục theo dõi với vai trò khán giả.`));
         }
         if (isHost) {
-          const nextBtn = button(`Chuyển sang Câu ${room.round + 1}/${room.totalRounds} →`, 'primary-btn', async () => {
+          const nextBtn = button(`Câu tiếp theo (${room.round + 1}/${room.totalRounds})`, 'primary-btn', async () => {
             nextBtn.disabled = true;
             try { await apiCall('h100-next', { code: room.id }); refresh(); }
             catch (e) { notice.textContent = e.message; nextBtn.disabled = false; }

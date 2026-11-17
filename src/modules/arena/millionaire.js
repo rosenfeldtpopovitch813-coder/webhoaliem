@@ -15,7 +15,7 @@ export function renderMillionaire(host, { availableDecks = [], onBack = null } =
     stopTimer();
     const wrap = element('section', 'arena-mode-wrap');
     const head = element('div', 'arena-mode-head');
-    head.append(element('h3', 'exam-heading', 'Ai là Triệu Phú (15 câu hỏi tăng dần)'));
+    head.append(element('h3', 'exam-heading', 'Ai là Triệu Phú'));
     if (onBack) head.append(button('← Hub Arena', 'exam-tab', () => { stopTimer(); onBack(); }));
 
     const desc = element('p', 'exam-message', 'Trả lời lần lượt tối đa 15 câu hỏi với 3 mốc an toàn (Câu 5, 10, 15) và 3 quyền trợ giúp: 50:50, Hỏi khán giả, Gợi ý chuyên gia.');
@@ -39,7 +39,7 @@ export function renderMillionaire(host, { availableDecks = [], onBack = null } =
     timerCheck.onchange = () => { useTimer = timerCheck.checked; };
     timerOpt.append(timerCheck, document.createTextNode(' Bật đồng hồ 30 giây mỗi câu'));
 
-    const startBtn = button('Bắt đầu chinh phục 15 câu →', 'primary-btn', () => {
+    const startBtn = button('Bắt đầu', 'primary-btn', () => {
       const deck = deckList.find((d) => d.id === select.value) || deckList[0];
       if (!deck) return;
       startRun(deck);
@@ -112,7 +112,7 @@ export function renderMillionaire(host, { availableDecks = [], onBack = null } =
           : safeMilestoneBefore(index);
       const resultCard = element('article', 'mill-qcard mill-end');
       resultCard.append(
-        element('h3', '', won ? 'XUẤT SẮC! CHINH PHỤC ĐỈNH CAO!' : stopped ? 'DỪNG CUỘC CHƠI BẢO TOÀN ĐIỂM' : 'RẤT TIẾC, DỪNG BƯỚC TẠI ĐÂY'),
+        element('h3', '', won ? 'Hoàn thành toàn bộ 15 câu' : stopped ? 'Đã dừng cuộc chơi' : 'Kết thúc lượt chơi'),
         element('p', 'mill-prize-big', prizeStep ? `Thành tích: ${prizeStep.reward} (${prizeStep.points} điểm)` : 'Chưa vượt qua mốc an toàn đầu tiên (0 điểm)'),
         element('p', 'exam-message', reasonText),
         (() => {
@@ -224,7 +224,7 @@ export function renderMillionaire(host, { availableDecks = [], onBack = null } =
               }, 1400);
               return;
             }
-            msgEl.textContent = `✓ Chính xác! Bạn đạt mốc ${stepInfo?.reward || ''}!`;
+            msgEl.textContent = `Chính xác — đạt mốc ${stepInfo?.reward || ''}.`;
             setTimeout(() => {
               if (!wrap.isConnected) return;
               index++;
@@ -239,7 +239,7 @@ export function renderMillionaire(host, { availableDecks = [], onBack = null } =
       const showHelperBox = () => {
         helperBanner.replaceChildren();
         if (audienceData) {
-          helperBanner.append(element('strong', '', 'Khảo sát khán giả giả lập:'));
+          helperBanner.append(element('strong', '', 'Ý kiến khán giả:'));
           const bars = element('div', 'mill-aud-bars');
           for (const letter of 'ABCD') {
             if (audienceData[letter] == null) continue;

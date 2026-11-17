@@ -44,7 +44,7 @@ export function renderArena() {
   const hero = element('section', 'hero exam-hero');
   hero.append(
     element('h2', 'hero-title', 'Đấu trường học tập đa môn'),
-    element('p', 'hero-subtitle', 'Minigame Online & Offline: Đối kháng 200 HP, Tiếng Anh phong cách Quizlet, Ai là Triệu Phú 15 câu & Đấu trường 100 quét mã QR.')
+    element('p', 'hero-subtitle', 'Lựa chọn chế độ Đối kháng, ôn luyện Tiếng Anh, Ai là Triệu Phú hoặc Đấu trường 100 theo bộ đề môn học.')
   );
   const body = element('div', 'arena-body');
   root.append(hero, body);
@@ -107,36 +107,36 @@ export function renderArena() {
 
     const filterBar = element('div', 'arena-hub-filters');
     let connFilter = 'all'; // 'all' | 'online' | 'offline'
-    const btnAll = button('Tất cả chế độ', 'exam-tab selected', () => setFilter('all'));
-    const btnOnline = button('Chơi Online (Nhiều người)', 'exam-tab', () => setFilter('online'));
-    const btnOffline = button('Tự luyện Offline (Chơi ngay)', 'exam-tab', () => setFilter('offline'));
+    const btnAll = button('Tất cả', 'exam-tab selected', () => setFilter('all'));
+    const btnOnline = button('Chơi trực tuyến', 'exam-tab', () => setFilter('online'));
+    const btnOffline = button('Tự luyện', 'exam-tab', () => setFilter('offline'));
     filterBar.append(btnAll, btnOnline, btnOffline);
 
     const gamesGrid = element('div', 'arena-games-grid');
     const gameCards = [
       {
-        id: 'battle', tag: 'ONLINE & OFFLINE · ĐA MÔN', tags: ['online', 'offline'], accent: 'is-emerald',
-        title: 'Đối kháng 200 HP',
-        desc: 'Đấu Online 2–8 người theo mã phòng/QR (đã sửa lỗi vào phòng trên server) hoặc luyện 1v1 Offline với AI Bot.',
+        id: 'battle', tag: 'Trực tuyến & tự luyện', tags: ['online', 'offline'], accent: 'is-emerald',
+        title: 'Đối kháng',
+        desc: 'Trả lời nhanh theo vòng cùng bạn bè qua mã phòng hoặc tự luyện với máy theo bộ đề môn học.',
         cta: 'Vào Đối kháng'
       },
       {
-        id: 'english', tag: 'OFFLINE · QUIZLET STYLE', tags: ['offline'], accent: 'is-indigo',
-        title: 'Tiếng Anh Studio (5-in-1)',
-        desc: 'Luyện qua Flashcard 3D lật thẻ + phát âm, Sổ từ vựng tự thêm từ, Trắc nghiệm, Viết lại câu & 10+ chuyên đề Ngữ pháp.',
-        cta: 'Mở Tiếng Anh Studio'
+        id: 'english', tag: 'Từ vựng & ngữ pháp', tags: ['offline'], accent: 'is-indigo',
+        title: 'Tiếng Anh',
+        desc: 'Ôn từ vựng qua thẻ ghi nhớ, phát âm, sổ từ cá nhân, trắc nghiệm, viết lại câu và chuyên đề ngữ pháp.',
+        cta: 'Vào Tiếng Anh'
       },
       {
-        id: 'millionaire', tag: 'OFFLINE / BỘ ĐỀ GIÁO VIÊN', tags: ['offline', 'online'], accent: 'is-amber',
-        title: 'Ai là Triệu Phú (15 câu)',
-        desc: 'Chinh phục 15 câu hỏi tăng dần qua 3 mốc an toàn với quyền trợ giúp 50:50, Hỏi khán giả và Gợi ý chuyên gia.',
-        cta: 'Chơi Ai là Triệu Phú'
+        id: 'millionaire', tag: '15 câu hỏi', tags: ['offline', 'online'], accent: 'is-amber',
+        title: 'Ai là Triệu Phú',
+        desc: 'Trả lời lần lượt 15 câu trắc nghiệm theo độ khó tăng dần với 3 quyền trợ giúp và 3 mốc an toàn.',
+        cta: 'Vào Ai là Triệu Phú'
       },
       {
-        id: 'hundred', tag: 'ONLINE · QUÉT MÃ QR', tags: ['online'], accent: 'is-rose',
-        title: 'Đấu trường 100 (Loại trực tiếp)',
-        desc: 'Giáo viên mở phòng tạo mã QR để học sinh quét vào thi Trắc nghiệm hoặc Nhập đáp án; sai bị loại tới người thắng cuối.',
-        cta: 'Mở Đấu trường 100'
+        id: 'hundred', tag: 'Nhiều người chơi · QR', tags: ['online'], accent: 'is-rose',
+        title: 'Đấu trường 100',
+        desc: 'Mở phòng bằng mã QR cho nhiều người cùng tham gia; trả lời sai sẽ bị loại cho tới khi còn người thắng cuối cùng.',
+        cta: 'Vào Đấu trường 100'
       }
     ];
 
@@ -165,13 +165,13 @@ export function renderArena() {
     const decksHead = element('div', 'arena-decks-head');
     const headTitle = element('div', '');
     headTitle.append(
-      element('h3', 'exam-heading', 'Kho đề nhanh đa môn (Giáo viên giao đề · Chơi tức thì)'),
-      element('p', 'exam-message', 'Giáo viên soạn nhanh bộ câu hỏi (Toán, Hóa, Anh, Lý, Sinh…) để học sinh mở ngay trong Triệu Phú, Đối kháng hoặc Đấu trường 100.')
+      element('h3', 'exam-heading', 'Bộ đề câu hỏi theo môn'),
+      element('p', 'exam-message', 'Tạo hoặc chọn bộ câu hỏi nhiều môn để mở phòng Đối kháng, Ai là Triệu Phú hoặc Đấu trường 100.')
     );
     let subjectFilter = 'Tất cả';
     const creatorWrap = element('div', 'arena-deck-creator');
     creatorWrap.hidden = true;
-    const toggleCreateBtn = button('+ Giáo viên tạo bộ đề nhanh', 'primary-btn', () => {
+    const toggleCreateBtn = button('+ Tạo bộ đề', 'primary-btn', () => {
       creatorWrap.hidden = !creatorWrap.hidden;
     });
     decksHead.append(headTitle, toggleCreateBtn);
@@ -242,15 +242,15 @@ export function renderArena() {
     deckActions.append(
       button('+ Thêm câu Trắc nghiệm', 'exam-tab', () => { qDrafts.push({ kind: 'mcq', prompt: '', options: ['', '', '', ''], answer: 'A' }); drawDrafts(); }),
       button('+ Thêm câu Nhập đáp án', 'exam-tab', () => { qDrafts.push({ kind: 'short', prompt: '', options: [], answer: '' }); drawDrafts(); }),
-      button('Lưu Online (giao cho cả lớp)', 'primary-btn', async () => {
-        deckMsg.textContent = 'Đang lưu bộ đề lên máy chủ…';
+      button('Lưu trực tuyến', 'primary-btn', async () => {
+        deckMsg.textContent = 'Đang lưu bộ đề lên hệ thống…';
         try {
           await apiCall('deck-create', { title: deckTitleIn.value, subject: deckSubjSel.value, questions: qDrafts });
-          deckMsg.textContent = '✓ Đã giao bộ đề thành công lên kho dùng chung!';
+          deckMsg.textContent = 'Đã lưu bộ đề lên hệ thống.';
           await refreshDecks(drawDeckGrid);
         } catch (e) { deckMsg.textContent = e.message; }
       }),
-      button('Lưu Offline trên máy này', 'focus-btn', () => {
+      button('Lưu trên máy', 'focus-btn', () => {
         const title = deckTitleIn.value.trim();
         if (!title || qDrafts.length < 1) { deckMsg.textContent = 'Nhập tên đề và ít nhất 1 câu hỏi.'; return; }
         const local = loadLocalDecks();
@@ -263,7 +263,7 @@ export function renderArena() {
           questions: qDrafts.map((q) => ({ ...q, options: [...(q.options || [])] }))
         });
         saveLocalDecks(local);
-        deckMsg.textContent = '✓ Đã lưu bộ đề offline trên trình duyệt!';
+        deckMsg.textContent = 'Đã lưu bộ đề trên trình duyệt.';
         drawDeckGrid();
       })
     );
@@ -279,7 +279,7 @@ export function renderArena() {
       decksGrid.replaceChildren();
       const filtered = allDecks().filter((d) => subjectFilter === 'Tất cả' || d.subject === subjectFilter);
       if (!filtered.length) {
-        decksGrid.append(element('p', 'exam-message', 'Chưa có bộ đề cho môn này — bạn có thể bấm "+ Giáo viên tạo bộ đề nhanh" ở trên.'));
+        decksGrid.append(element('p', 'exam-message', 'Chưa có bộ đề cho môn này — bấm "+ Tạo bộ đề" ở trên để thêm mới.'));
         return;
       }
       for (const d of filtered) {
