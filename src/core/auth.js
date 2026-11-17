@@ -1,48 +1,33 @@
 import { AppStore } from './store.js';
 import { observeAuth, settleRedirect, upsertUserProfile, getUserTheme, consumeRedirectPending, describeAuthError, auth } from './firebase.js';
 import { applyTheme } from './theme.js';
-import { getVNDateString } from '../../shared/time-utils.js';
 
 export function syncStudyStatsToStore(stats) {
   if (!stats || typeof stats !== 'object') return;
-  const loginStreak = Math.max(0, Math.floor(Number(stats.loginStreak) || 0));
-  const bestLoginStreak = Math.max(Math.floor(Number(stats.bestLoginStreak) || 0), loginStreak);
+  const streak = Math.max(0, Math.floor(Number(stats.streak) || 0));
+  const bestStreak = Math.max(Math.floor(Number(stats.bestStreak) || 0), streak);
   AppStore.set('studyStats', {
     totalSeconds: Math.max(0, Math.floor(Number(stats.totalSeconds) || 0)),
     todaySeconds: Math.max(0, Math.floor(Number(stats.todaySeconds) || 0)),
-    streak: Math.max(0, Math.floor(Number(stats.streak) || 0)),
-    loginStreak,
-    bestLoginStreak,
+    streak,
+    bestStreak,
     title: stats.title || '',
     sharing: Boolean(stats.sharing)
   });
-  AppStore.set('loginStreak', loginStreak);
-  AppStore.set('bestLoginStreak', bestLoginStreak);
 }
 
 async function syncDailyLoginCheckin(user) {
   if (!user?.uid) return;
-  const dayKey = getVNDateString();
-  const cacheKey = `htvvm-login-checkin-v2:${user.uid}:${dayKey}`;
-  let alreadyCheckedToday = false;
-  try { alreadyCheckedToday = localStorage.getItem(cacheKey) === '1'; } catch {}
   try {
     const token = await user.getIdToken();
     const res = await fetch('/api/study-tracker', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: alreadyCheckedToday ? 'status' : 'login-checkin' }),
+      headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store'
     });
     if (!res.ok) return;
     const data = await res.json().catch(() => null);
-    if (data?.stats) {
-      syncStudyStatsToStore(data.stats);
-      if ((Number(data.stats.loginStreak) || 0) >= 1) {
-        try { localStorage.setItem(cacheKey, '1'); } catch {}
-      }
-    }
-  } catch { /* non-blocking background streak sync */ }
+    if (data?.stats) syncStudyStatsToStore(data.stats);
+  } catch { /* non-blocking background stats sync */ }
 }
 
 let generation = 0;

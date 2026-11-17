@@ -930,12 +930,11 @@ export function renderFocus() {
     const totalSeconds = (statsSnapshot.totalSeconds || 0) + liveSeconds;
     const todaySeconds = (statsSnapshot.todaySeconds || 0) + liveSeconds;
     const studyStreak = Math.max(statsSnapshot.streak || 0, !auth?.currentUser && todaySeconds > 0 ? 1 : 0);
-    const loginStreak = Math.max(statsSnapshot.loginStreak || 0, Number(AppStore.get('loginStreak')) || 0);
     stats.replaceChildren();
     for (const [label, val] of [
       ['Hôm nay', fmtFull(todaySeconds)],
       ['Tổng giờ', fmtFull(totalSeconds)],
-      ['Chuỗi (Học / ĐN)', `${studyStreak} / ${loginStreak} ngày`],
+      ['Chuỗi học', `${studyStreak} ngày`],
       ['Danh hiệu', titleFor(totalSeconds)]
     ]) {
       const item = element('div', 'focus-stat');

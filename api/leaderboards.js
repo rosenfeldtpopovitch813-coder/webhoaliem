@@ -23,24 +23,23 @@ export default async function handler(req, res) {
         totalSeconds: st.totalSeconds,
         todaySeconds: st.todaySeconds,
         streak: st.streak,
-        loginStreak: st.loginStreak,
+        bestStreak: st.bestStreak,
         title: st.title
       });
-      if (st.loginStreak > 0) {
+      if (st.streak > 0) {
         streakRows.push({
           uid,
           name,
-          loginStreak: st.loginStreak,
-          bestLoginStreak: st.bestLoginStreak,
-          totalSeconds: st.totalSeconds,
           streak: st.streak,
+          bestStreak: st.bestStreak,
+          totalSeconds: st.totalSeconds,
           title: st.title
         });
       }
     }
 
     rows.sort((a, b) => b.totalSeconds - a.totalSeconds || b.todaySeconds - a.todaySeconds);
-    streakRows.sort((a, b) => b.loginStreak - a.loginStreak || b.bestLoginStreak - a.bestLoginStreak || b.totalSeconds - a.totalSeconds);
+    streakRows.sort((a, b) => b.streak - a.streak || b.bestStreak - a.bestStreak || b.totalSeconds - a.totalSeconds);
 
     const me = all[user.uid] && typeof all[user.uid] === 'object' ? all[user.uid] : {};
     return res.json({

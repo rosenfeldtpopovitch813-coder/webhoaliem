@@ -16,7 +16,8 @@ export function applyHeartbeat(current,now,sessionId,name){const day=getVNDayInd
  const dailyMs=(dayChanged?0:(state.dailyMs||0))+added;
  const totalMs=(state.totalMs||0)+added;
  const streak=added>0?streakNext(state.lastStudyDay,state.streak||0,now):state.streak||0;
- return {state:{...state,displayName:name,dayIndex:day,dailyMs,totalMs,streak,lastStudyDay:added>0?day:state.lastStudyDay??null,session:{id:sessionId,lastPing:now}},accepted:true,added};
+ const bestStreak=Math.max(Math.floor(Number(state.bestStreak)||0),streak);
+ return {state:{...state,displayName:name,dayIndex:day,dailyMs,totalMs,streak,bestStreak,lastStudyDay:added>0?day:state.lastStudyDay??null,session:{id:sessionId,lastPing:now}},accepted:true,added};
 }
 
 /** Credit bounded off-tab Focus Mode study time up to elapsed clock delta and MAX_FOCUS_AWAY_MS. */
@@ -34,6 +35,7 @@ export function claimFocusAway(current, now, sessionId, name, requestedAwayMs) {
  const dailyMs = (dayChanged ? 0 : (state.dailyMs || 0)) + added;
  const totalMs = (state.totalMs || 0) + added;
  const streak = added > 0 ? streakNext(state.lastStudyDay, state.streak || 0, now) : state.streak || 0;
+ const bestStreak = Math.max(Math.floor(Number(state.bestStreak) || 0), streak);
  return {
   state: {
    ...state,
@@ -42,6 +44,7 @@ export function claimFocusAway(current, now, sessionId, name, requestedAwayMs) {
    dailyMs,
    totalMs,
    streak,
+   bestStreak,
    lastStudyDay: added > 0 ? day : state.lastStudyDay ?? null,
    session: { id: sessionId, lastPing: now }
   },
@@ -175,6 +178,7 @@ export function summarizeStudyStats(s = {}, now = Date.now()) {
   const totalSeconds = Math.floor((s?.totalMs || 0) / 1000);
   const todaySeconds = s?.dayIndex === day ? Math.floor((s?.dailyMs || 0) / 1000) : 0;
   const streak = Number(s?.lastStudyDay) >= day - 1 ? Math.max(0, Math.floor(Number(s?.streak) || 0)) : 0;
+  const bestStreak = Math.max(Math.floor(Number(s?.bestStreak) || 0), streak);
   const rawLoginStreak = activeLoginStreakFor(s, day);
   const loginStreak = !s?.loginSeeded && streak > rawLoginStreak ? streak : rawLoginStreak;
   const bestLoginStreak = Math.max(Math.floor(Number(s?.bestLoginStreak) || 0), loginStreak, streak);
@@ -182,6 +186,7 @@ export function summarizeStudyStats(s = {}, now = Date.now()) {
     totalSeconds,
     todaySeconds,
     streak,
+    bestStreak,
     loginStreak,
     bestLoginStreak,
     lastStudyDay: s?.lastStudyDay ?? null,
