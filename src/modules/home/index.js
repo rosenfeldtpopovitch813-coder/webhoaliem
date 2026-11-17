@@ -8,7 +8,7 @@ const modules = [
   ['exam-paper', 'Soạn đề A4', 'Soạn đề nhiều trang A4 như Word, công thức Toán/Hóa, xuất .docx & PDF', '/exam-paper'],
   ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay độc lập, dựng hình 3D, vẽ đồ thị và viết lên PDF', '/whiteboard'],
   ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR tinh gọn bên phải, chấm điểm tự động', '/exam'],
-  ['arena', 'Chem Arena', 'Đấu trường Hóa học đối kháng thời gian thực', '/arena'],
+  ['arena', 'Đấu trường học tập', 'Đối kháng đa môn, Tiếng Anh Quizlet, Ai là Triệu Phú & Đấu trường 100', '/arena'],
   ['handbook', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
   ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
   ['library', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
@@ -32,14 +32,44 @@ export function renderHome() {
   const boardIcon = element('span', 'home-board-icon');
   boardIcon.append(icon('trophy', 22));
   boardTitle.append(boardIcon, element('div', '', ''));
-  boardTitle.lastChild.append(element('h3', 'section-heading', 'Bảng xếp hạng'), element('p', 'home-board-subtitle', 'Xếp hạng thời gian học do người dùng tự nguyện chia sẻ.'));
+  const boardSubtitle = element('p', 'home-board-subtitle', 'Tự nguyện chia sẻ giờ học và chuỗi đăng nhập liên tiếp.');
+  boardTitle.lastChild.append(element('h3', 'section-heading', 'Bảng xếp hạng'), boardSubtitle);
   const refresh = button('Làm mới', 'focus-btn', () => loadBoard());
   boardHeader.append(boardTitle, refresh);
+
+  const boardToolbar = element('div', 'home-board-toolbar');
+  const boardTabs = element('div', 'home-board-tabs');
+  let activeBoardTab = 'study'; // 'study' | 'login'
+  const tabStudyBtn = button('Giờ tập trung', 'home-board-tab is-active', () => switchBoardTab('study'));
+  const tabLoginBtn = button('', 'home-board-tab', () => switchBoardTab('login'));
+  tabLoginBtn.append(icon('flame', 14), document.createTextNode(' Chuỗi đăng nhập'));
+  boardTabs.append(tabStudyBtn, tabLoginBtn);
+
+  const shareWrap = element('label', 'home-board-optin');
+  const shareToggle = document.createElement('input');
+  shareToggle.type = 'checkbox';
+  shareWrap.append(shareToggle, document.createTextNode(' Hiện tôi trên BXH'));
+  boardToolbar.append(boardTabs, shareWrap);
+
+  const myStreakBanner = element('div', 'home-board-my-streak');
+  myStreakBanner.hidden = true;
   const board = element('div', 'home-board-list');
-  boardPanel.append(boardHeader, board);
+  boardPanel.append(boardHeader, boardToolbar, myStreakBanner, board);
+
+  let cachedBoardData = null;
+  function switchBoardTab(nextTab) {
+    activeBoardTab = nextTab;
+    tabStudyBtn.classList.toggle('is-active', nextTab === 'study');
+    tabLoginBtn.classList.toggle('is-active', nextTab === 'login');
+    renderBoardRows();
+  }
+
   let alive = true;
-  const unsubscribeUser = AppStore.subscribe('user', () => { if (alive) loadBoard(); });
-  const watcher = new MutationObserver(() => { if (!wrap.isConnected) { alive = false; unsubscribeUser(); watcher.disconnect(); } });
+  const unsubscribeUser = AppStore.subscribe('user', () => { if (alive) { loadBoard(); loadExamProgress(); } });
+  const unsubscribeStreak = AppStore.subscribe('loginStreak', () => { if (alive) loadBoard(); });
+  const watcher = new MutationObserver(() => {
+    if (!wrap.isConnected) { alive = false; unsubscribeUser(); unsubscribeStreak(); watcher.disconnect(); }
+  });
   watcher.observe(document.getElementById('main-content') || document.body, { childList: true });
   const examProgress = element('section', 'home-exam-stats-panel');
   const examProgressHeader = element('div', 'home-exam-stats-header');
@@ -63,6 +93,54 @@ export function renderHome() {
   }
   wrap.append(grid);
 
+  shareToggle.addEventListener('change', async () => {
+    const user = auth?.currentUser;
+    if (!user) {
+      shareToggle.checked = false;
+      return;
+    }
+    shareToggle.disabled = true;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/study-tracker', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sharing', enabled: shareToggle.checked }),
+        cache: 'no-store'
+      });
+      if (res.ok) await loadBoard();
+    } finally {
+      if (alive) shareToggle.disabled = false;
+    }
+  });
+
+  function renderBoardRows() {
+    board.replaceChildren();
+    if (!cachedBoardData) return;
+    const list = activeBoardTab === 'login' ? (cachedBoardData.streakRows || []) : (cachedBoardData.rows || []);
+    if (!list.length) {
+      const emptyMsg = activeBoardTab === 'login'
+        ? 'Chưa có thành viên bật chia sẻ chuỗi đăng nhập. Hãy tick "Hiện tôi trên BXH" để góp mặt!'
+        : 'Chưa có người bật chia sẻ thời gian học. Bạn có thể bật chia sẻ tại đây hoặc trong Góc tập trung.';
+      board.append(element('p', 'home-board-empty', emptyMsg));
+      return;
+    }
+    list.slice(0, 10).forEach((row, index) => {
+      const line = element('div', `home-board-row${index < 3 ? ` top-${index + 1}` : ''}`);
+      const rank = element('span', 'home-board-rank', String(index + 1));
+      const details = element('div', 'home-board-person');
+      const subText = activeBoardTab === 'login'
+        ? `Kỷ lục ${row.bestLoginStreak || row.loginStreak || 1} ngày · ${row.title || 'Đang học'}`
+        : `${row.title || 'Đang học'}${row.loginStreak ? ` · Đăng nhập ${row.loginStreak} ngày` : ''}`;
+      details.append(element('strong', '', row.name || 'Người học'), element('small', '', subText));
+      const metric = activeBoardTab === 'login'
+        ? `${row.loginStreak || 0} ngày`
+        : fmt(Number(row.totalSeconds) || 0);
+      line.append(rank, details, element('strong', 'home-board-time', metric));
+      board.append(line);
+    });
+  }
+
   async function loadBoard() {
     if (!alive) return;
     refresh.disabled = true; refresh.textContent = 'Đang tải…';
@@ -70,27 +148,32 @@ export function renderHome() {
     try {
       const user = auth?.currentUser;
       if (!user) {
-        board.replaceChildren(element('p', 'home-board-empty', 'Đăng nhập Google để xem bảng xếp hạng. Chỉ người bật chia sẻ trong Góc tập trung mới xuất hiện tại đây.'));
+        cachedBoardData = null;
+        myStreakBanner.hidden = true;
+        shareToggle.checked = false;
+        shareToggle.disabled = true;
+        board.replaceChildren(element('p', 'home-board-empty', 'Đăng nhập Google để theo dõi chuỗi đăng nhập liên tiếp và xem bảng xếp hạng.'));
         return;
       }
+      shareToggle.disabled = false;
       const token = await user.getIdToken();
       const response = await fetch('/api/leaderboards', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
       if (!alive) return;
-      if (!response.ok) throw new Error(data.error || 'Không tải được bảng xếp hạng.')
-      board.replaceChildren();
-      if (!data.rows?.length) {
-        board.append(element('p', 'home-board-empty', 'Chưa có người bật chia sẻ thời gian học. Bạn có thể bật chia sẻ trong Góc tập trung.'));
-        return;
-      }
-      data.rows.slice(0, 10).forEach((row, index) => {
-        const line = element('div', `home-board-row${index < 3 ? ` top-${index + 1}` : ''}`);
-        const rank = element('span', 'home-board-rank', index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : String(index + 1));
-        const details = element('div', 'home-board-person');
-        details.append(element('strong', '', row.name || 'Người học'), element('small', '', row.title || 'Đang học'));
-        line.append(rank, details, element('strong', 'home-board-time', fmt(Number(row.totalSeconds) || 0)));
-        board.append(line);
-      });
+      if (!response.ok) throw new Error(data.error || 'Không tải được bảng xếp hạng.');
+      cachedBoardData = data;
+      const my = data.myStats || {};
+      shareToggle.checked = Boolean(my.sharing);
+      const streakNow = Math.max(Number(my.loginStreak) || 0, Number(AppStore.get('loginStreak')) || 0);
+      const streakBest = Math.max(Number(my.bestLoginStreak) || 0, streakNow);
+      myStreakBanner.hidden = false;
+      myStreakBanner.replaceChildren(
+        icon('flame', 15),
+        element('span', '', `Chuỗi đăng nhập của bạn: `),
+        element('strong', '', `${streakNow} ngày liên tiếp`),
+        element('small', '', `(Kỷ lục ${streakBest} ngày)`)
+      );
+      renderBoardRows();
     } catch (error) {
       if (alive) board.replaceChildren(element('p', 'home-board-empty', error.message || 'Không tải được bảng xếp hạng.'));
     } finally { if (alive) { refresh.disabled = false; refresh.textContent = 'Làm mới'; } }

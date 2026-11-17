@@ -17,6 +17,7 @@ import {
   MAX_FOCUS_AWAY_MS,
   normalizeFocusTarget,
   isUrlAllowedInFocus,
+  rankProgressFor,
   titleFor
 } from '../../../shared/study-core.js';
 import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, validFocusDuration } from '../../../shared/focus-timer.js';
@@ -317,6 +318,16 @@ export function renderFocus() {
     item.append(element('small', '', label), element('strong', '', val));
     stats.append(item);
   }
+  const rankRageBox = element('div', 'focus-rank-rage');
+  const rankRageHead = element('div', 'focus-rank-rage-head');
+  const rankRageTitle = element('strong', 'focus-rank-rage-title', 'Nước tinh khiết → Caffein');
+  const rankRageRemain = element('span', 'focus-rank-rage-remain', 'Còn 01:00:00');
+  rankRageHead.append(rankRageTitle, rankRageRemain);
+  const rankRageTrack = element('div', 'focus-rank-rage-track');
+  const rankRageFill = element('div', 'focus-rank-rage-fill');
+  rankRageTrack.append(rankRageFill);
+  rankRageBox.append(rankRageHead, rankRageTrack);
+
   const stateLine = element('p', 'focus-muted', 'Bắt đầu đồng hồ tập trung để tự động cộng giờ học khi đã đăng nhập.');
   const status = element('p', 'focus-status-banner', 'Sẵn sàng ghi nhận giờ học.');
   const actions = element('div', 'focus-actions');
@@ -573,7 +584,7 @@ export function renderFocus() {
   });
   musicBox.append(musicHead, audioInput, audioBar);
 
-  statsBox.append(stats, stateLine, status, actions, shareLabel, focusModeBox, musicBox);
+  statsBox.append(stats, rankRageBox, stateLine, status, actions, shareLabel, focusModeBox, musicBox);
 
   // TẦNG 2: KHÔNG GIAN LÀM VIỆC TOÀN CHIỀU RỘNG (TAB CHUYỂN ĐỔI LINH HOẠT)
   const workspaceHub = element('section', 'focus-card focus-workspace-hub');
@@ -905,6 +916,18 @@ export function renderFocus() {
       item.append(element('small', '', label), element('strong', '', val));
       stats.append(item);
     }
+    const rp = rankProgressFor(totalSeconds);
+    const pct = Math.round(rp.progressRatio * 100);
+    rankRageBox.classList.toggle('is-charging', isCountingStudy());
+    rankRageBox.classList.toggle('is-max', rp.isMax);
+    if (rp.isMax) {
+      rankRageTitle.textContent = `${rp.currentTitle} · Đỉnh cao tối đa`;
+      rankRageRemain.textContent = '100% đầy thanh nộ';
+    } else {
+      rankRageTitle.textContent = `Thanh nộ hạng: ${rp.currentTitle} → ${rp.nextTitle}`;
+      rankRageRemain.textContent = `${pct}% · Còn ${fmtFull(rp.remainingSeconds)}`;
+    }
+    rankRageFill.style.width = `${pct}%`;
     shareInput.checked = !!statsSnapshot.sharing;
     if (todaySeconds >= 18000) {
       stateLine.textContent = 'Bạn đã hoàn thành 5 giờ học hôm nay. Hãy nghỉ ngơi và vận động nhẹ.';

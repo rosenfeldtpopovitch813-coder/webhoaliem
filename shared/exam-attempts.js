@@ -1,6 +1,22 @@
 import { gradeExam } from './exam-grading.js';
 
 export const SUBMISSION_GRACE_MS = 30_000;
+export const MAX_EXAM_ATTEMPTS_LIMIT = 50;
+
+export function parseMaxAttempts(raw) {
+  if (raw === null || raw === undefined || raw === '') return 0;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_EXAM_ATTEMPTS_LIMIT) {
+    throw Error(`Giới hạn số lần làm phải là số nguyên từ 0 đến ${MAX_EXAM_ATTEMPTS_LIMIT} (0 = không giới hạn).`);
+  }
+  return n;
+}
+
+export function hasRemainingAttempts(maxAttempts, completedCount) {
+  const limit = Math.max(0, Math.floor(Number(maxAttempts) || 0));
+  if (limit === 0) return true;
+  return Math.max(0, Math.floor(Number(completedCount) || 0)) < limit;
+}
 
 export function isExamLocked(meta, now = Date.now()) {
   if (!meta || typeof meta !== 'object') return false;

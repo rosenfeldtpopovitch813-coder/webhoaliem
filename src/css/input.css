@@ -1336,3 +1336,174 @@ body.is-exam-lockdown .exam-pdf-pages{max-height:calc(100vh - 134px)}
 .bg-music-mini-close:hover{opacity:1;color:var(--text);border-color:var(--accent)}
 body.is-dragging-music-fab iframe{pointer-events:none}
 body.is-exam-lockdown .bg-music-mini{display:none!important}
+
+/* Home Leaderboard Top 1/2/3 Gold-Silver-Bronze & Login Streak */
+.home-board-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.home-board-tabs{display:inline-flex;gap:6px;flex-wrap:wrap}
+.home-board-tab{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;border:1px solid var(--stroke);background:var(--panel-2);color:var(--muted);font-size:11.5px;font-weight:700}
+.home-board-tab.is-active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.home-board-optin{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);cursor:pointer}
+.home-board-my-streak{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--stroke));background:color-mix(in srgb,var(--accent) 10%,var(--panel-2));font-size:12px}
+.home-board-my-streak svg{color:#f59e0b}
+.home-board-list{display:grid;gap:8px}
+.home-board-row{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 12px;border-radius:13px;border:1px solid var(--stroke);background:var(--panel-2)}
+.home-board-rank{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--panel);border:1px solid var(--stroke);font-weight:900;font-size:13px;color:var(--text)}
+.home-board-row.top-1{background:linear-gradient(120deg,color-mix(in srgb,#f59e0b 26%,var(--panel)),color-mix(in srgb,#fde047 12%,var(--panel-2)));border-color:color-mix(in srgb,#f59e0b 65%,var(--stroke))}
+.home-board-row.top-1 .home-board-rank{background:linear-gradient(135deg,#f59e0b,#eab308);color:#111827;border-color:#fde047;font-size:15px}
+.home-board-row.top-2{background:linear-gradient(120deg,color-mix(in srgb,#94a3b8 24%,var(--panel)),color-mix(in srgb,#e2e8f0 10%,var(--panel-2)));border-color:color-mix(in srgb,#94a3b8 60%,var(--stroke))}
+.home-board-row.top-2 .home-board-rank{background:linear-gradient(135deg,#cbd5e1,#94a3b8);color:#0f172a;border-color:#e2e8f0;font-size:14.5px}
+.home-board-row.top-3{background:linear-gradient(120deg,color-mix(in srgb,#c2410c 22%,var(--panel)),color-mix(in srgb,#d97706 11%,var(--panel-2)));border-color:color-mix(in srgb,#d97706 55%,var(--stroke))}
+.home-board-row.top-3 .home-board-rank{background:linear-gradient(135deg,#d97706,#b45309);color:#fff7ed;border-color:#f59e0b;font-size:14px}
+
+/* Focus Zone Rank Rage Progress Bar */
+.focus-rank-rage{display:grid;gap:7px;padding:11px 13px;border-radius:13px;border:1px solid var(--stroke);background:var(--panel-2)}
+.focus-rank-rage.is-charging{border-color:color-mix(in srgb,var(--accent) 55%,var(--stroke))}
+.focus-rank-rage-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.focus-rank-rage-remain{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
+.focus-rank-rage-track{width:100%;height:11px;border-radius:999px;background:var(--panel);border:1px solid var(--stroke);overflow:hidden}
+.focus-rank-rage-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,var(--accent),#f59e0b);transition:width .4s ease}
+.focus-rank-rage.is-max .focus-rank-rage-fill{background:linear-gradient(90deg,#f59e0b,#10b981)}
+
+/* Exam Room Student Review */
+.exam-review-attempts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.exam-review-doc-wrap{display:grid;gap:10px;margin:10px 0}
+.exam-review-list{display:grid;gap:12px;margin:14px 0}
+.exam-review-card{display:grid;gap:9px;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel-2)}
+.exam-review-card.is-correct{border-color:color-mix(in srgb,#10b981 55%,var(--stroke))}
+.exam-review-card.is-wrong{border-color:color-mix(in srgb,#f43f5e 50%,var(--stroke))}
+.exam-review-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.exam-review-badge{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800}
+.exam-review-badge.is-correct{background:color-mix(in srgb,#10b981 18%,var(--panel));color:#10b981}
+.exam-review-badge.is-partial{background:color-mix(in srgb,#f59e0b 18%,var(--panel));color:#f59e0b}
+.exam-review-badge.is-wrong{background:color-mix(in srgb,#f43f5e 16%,var(--panel));color:#fb7185}
+.exam-review-options{display:grid;gap:6px}
+.exam-review-opt{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 11px;border-radius:10px;border:1px solid var(--stroke);background:var(--panel);font-size:12.5px}
+.exam-review-opt.is-correct{border-color:#10b981;background:color-mix(in srgb,#10b981 13%,var(--panel))}
+.exam-review-opt.is-wrong{border-color:#fb7185;background:color-mix(in srgb,#f43f5e 12%,var(--panel))}
+.exam-review-opt-text{min-width:0}
+.exam-review-opt-text p{margin:0}
+.exam-review-opt-tag{font-size:10.5px;font-weight:800;flex:none;color:var(--muted)}
+.exam-review-short{margin:0;padding:8px 11px;border-radius:9px;background:var(--panel);font-size:12.5px;font-weight:600}
+
+/* Arena Learning Hub, Battle, Millionaire, Hundred, English Studio */
+.arena-body{display:grid;gap:18px}
+.arena-hub-filters{display:flex;flex-wrap:wrap;gap:8px}
+.arena-games-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.arena-game-card{display:grid;gap:10px;align-content:space-between;padding:18px;border-radius:18px;border:1px solid var(--stroke);background:var(--panel);box-shadow:var(--shadow-card)}
+.arena-game-card.is-emerald{border-top:4px solid #10b981}
+.arena-game-card.is-indigo{border-top:4px solid #6366f1}
+.arena-game-card.is-amber{border-top:4px solid #f59e0b}
+.arena-game-card.is-rose{border-top:4px solid #f43f5e}
+.arena-game-tag,.arena-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.08em;color:var(--accent)}
+.arena-game-title{margin:0;font-size:1.15rem}
+.arena-game-desc{margin:0;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.arena-decks-panel{display:grid;gap:12px}
+.arena-decks-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.arena-deck-creator{display:grid;gap:10px;padding:14px;border-radius:14px;border:1px dashed var(--stroke);background:var(--panel-2)}
+.arena-decks-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.arena-deck-card{display:grid;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel-2)}
+.arena-deck-actions{display:flex;flex-wrap:wrap;gap:6px}
+.arena-mode-wrap{display:grid;gap:14px}
+.arena-mode-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.arena-q-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.arena-qr-invite{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel-2);margin-bottom:12px}
+.arena-qr-img{width:140px;height:140px;border-radius:12px;background:#fff;padding:6px;object-fit:contain}
+.arena-qr-img.is-large{width:176px;height:176px}
+.arena-invite-meta{display:grid;gap:8px;flex:1;min-width:220px}
+
+.h100-survivor-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.h100-stage{display:grid;gap:12px;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel-2);margin-bottom:12px}
+.h100-roster{display:grid;gap:8px;margin-top:12px}
+.h100-roster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.h100-player-chip{display:grid;gap:2px;padding:8px 10px;border-radius:10px;border:1px solid var(--stroke);background:var(--panel-2);font-size:12px}
+.h100-player-chip.is-alive{border-color:color-mix(in srgb,#10b981 55%,var(--stroke))}
+.h100-player-chip.is-out{opacity:.55}
+.h100-player-chip.is-me{box-shadow:0 0 0 1.5px var(--accent)}
+
+.mill-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px;align-items:start}
+.mill-stage{display:grid;gap:12px}
+.mill-topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.mill-lifelines{display:flex;flex-wrap:wrap;gap:8px}
+.mill-lifelines .is-used{opacity:.4;text-decoration:line-through}
+.mill-qcard{display:grid;gap:12px;padding:18px;border-radius:16px;border:1px solid var(--stroke);background:var(--panel)}
+.mill-q-prompt{margin:0;font-size:1.15rem;line-height:1.5}
+.mill-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mill-helper-box{display:grid;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--stroke);background:var(--panel-2);font-size:12.5px}
+.mill-aud-bars{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;height:110px;align-items:end;padding-top:8px}
+.mill-aud-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
+.mill-aud-fill{width:100%;max-width:42px;border-radius:6px 6px 0 0;background:var(--accent)}
+.mill-ladder{display:grid;gap:4px;padding:12px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel)}
+.mill-ladder-title{margin:0 0 4px;font-size:12px}
+.mill-step{display:flex;justify-content:space-between;padding:4px 8px;border-radius:7px;font-size:11px;color:var(--muted)}
+.mill-step.is-safe{color:#f59e0b;font-weight:700}
+.mill-step.is-passed{color:var(--accent)}
+.mill-step.is-current{background:var(--accent);color:var(--accent-text);font-weight:800}
+.mill-prize-big{font-size:1.3rem;font-weight:800;color:var(--accent);margin:0}
+
+/* English Studio Quizlet Style */
+.eng-studio{display:grid;gap:14px}
+.eng-hero{display:grid;gap:12px;padding:18px;border-radius:18px;border:1px solid var(--stroke);background:var(--panel)}
+.eng-hero-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.eng-title{margin:4px 0 0;font-size:1.25rem}
+.eng-hero-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.eng-mastery-pill{padding:6px 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--stroke));background:color-mix(in srgb,var(--accent) 12%,var(--panel-2));font-size:11.5px;font-weight:700}
+.eng-search-row{position:relative}
+.eng-search-results{position:absolute;left:0;right:0;top:100%;margin-top:6px;z-index:40;display:grid;gap:4px;max-height:260px;overflow-y:auto;padding:8px;border-radius:12px;border:1px solid var(--stroke);background:var(--panel);box-shadow:var(--shadow-card)}
+.eng-search-hit{text-align:left;padding:8px 10px;border-radius:8px;border:0;background:transparent;color:var(--text);font-size:12px}
+.eng-search-hit:hover{background:var(--panel-2)}
+.eng-subtabs,.eng-theme-pills,.eng-vocab-filters,.eng-fc-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.eng-vocab-filters .exam-input{max-width:260px}
+.eng-fc-progress{display:grid;gap:6px;max-width:640px;margin:0 auto;width:100%}
+.eng-fc-track{height:7px;border-radius:999px;background:var(--panel-2);overflow:hidden}
+.eng-fc-fill{height:100%;background:var(--accent);transition:width .25s}
+.eng-fc-stage{max-width:640px;width:100%;margin:0 auto}
+.eng-fc-scene{perspective:1000px;width:100%;min-height:290px}
+.eng-fc-inner{position:relative;width:100%;min-height:290px;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.22,.61,.36,1);cursor:pointer}
+.eng-fc-inner.is-flipped{transform:rotateY(180deg)}
+.eng-fc-face{position:absolute;inset:0;backface-visibility:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:20px;border-radius:18px;border:1px solid var(--stroke);background:var(--panel);box-shadow:var(--shadow-card)}
+.eng-fc-face.is-back{transform:rotateY(180deg);background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 14%,var(--panel)),var(--panel-2))}
+.eng-fc-face-top,.eng-fc-tools{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.eng-fc-body{text-align:center;display:grid;gap:8px;padding:12px 0}
+.eng-fc-word{margin:0;font-size:clamp(1.6rem,3vw,2.2rem)}
+.eng-fc-ipa{margin:0;font-family:monospace;color:var(--muted)}
+.eng-fc-meaning{margin:0;font-size:1.35rem;color:var(--accent)}
+.eng-fc-example{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.eng-fc-tap-tip{text-align:center;font-size:11px;color:var(--muted)}
+.eng-fc-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:12px}
+.exam-card-icon-btn.is-starred{color:#f59e0b}
+.eng-vocab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.eng-vocab-card{display:grid;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel)}
+.eng-vocab-card.is-mastered{border-color:color-mix(in srgb,#10b981 55%,var(--stroke))}
+.eng-vocab-card.is-learning{border-color:color-mix(in srgb,#f59e0b 55%,var(--stroke))}
+.eng-vocab-top,.eng-vocab-footer{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.eng-vocab-word{display:block;font-size:14.5px}
+.eng-vocab-ipa{font-family:monospace;color:var(--muted);font-size:11.5px}
+.eng-vocab-meaning{margin:6px 0 4px;font-weight:700;color:var(--accent);font-size:13px}
+.eng-vocab-ex{margin:0;font-size:12px;color:var(--muted);line-height:1.45}
+.eng-mini-state{flex:1;padding:5px 7px;border-radius:8px;border:1px solid var(--stroke);background:var(--panel-2);color:var(--muted);font-size:11px;font-weight:700}
+.eng-mini-state.is-active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+
+.eng-grammar-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:14px;align-items:start}
+.eng-grammar-list{display:grid;gap:6px;max-height:660px;overflow-y:auto;padding:10px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel)}
+.eng-grammar-item{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;padding:9px 11px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--text);font-size:12.5px;font-weight:600}
+.eng-grammar-item.is-active{background:color-mix(in srgb,var(--accent) 14%,var(--panel-2));border-color:var(--accent)}
+.eng-grammar-detail{display:grid;gap:12px;padding:18px;border-radius:16px;border:1px solid var(--stroke);background:var(--panel)}
+.eng-grammar-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.eng-formula-box{margin:0;padding:12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--stroke);font-family:monospace;font-size:12px;white-space:pre-wrap;line-height:1.5}
+.eng-callout-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.eng-callout{padding:11px 13px;border-radius:11px;border:1px solid var(--stroke);background:var(--panel-2);font-size:12px}
+.eng-example-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--stroke)}
+.eng-ex-en{margin:0;font-weight:700;font-size:13px}
+.eng-ex-vi{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.eng-miniquiz,.eng-note-box{display:grid;gap:8px;padding:12px;border-radius:12px;border:1px solid var(--stroke);background:var(--panel-2)}
+.eng-miniquiz-opts,.eng-quiz-list{display:grid;gap:8px}
+.eng-quiz-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.exam-option.is-correct{border-color:#10b981!important;background:color-mix(in srgb,#10b981 18%,var(--panel))!important}
+.exam-option.is-wrong{border-color:#fb7185!important;background:color-mix(in srgb,#f43f5e 16%,var(--panel))!important}
+.eng-modal-backdrop{position:fixed;inset:0;z-index:900;background:#0007;display:grid;place-items:center;padding:16px}
+.eng-modal-card{width:min(460px,100%);display:grid;gap:10px;padding:18px;border-radius:16px;border:1px solid var(--stroke);background:var(--panel);box-shadow:var(--shadow-card)}
+.eng-modal-head{display:flex;justify-content:space-between;align-items:center}
+
+@media(max-width:850px){
+  .arena-games-grid,.mill-layout,.mill-options,.eng-grammar-layout,.eng-callout-grid{grid-template-columns:1fr}
+}

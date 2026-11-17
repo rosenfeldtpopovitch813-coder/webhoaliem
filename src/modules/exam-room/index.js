@@ -366,20 +366,29 @@ async function showList(host) {
       if (x.hasActiveAttempt) {
         badgeRow.append(E('span', 'exam-card-pill is-active', 'Đang làm dở'));
       } else if (x.myAttemptsCount > 0) {
-        badgeRow.append(E('span', 'exam-card-pill is-done', `${x.myAttemptsCount} lượt · Cao nhất ${Number(x.myBestScore || 0).toFixed(2)}đ`));
+        badgeRow.append(E('span', 'exam-card-pill is-done', `${x.myAttemptsCount}${x.maxAttempts > 0 ? `/${x.maxAttempts}` : ''} lượt · Cao nhất ${Number(x.myBestScore || 0).toFixed(2)}đ`));
+      } else if (x.maxAttempts > 0) {
+        badgeRow.append(E('span', 'exam-card-pill', `Tối đa ${x.maxAttempts} lượt`));
       }
       const totalQ = (x.counts?.I || 0) + (x.counts?.II || 0) + (x.counts?.III || 0);
       const cardActions = E('div', 'exam-card-actions');
-      const blockedNew = x.isLocked && !x.hasActiveAttempt;
-      const enterLabel = blockedNew
-        ? 'Đã khóa phòng'
-        : x.hasActiveAttempt
-          ? 'Tiếp tục làm bài →'
-          : x.myAttemptsCount > 0
-            ? `Làm lại (Lượt #${x.myAttemptsCount + 1}) →`
-            : 'Vào phòng →';
+      const exhausted = !x.isLocked && x.canRetake === false && !x.hasActiveAttempt;
+      const blockedNew = (x.isLocked || x.canRetake === false) && !x.hasActiveAttempt;
+      const enterLabel = x.hasActiveAttempt
+        ? 'Tiếp tục làm bài →'
+        : x.isLocked
+          ? 'Đã khóa phòng'
+          : exhausted
+            ? `Đã hết ${x.maxAttempts} lượt`
+            : x.myAttemptsCount > 0
+              ? `Làm lại (Lượt #${x.myAttemptsCount + 1}) →`
+              : 'Vào phòng →';
       const enterBtn = button(enterLabel, 'primary-btn', () => begin(host, x.id));
       if (blockedNew) enterBtn.disabled = true;
+
+      const reviewBtn = x.myAttemptsCount > 0
+        ? button('Xem lại bài', 'exam-card-tool-btn', () => reviewHistory(host, x.id))
+        : null;
 
       const rankBtn = button('', 'exam-card-tool-btn', () => showLeaderboard(host, x.id, x.title));
       rankBtn.title = 'Xem bảng xếp hạng của đề này';
@@ -391,14 +400,14 @@ async function showList(host) {
       });
       copyBtn.title = `Sao chép mã ${x.id}`;
       copyBtn.append(icon('copy', 14));
-      cardActions.append(enterBtn, rankBtn, copyBtn);
+      cardActions.append(enterBtn, ...(reviewBtn ? [reviewBtn] : []), rankBtn, copyBtn);
 
       let lockDrawer = null;
       if (x.isOwner) {
         const lockToggleBtn = button('', 'exam-card-tool-btn', () => {
           if (lockDrawer) lockDrawer.hidden = !lockDrawer.hidden;
         });
-        lockToggleBtn.title = 'Cài đặt khóa phòng / hạn nộp bài';
+        lockToggleBtn.title = 'Cài đặt khóa phòng, hạn nộp & số lượt làm';
         lockToggleBtn.append(icon('lock', 14), document.createTextNode(x.isLocked ? ' Mở khóa' : ' Khóa / Hạn'));
 
         const delBtn = button('', 'exam-card-delete-btn', () => {
@@ -415,8 +424,10 @@ async function showList(host) {
           ? 'Phòng thi đang khóa. Chỉ bạn (người tạo đề) mới có quyền mở lại.'
           : 'Đang mở cho học sinh vào làm bài.');
         const dlInput = field('datetime-local', '', toLocalDatetimeInput(x.deadlineAt));
+        const maxAttInput = field('number', '0 = không giới hạn', String(x.maxAttempts || 0));
+        maxAttInput.min = '0'; maxAttInput.max = '50'; maxAttInput.step = '1';
         const drawerBtns = E('div', 'exam-owner-lock-actions');
-        const saveLockBtn = button(x.manualLocked ? 'Mở khóa & Lưu hạn' : 'Lưu hạn nộp', 'exam-tab', async () => {
+        const saveLockBtn = button(x.manualLocked ? 'Mở khóa & Lưu' : 'Lưu cài đặt', 'exam-tab', async () => {
           saveLockBtn.disabled = true;
           try {
             const rawVal = dlInput.value.trim();
@@ -424,7 +435,11 @@ async function showList(host) {
             if (rawVal && (!Number.isFinite(parsedTs) || parsedTs <= Date.now() + 60_000)) {
               throw Error('Hạn nộp mới phải lớn hơn thời điểm hiện tại ít nhất 1 phút.');
             }
-            await api('update-lock', { id: x.id, manualLocked: false, deadlineAt: parsedTs });
+            const nextLimit = maxAttInput.value.trim() === '' ? 0 : Number(maxAttInput.value);
+            if (!Number.isInteger(nextLimit) || nextLimit < 0 || nextLimit > 50) {
+              throw Error('Số lần làm tối đa phải là số nguyên 0–50 (0 = không giới hạn).');
+            }
+            await api('update-lock', { id: x.id, manualLocked: false, deadlineAt: parsedTs, maxAttempts: nextLimit });
             showList(host);
           } catch (err) {
             lockStatusMsg.textContent = `⚠ ${err.message || String(err)}`;
@@ -461,13 +476,20 @@ async function showList(host) {
           }
         });
         drawerBtns.append(saveLockBtn, instantBtn, clearDlBtn);
-        lockDrawer.append(label('Hạn chót tự động khóa phòng (tùy chọn)'), dlInput, drawerBtns, lockStatusMsg);
+        lockDrawer.append(
+          label('Hạn chót tự động khóa phòng (tùy chọn)'),
+          dlInput,
+          label('Số lần làm tối đa (0 = không giới hạn)'),
+          maxAttInput,
+          drawerBtns,
+          lockStatusMsg
+        );
       }
 
       card.append(
         badgeRow,
         E('strong', 'exam-card-title', x.title),
-        E('span', '', `Mã ${x.id} • ${x.durationMinutes} phút • ${totalQ} câu`),
+        E('span', '', `Mã ${x.id} • ${x.durationMinutes} phút • ${totalQ} câu${x.maxAttempts > 0 ? ` • Tối đa ${x.maxAttempts} lượt` : ' • Không giới hạn lượt'}`),
         cardActions,
         ...(lockDrawer ? [lockDrawer] : [])
       );
@@ -491,7 +513,11 @@ async function begin(host, id, options = {}) {
       return showResult(host, data.result, id, {
         autoSubmitted: Boolean(data.autoSubmittedSession),
         canRetake: data.canRetake !== false,
-        attemptNumber: data.session.attemptNumber
+        attemptNumber: data.session.attemptNumber,
+        maxAttempts: data.maxAttempts || data.exam?.maxAttempts || 0,
+        examTitle: data.exam?.title || '',
+        sourceUrl: data.exam?.sourceUrl || null,
+        questions: data.questions || []
       });
     }
     let cachedIdToken = await auth.currentUser?.getIdToken?.().catch(() => '') || '';
@@ -527,7 +553,11 @@ async function begin(host, id, options = {}) {
         showResult(host, output.result, id, {
           autoSubmitted: Boolean(output.autoSubmitted || output.result?.autoSubmitted || automatic),
           attemptNumber: output.attemptNumber || output.result?.attemptNumber,
-          canRetake: current?.exam ? !current.exam.isLocked : true
+          canRetake: typeof output.canRetake === 'boolean' ? output.canRetake : (current?.exam ? !current.exam.isLocked : true),
+          maxAttempts: output.maxAttempts ?? current?.exam?.maxAttempts ?? 0,
+          examTitle: output.examTitle || current?.exam?.title || '',
+          sourceUrl: output.sourceUrl ?? current?.exam?.sourceUrl ?? null,
+          questions: output.questions || questions
         });
       } catch (err) {
         busy = false;
@@ -983,23 +1013,137 @@ async function begin(host, id, options = {}) {
 function showResult(host, result, id, meta = {}) {
   clearTimer();
   exitExamLockdown();
-  const p = panel('Kết quả bài thi'); if (!result) return showError(host, Error('Chưa nhận được kết quả.'));
+  const titleText = meta.examTitle ? `Xem lại bài thi · ${meta.examTitle}` : 'Kết quả & Xem lại bài thi';
+  const p = panel(titleText); if (!result) return showError(host, Error('Chưa nhận được kết quả.'));
   if (meta.autoSubmitted || result.autoSubmitted) {
     p.append(E('p', 'exam-auto-banner', `Hết giờ làm bài — hệ thống đã tự động nộp bài làm gần nhất của bạn${meta.attemptNumber ? ` (Lượt #${meta.attemptNumber})` : ''}.`));
   } else if (meta.attemptNumber) {
-    p.append(E('p', 'exam-message', `Lượt làm thứ #${meta.attemptNumber} đã được lưu vào hồ sơ.`));
+    p.append(E('p', 'exam-message', `Lượt làm thứ #${meta.attemptNumber}${meta.maxAttempts > 0 ? ` / ${meta.maxAttempts} lượt tối đa` : ' (không giới hạn lượt)'}${meta.submittedAt ? ` · Nộp lúc ${formatDateTime(meta.submittedAt)}` : ''}.`));
   }
-  p.append(E('div', 'exam-score', `${Number(result.score || 0).toFixed(2)} / 10`), E('p', 'exam-message', `Đúng trọn vẹn ${result.fullyCorrect || 0}/${result.total || 0} câu`));
+
+  if (Array.isArray(meta.attempts) && meta.attempts.length > 1) {
+    const attemptBar = E('div', 'exam-review-attempts');
+    for (const a of meta.attempts) {
+      const active = (a.attemptNumber || 1) === (meta.attemptNumber || 1);
+      const ab = button(`Lượt #${a.attemptNumber || 1} · ${Number(a.score || 0).toFixed(2)}đ`, active ? 'exam-tab selected' : 'exam-tab', () => reviewHistory(host, id, a.attemptId));
+      attemptBar.append(ab);
+    }
+    p.append(attemptBar);
+  }
+
+  p.append(E('div', 'exam-score', `${Number(result.score || 0).toFixed(2)} / 10`), E('p', 'exam-message', `Đúng trọn vẹn ${result.fullyCorrect || 0}/${result.total || 0} câu${meta.elapsedMs ? ` · Thời gian làm ${formatDurationClock(meta.elapsedMs)}` : ''}`));
+
+  if (meta.sourceUrl) {
+    const docWrap = E('div', 'exam-review-doc-wrap');
+    const docBox = E('div', 'exam-pdf-pages');
+    docBox.hidden = true;
+    let docLoaded = false;
+    const toggleDocBtn = button('📄 Mở lại đề thi gốc (PDF / Drive)', 'exam-tab', () => {
+      docBox.hidden = !docBox.hidden;
+      toggleDocBtn.textContent = docBox.hidden ? '📄 Mở lại đề thi gốc (PDF / Drive)' : '📄 Ẩn đề thi gốc';
+      if (!docBox.hidden && !docLoaded) {
+        docLoaded = true;
+        docBox.replaceChildren(E('p', 'exam-message', 'Đang tải đề thi gốc…'));
+        renderExamPdf(id, docBox).catch(() => {
+          const frame = document.createElement('iframe');
+          frame.className = 'exam-source-document';
+          frame.src = meta.sourceUrl;
+          frame.title = 'Tài liệu đề thi gốc';
+          docBox.replaceChildren(frame);
+        });
+      }
+    });
+    docWrap.append(toggleDocBtn, docBox);
+    p.append(docWrap);
+  }
+
+  const qById = new Map((Array.isArray(meta.questions) ? meta.questions : []).map((q) => [q.id, q]));
+  const reviewList = E('div', 'exam-review-list');
   for (const d of result.details || []) {
-    const item = E('div', 'exam-result-line');
-    item.append(E('strong', '', `${d.id} · Phần ${d.part} · ${d.earned / 100}/${d.possible / 100} điểm`), E('span', '', d.prompt), E('span', '', `Bạn chọn: ${JSON.stringify(d.response)} | Đáp án: ${JSON.stringify(d.answer)}`)); p.append(item);
+    const qObj = qById.get(d.id);
+    const earnedPts = d.earned / 100;
+    const maxPts = d.possible / 100;
+    const stateCls = d.correct ? 'is-correct' : (d.earned > 0 ? 'is-partial' : 'is-wrong');
+    const stateLabel = d.correct ? '✓ Đúng' : (d.earned > 0 ? '△ Đúng một phần' : (d.response == null || d.response === '' ? '— Bỏ trống' : '✗ Sai'));
+
+    const item = E('article', `exam-review-card ${stateCls}`);
+    const head = E('div', 'exam-review-card-head');
+    head.append(
+      E('strong', '', `${d.id.toUpperCase()} · Phần ${d.part} · ${earnedPts}/${maxPts} điểm`),
+      E('span', `exam-review-badge ${stateCls}`, stateLabel)
+    );
+    item.append(head);
+
+    const promptText = qObj?.prompt || d.prompt || '';
+    if (promptText) {
+      const body = E('div', 'exam-markdown-body');
+      body.innerHTML = richMathHTML(promptText);
+      item.append(body);
+    }
+    if (qObj?.latex) {
+      const fbox = E('div', 'exam-markdown-body');
+      fbox.innerHTML = richMathHTML(`$$${qObj.latex}$$`);
+      item.append(fbox);
+    }
+    if (qObj?.image) {
+      const img = document.createElement('img');
+      img.src = qObj.image;
+      img.alt = `Hình minh họa ${d.id}`;
+      img.className = 'exam-markdown-uploaded-image';
+      item.append(img);
+    }
+
+    if (d.part === 'I') {
+      const opts = Array.isArray(qObj?.options) ? qObj.options : null;
+      const optList = E('div', 'exam-review-options');
+      const userChoice = typeof d.response === 'string' ? d.response.trim().toUpperCase() : '';
+      const correctChoice = String(d.answer || '').trim().toUpperCase();
+      ['A', 'B', 'C', 'D'].forEach((letter, idx) => {
+        const isCorrect = letter === correctChoice;
+        const isUserPick = letter === userChoice;
+        const cls = isCorrect ? 'is-correct' : (isUserPick ? 'is-wrong' : '');
+        const optRow = E('div', `exam-review-opt ${cls}`);
+        const optText = opts?.[idx] ? `${letter}. ${opts[idx]}` : `Phương án ${letter}`;
+        const contentSpan = E('span', 'exam-review-opt-text');
+        contentSpan.innerHTML = richMathHTML(optText);
+        optRow.append(contentSpan);
+        if (isCorrect || isUserPick) {
+          optRow.append(E('small', 'exam-review-opt-tag', isCorrect && isUserPick ? 'Bạn chọn · Đáp án đúng' : isCorrect ? 'Đáp án đúng' : 'Bạn chọn'));
+        }
+        optList.append(optRow);
+      });
+      item.append(optList);
+    } else if (d.part === 'II') {
+      const stmts = Array.isArray(qObj?.options) ? qObj.options : ['Ý a', 'Ý b', 'Ý c', 'Ý d'];
+      const userArr = Array.isArray(d.response) ? d.response : [null, null, null, null];
+      const keyArr = Array.isArray(d.answer) ? d.answer : [];
+      const tfList = E('div', 'exam-review-options');
+      ['a', 'b', 'c', 'd'].forEach((letter, idx) => {
+        const uVal = userArr[idx];
+        const kVal = keyArr[idx];
+        const match = uVal === kVal;
+        const tfRow = E('div', `exam-review-opt ${match ? 'is-correct' : 'is-wrong'}`);
+        const textSpan = E('span', 'exam-review-opt-text');
+        textSpan.innerHTML = richMathHTML(`${letter}) ${stmts[idx] || ''}`);
+        const uText = uVal === true ? 'Đúng' : uVal === false ? 'Sai' : 'Trống';
+        const kText = kVal === true ? 'Đúng' : 'Sai';
+        tfRow.append(textSpan, E('small', 'exam-review-opt-tag', `Bạn: ${uText} · Đáp án: ${kText}`));
+        tfList.append(tfRow);
+      });
+      item.append(tfList);
+    } else {
+      item.append(E('p', 'exam-review-short', `Bạn nhập: ${d.response ? String(d.response) : '(Bỏ trống)'}   ·   Đáp án chuẩn: ${String(d.answer ?? '')}`));
+    }
+    reviewList.append(item);
   }
+  p.append(reviewList);
+
   const resultActions = E('div', 'exam-tabs');
   if (meta.canRetake !== false) {
     resultActions.append(button('Làm lại lượt mới →', 'primary-btn', () => begin(host, id, { retake: true })));
   }
   resultActions.append(
-    button('Bảng xếp hạng đề này', meta.canRetake === false ? 'primary-btn' : 'exam-tab', () => showLeaderboard(host, id, current?.exam?.title || '')),
+    button('Bảng xếp hạng đề này', meta.canRetake === false ? 'primary-btn' : 'exam-tab', () => showLeaderboard(host, id, meta.examTitle || current?.exam?.title || '')),
     button('Lịch sử & thống kê', 'exam-tab', () => showHistory(host)),
     button('Quay lại kho đề', 'exam-tab', () => showList(host))
   );
@@ -1100,7 +1244,18 @@ async function reviewHistory(host, id, attemptId = '') {
   host.replaceChildren(E('p', 'exam-message', 'Đang tải chi tiết kết quả…'));
   try {
     const data = await api('review', { id, ...(attemptId ? { attemptId } : {}) }, 'GET');
-    showResult(host, data.result, id, { autoSubmitted: data.autoSubmitted, attemptNumber: data.attemptNumber });
+    showResult(host, data.result, id, {
+      autoSubmitted: data.autoSubmitted,
+      attemptNumber: data.attemptNumber,
+      submittedAt: data.submittedAt,
+      elapsedMs: data.elapsedMs,
+      examTitle: data.examTitle,
+      maxAttempts: data.maxAttempts || 0,
+      canRetake: data.canRetake !== false,
+      sourceUrl: data.sourceUrl || null,
+      questions: data.questions || [],
+      attempts: data.attempts || []
+    });
   }
   catch (error) { showError(host, error); }
 }
@@ -1121,6 +1276,8 @@ function showCreator(host) {
   const title = field('text', 'Tên đề, ví dụ: Đề kiểm tra Hóa học 12 - Giữa kỳ 1', 'Đề kiểm tra định kỳ Hóa học 12');
   const duration = field('number', 'Thời gian (phút)', '50');
   duration.min = '5'; duration.max = '240'; duration.step = '1';
+  const maxAttemptsInput = field('number', '0 = không giới hạn', '0');
+  maxAttemptsInput.min = '0'; maxAttemptsInput.max = '50'; maxAttemptsInput.step = '1';
   const deadlineInput = field('datetime-local', '', '');
 
   const common = E('div', 'exam-creator-common exam-creator-header-bar');
@@ -1128,9 +1285,11 @@ function showCreator(host) {
   titleWrap.append(label('Tên đề thi / Phòng thi'), title);
   const durationWrap = E('div', 'exam-creator-field-col is-compact');
   durationWrap.append(label('Thời gian (5–240 phút)'), duration);
+  const attemptsWrap = E('div', 'exam-creator-field-col is-compact');
+  attemptsWrap.append(label('Số lần làm (0 = ∞)'), maxAttemptsInput);
   const deadlineWrap = E('div', 'exam-creator-field-col is-deadline');
   deadlineWrap.append(label('Hạn chót đóng phòng (tùy chọn)'), deadlineInput);
-  common.append(titleWrap, durationWrap, deadlineWrap);
+  common.append(titleWrap, durationWrap, attemptsWrap, deadlineWrap);
 
   const tabs = E('div', 'exam-creator-tabs');
   const roomTab = button('1. Đề bên trái · Phiếu OMR bên phải (PDF / Drive)', 'exam-creator-tab is-active', () => switchMode('room'));
@@ -1168,13 +1327,20 @@ function showCreator(host) {
     if (!Number.isInteger(minutes) || minutes < 5 || minutes > 240) throw Error('Thời gian làm bài phải từ 5 đến 240 phút.');
     return minutes;
   };
+  const getMaxAttempts = () => {
+    const raw = maxAttemptsInput.value.trim();
+    if (!raw) return 0;
+    const count = Number(raw);
+    if (!Number.isInteger(count) || count < 0 || count > 50) throw Error('Số lần làm tối đa phải từ 0 đến 50 (0 = không giới hạn).');
+    return count;
+  };
   const getTitle = () => {
     const value = title.value.trim();
     if (value.length < 3 || value.length > 140) throw Error('Tên đề phải từ 3 đến 140 ký tự.');
     return value;
   };
   async function publishExam(questions, sourceUrl = '', sourceOpenUrl = '') {
-    const examTitle = getTitle(), minutes = getDuration();
+    const examTitle = getTitle(), minutes = getDuration(), maxAttempts = getMaxAttempts();
     if (!Array.isArray(questions) || !questions.length) throw Error('Hãy thêm ít nhất một câu hỏi và đáp án.');
     let deadlineAt = null;
     if (deadlineInput.value.trim()) {
@@ -1184,7 +1350,7 @@ function showCreator(host) {
       }
     }
     message.textContent = 'Đang lưu đề và tạo phòng thi…';
-    const response = await api('create', { title: examTitle, durationMinutes: minutes, ...(deadlineAt ? { deadlineAt } : {}), questions, ...(sourceUrl ? { sourceUrl, sourceOpenUrl } : {}) });
+    const response = await api('create', { title: examTitle, durationMinutes: minutes, maxAttempts, ...(deadlineAt ? { deadlineAt } : {}), questions, ...(sourceUrl ? { sourceUrl, sourceOpenUrl } : {}) });
     message.textContent = `Đã tạo phòng thi ${response.exam.id}.`;
     const result = E('div', 'exam-created-result');
     result.append(

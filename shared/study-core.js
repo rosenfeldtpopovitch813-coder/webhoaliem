@@ -90,3 +90,73 @@ export function resumeHeartbeat(current, now, sessionId, name) {
  }
  return applyHeartbeat(state, now, sessionId, name);
 }
+
+/** Compute progress ("thanh nộ") toward the next rank title in Focus Zone. */
+export function rankProgressFor(totalSeconds = 0) {
+ const sec = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+ let idx = 0;
+ for (let i = 0; i < TITLES.length; i++) {
+   if (sec >= TITLES[i].seconds) idx = i;
+ }
+ const current = TITLES[idx];
+ const next = TITLES[idx + 1] || null;
+ if (!next) {
+   return {
+     currentTitle: current.label,
+     nextTitle: null,
+     currentMinSeconds: current.seconds,
+     nextMinSeconds: current.seconds,
+     progressRatio: 1,
+     remainingSeconds: 0,
+     isMax: true
+   };
+ }
+ const span = Math.max(1, next.seconds - current.seconds);
+ const done = Math.max(0, sec - current.seconds);
+ return {
+   currentTitle: current.label,
+   nextTitle: next.label,
+   currentMinSeconds: current.seconds,
+   nextMinSeconds: next.seconds,
+   progressRatio: Math.max(0, Math.min(1, done / span)),
+   remainingSeconds: Math.max(0, next.seconds - sec),
+   isMax: false
+ };
+}
+
+/** Return active VN login streak if checked in today or yesterday. */
+export function activeLoginStreakFor(state = {}, day = getVNDayIndex()) {
+ const lastDay = Number(state?.lastLoginDay);
+ if (!Number.isFinite(lastDay) || lastDay < day - 1) return 0;
+ return Math.max(0, Math.floor(Number(state?.loginStreak) || 0));
+}
+
+/** Update consecutive daily login streak using server VN day index (UTC+7). */
+export function applyLoginStreak(current, now = Date.now(), name = 'Người học') {
+ const day = getVNDayIndex(now);
+ const state = current && typeof current === 'object' ? current : {};
+ const prevDay = Number(state.lastLoginDay);
+ let loginStreak = Math.max(0, Math.floor(Number(state.loginStreak) || 0));
+ let incremented = false;
+ if (prevDay === day) {
+   loginStreak = Math.max(1, loginStreak);
+ } else if (prevDay === day - 1) {
+   loginStreak = loginStreak + 1;
+   incremented = true;
+ } else {
+   loginStreak = 1;
+   incremented = true;
+ }
+ const bestLoginStreak = Math.max(Math.floor(Number(state.bestLoginStreak) || 0), loginStreak);
+ return {
+   incremented,
+   state: {
+     ...state,
+     displayName: String(name || state.displayName || 'Người học').slice(0, 80),
+     lastLoginDay: day,
+     lastLoginAt: now,
+     loginStreak,
+     bestLoginStreak
+   }
+ };
+}

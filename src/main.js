@@ -17,7 +17,7 @@ const nav = [
   ['/exam-paper', 'exam-paper', 'Soạn đề A4'],
   ['/whiteboard', 'whiteboard', 'Bảng vẽ Mực'],
   ['/exam', 'exam-room', 'Phòng thi'],
-  ['/arena', 'arena', 'Chem Arena'],
+  ['/arena', 'arena', 'Đấu trường học tập'],
   ['/handbook', 'handbook', 'Sổ tay'],
   ['/focus', 'focus', 'Góc tập trung'],
   ['/library', 'library', 'Thư viện học liệu'],

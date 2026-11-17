@@ -4,7 +4,7 @@ export const ROUTES = Object.freeze({
   '/exam-paper': { title: 'Soạn đề A4', module: 'exam-paper' },
   '/whiteboard': { title: 'Bảng vẽ Mực', module: 'whiteboard' },
   '/exam': { title: 'Phòng thi', module: 'exam-room' },
-  '/arena': { title: 'Chem Arena', module: 'chem-arena' },
+  '/arena': { title: 'Đấu trường học tập', module: 'arena' },
   '/handbook': { title: 'Sổ tay', module: 'handbook' },
   '/focus': { title: 'Góc tập trung', module: 'focus-zone' },
   '/community': { title: 'Trợ lý AI', module: 'community-ai' },
@@ -49,7 +49,7 @@ export async function loadRouteView(route) {
   }
   if (route.module === 'exam-paper') { const mod = await import('../modules/exam-paper/index.js'); return mod.renderExamPaperApp(); }
   if (route.module === 'whiteboard') { const mod = await import('../modules/whiteboard/index.js'); return mod.renderWhiteboardApp(); }
-  if (route.module === 'chem-arena') { const mod = await import('../modules/chem-arena/index.js'); return mod.renderArena(); }
+  if (route.module === 'arena') { const mod = await import('../modules/arena/index.js'); return mod.renderArena(); }
   if (route.module === 'exam-room') { const mod = await import('../modules/exam-room/index.js'); return mod.renderExam(); }
   if (route.module === 'focus-zone') { const mod = await import('../modules/focus-zone/index.js'); return mod.renderFocus(); }
   if (route.module === 'handbook') { const mod = await import('../modules/handbook/index.js'); return mod.renderHandbook(); }

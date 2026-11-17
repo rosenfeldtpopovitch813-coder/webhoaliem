@@ -22,7 +22,11 @@ const PATHS = {
   music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
   play: '<polygon points="6 4 20 12 6 20 6 4"/>',
   pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
-  close: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>'
+  close: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>',
+  flame: '<path d="M12 2.5c.6 3.5 3.8 5.2 4.4 8.7.5 3.1-1.6 6.8-4.9 8.3-3.1-1.4-4.9-4.5-4.4-7.6.2-1.5.9-2.8 1.9-3.9-.1 1.3.4 2.3 1.4 2.9-.5-2.6.2-5.7 1.6-8.4Z"/>',
+  book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19v20H6.5a2.5 2.5 0 0 1 0-5H19"/>',
+  qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M17 17h4v4h-4z"/><path d="M14 20h1"/>',
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>'
 };
 
 export function icon(name, size = 18) {

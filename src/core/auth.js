@@ -1,6 +1,31 @@
 import { AppStore } from './store.js';
 import { observeAuth, settleRedirect, upsertUserProfile, getUserTheme, consumeRedirectPending, describeAuthError, auth } from './firebase.js';
 import { applyTheme } from './theme.js';
+import { getVNDateString } from '../../shared/time-utils.js';
+
+async function syncDailyLoginCheckin(user) {
+  if (!user?.uid) return;
+  const dayKey = getVNDateString();
+  const cacheKey = `htvvm-login-checkin:${user.uid}:${dayKey}`;
+  let alreadyCheckedToday = false;
+  try { alreadyCheckedToday = localStorage.getItem(cacheKey) === '1'; } catch {}
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch('/api/study-tracker', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: alreadyCheckedToday ? 'status' : 'login-checkin' }),
+      cache: 'no-store'
+    });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (data?.stats) {
+      AppStore.set('loginStreak', Number(data.stats.loginStreak) || 1);
+      AppStore.set('bestLoginStreak', Number(data.stats.bestLoginStreak) || Number(data.stats.loginStreak) || 1);
+      try { localStorage.setItem(cacheKey, '1'); } catch {}
+    }
+  } catch { /* non-blocking background streak sync */ }
+}
 
 let generation = 0;
 export function startAuth() {
@@ -43,6 +68,7 @@ export function startAuth() {
       await upsertUserProfile(user);
       const theme = await getUserTheme(user.uid);
       if (current === generation && theme) applyTheme(theme, { persist: false });
+      if (current === generation) void syncDailyLoginCheckin(user);
     } catch (error) {
       if (current === generation) AppStore.set('notice', `Không thể đồng bộ hồ sơ: ${error.message}`);
     } finally {
