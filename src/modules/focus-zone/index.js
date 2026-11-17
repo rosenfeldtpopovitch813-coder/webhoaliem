@@ -92,12 +92,12 @@ export function renderFocus() {
   const timerHead = element('div', 'focus-card-header-row');
   const timerTitleWrap = element('div', '');
   timerTitleWrap.append(
-    element('span', 'focus-kicker-badge', '⏱ POMODORO THỜI GIAN THỰC'),
     element('h3', '', 'Đồng hồ tập trung')
   );
-  const customToggleBtn = button('⚙ Đổi thời lượng', 'focus-btn is-sm', () => {
+  const customToggleBtn = button('Đổi thời lượng', 'focus-btn is-sm', () => {
     durationEditor.hidden = !durationEditor.hidden;
   });
+  customToggleBtn.prepend(icon('sliders'));
   timerHead.append(timerTitleWrap, customToggleBtn);
   timerBox.append(timerHead);
 
@@ -138,19 +138,19 @@ export function renderFocus() {
   const modes = element('div', 'focus-preset-pills');
 
   const clockDisplayWrap = element('div', 'focus-clock-face');
-  const modeBadge = element('span', 'focus-clock-mode-pill', selectedMode === 'focus' ? '🎯 Phiên Tập Trung' : '☕ Phiên Nghỉ Ngơi');
+  const modeBadge = element('span', 'focus-clock-mode-pill', selectedMode === 'focus' ? 'Phiên tập trung' : 'Phiên nghỉ ngơi');
   const digits = element('div', 'focus-time', fmt(seconds));
   const progressTrack = element('div', 'focus-progress-track');
   const progressBar = element('div', 'focus-progress-bar');
   progressTrack.append(progressBar);
-  const timerHint = element('p', 'focus-timer-subnote', running ? '● Đồng hồ đang đếm ngược ổn định (không bị ngắt khi chuyển tab).' : 'Sẵn sàng bắt đầu phiên tập trung.');
+  const timerHint = element('p', 'focus-timer-subnote', running ? 'Đồng hồ đang đếm ngược ổn định (không bị ngắt khi chuyển tab).' : 'Sẵn sàng bắt đầu phiên tập trung.');
   clockDisplayWrap.append(modeBadge, digits, progressTrack, timerHint);
 
   function updateProgressUI() {
     digits.textContent = fmt(seconds);
     const pct = duration > 0 ? Math.max(0, Math.min(100, ((duration - seconds) / duration) * 100)) : 0;
     progressBar.style.width = `${pct.toFixed(1)}%`;
-    modeBadge.textContent = selectedMode === 'focus' ? '🎯 Phiên Tập Trung' : '☕ Phiên Nghỉ Ngơi';
+    modeBadge.textContent = selectedMode === 'focus' ? 'Phiên tập trung' : 'Phiên nghỉ ngơi';
     modeBadge.classList.toggle('is-break', selectedMode === 'break');
     clockDisplayWrap.classList.toggle('is-running', running);
   }
@@ -174,7 +174,7 @@ export function renderFocus() {
   }
 
   function updateControls() {
-    toggle.textContent = running ? '⏸ Tạm dừng' : '▶ Bắt đầu';
+    toggle.textContent = running ? 'Tạm dừng' : 'Bắt đầu';
     toggle.setAttribute('aria-pressed', String(running));
     updateProgressUI();
   }
@@ -211,10 +211,10 @@ export function renderFocus() {
   }
 
   for (const [label, s, mode] of [
-    ['🎯 Tập trung · 25′', 1500, 'focus'],
-    ['☕ Nghỉ ngắn · 5′', 300, 'break'],
-    ['🌿 Nghỉ dài · 15′', 900, 'break'],
-    ['⚡ Luyện đề · 50′', 3000, 'focus']
+    ['Tập trung · 25 phút', 1500, 'focus'],
+    ['Nghỉ ngắn · 5 phút', 300, 'break'],
+    ['Nghỉ dài · 15 phút', 900, 'break'],
+    ['Luyện đề · 50 phút', 3000, 'focus']
   ]) {
     const b = button(label, 'focus-btn', () => selectPreset(s, mode));
     modes.append(b);
@@ -223,12 +223,12 @@ export function renderFocus() {
   syncModeButtons();
 
   const controls = element('div', 'focus-actions focus-main-controls');
-  const toggle = button(running ? '⏸ Tạm dừng' : '▶ Bắt đầu', 'focus-btn primary focus-start-btn', async () => {
+  const toggle = button(running ? 'Tạm dừng' : 'Bắt đầu', 'focus-btn primary focus-start-btn', async () => {
     if (running) {
       seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
       running = false;
       endTimeMs = 0;
-      timerHint.textContent = '⏸ Đồng hồ đang tạm dừng. Bấm Bắt đầu để chạy tiếp.';
+      timerHint.textContent = 'Đồng hồ đang tạm dừng. Bấm Bắt đầu để chạy tiếp.';
       saveTimerState();
       updateControls();
       if (sessionOrigin === 'pomodoro' && sessionId) {
@@ -240,7 +240,7 @@ export function renderFocus() {
     if (seconds <= 0) seconds = duration;
     running = true;
     endTimeMs = Date.now() + seconds * 1000;
-    timerHint.textContent = '● Đồng hồ đang đếm ngược ổn định (vẫn chạy chính xác khi bạn chuyển tab xem tài liệu).';
+    timerHint.textContent = 'Đồng hồ đang đếm ngược ổn định (vẫn chạy chính xác khi bạn chuyển tab xem tài liệu).';
     saveTimerState();
     updateControls();
 
@@ -248,11 +248,11 @@ export function renderFocus() {
     if (selectedMode === 'focus' && !sessionId && auth?.currentUser) {
       void startSession('pomodoro');
     } else if (selectedMode === 'break' && !sessionId) {
-      status.textContent = '☕ Đồng hồ nghỉ đang chạy; thời gian nghỉ không cộng vào giờ học.';
+      status.textContent = 'Đồng hồ nghỉ đang chạy; thời gian nghỉ không cộng vào giờ học.';
     }
   });
 
-  const reset = button('↺ Đặt lại', 'focus-btn', async () => {
+  const reset = button('Đặt lại', 'focus-btn', async () => {
     running = false;
     endTimeMs = 0;
     seconds = duration;
@@ -306,7 +306,6 @@ export function renderFocus() {
   const statsHead = element('div', 'focus-card-header-row');
   const statsTitleWrap = element('div', '');
   statsTitleWrap.append(
-    element('span', 'focus-kicker-badge', '📊 THỐNG KÊ & ÂM THANH NỀN'),
     element('h3', '', 'Tiến độ học tập & Nhạc tập trung')
   );
   statsHead.append(statsTitleWrap);
@@ -331,7 +330,7 @@ export function renderFocus() {
   const stateLine = element('p', 'focus-muted', 'Bắt đầu đồng hồ tập trung để tự động cộng giờ học khi đã đăng nhập.');
   const status = element('p', 'focus-status-banner', 'Sẵn sàng ghi nhận giờ học.');
   const actions = element('div', 'focus-actions');
-  const begin = button('● Ghi nhận giờ học', 'focus-btn primary', () => startSession('manual'));
+  const begin = button('Ghi nhận giờ học', 'focus-btn primary', () => startSession('manual'));
   const end = button('Lưu & Kết thúc phiên', 'focus-btn', async () => {
     if (running) {
       seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
@@ -591,15 +590,17 @@ export function renderFocus() {
   const hubHeader = element('div', 'focus-workspace-header');
   const hubTitleCol = element('div', '');
   hubTitleCol.append(
-    element('span', 'focus-kicker-badge', '🖥 KHÔNG GIAN HỌC TẬP RỘNG TOÀN MÀN HÌNH'),
-    element('h3', '', 'Bảng viết Lớp học Mực · Video bài giảng · Tài liệu PDF/Drive')
+    element('h3', '', 'Không gian học tập: Bảng viết · Video · Tài liệu')
   );
 
   const hubTabs = element('div', 'focus-workspace-tabs');
   let activeWorkspaceMode = 'split'; // 'board' | 'media' | 'split'
-  const tabBoard = button('📝 Bảng viết Lớp học Mực', 'focus-ws-tab', () => setWorkspaceMode('board'));
-  const tabMedia = button('🎬 Video & Tài liệu PDF', 'focus-ws-tab', () => setWorkspaceMode('media'));
-  const tabSplit = button('⊞ Kết hợp (Tài liệu + Bảng viết)', 'focus-ws-tab is-active', () => setWorkspaceMode('split'));
+  const tabBoard = button('Bảng viết Lớp học Mực', 'focus-ws-tab', () => setWorkspaceMode('board'));
+  tabBoard.prepend(icon('whiteboard'));
+  const tabMedia = button('Video & Tài liệu PDF', 'focus-ws-tab', () => setWorkspaceMode('media'));
+  tabMedia.prepend(icon('video'));
+  const tabSplit = button('Kết hợp (Tài liệu + Bảng viết)', 'focus-ws-tab is-active', () => setWorkspaceMode('split'));
+  tabSplit.prepend(icon('exam-paper'));
   hubTabs.append(tabSplit, tabBoard, tabMedia);
   hubHeader.append(hubTitleCol, hubTabs);
   workspaceHub.append(hubHeader);
@@ -613,7 +614,7 @@ export function renderFocus() {
 
   // Khung YouTube
   const youtubePane = element('section', 'focus-resource-pane');
-  youtubePane.append(element('h4', '', '🎬 Video bài giảng (YouTube)'), element('p', 'focus-muted', 'Hỗ trợ link video lẻ hoặc danh sách phát (playlist).'));
+  youtubePane.append(element('h4', '', 'Video bài giảng (YouTube)'), element('p', 'focus-muted', 'Hỗ trợ link video lẻ hoặc danh sách phát (playlist).'));
   const ytInputRow = element('div', 'focus-inline-input-row');
   const youtubeInput = document.createElement('input');
   youtubeInput.type = 'url';
@@ -672,7 +673,7 @@ export function renderFocus() {
 
   // Khung Tài liệu PDF / Google Drive
   const documentPane = element('section', 'focus-resource-pane');
-  documentPane.append(element('h4', '', '📄 Tài liệu học tập (PDF / Google Drive)'), element('p', 'focus-muted', 'Dán link Google Drive/Docs hoặc mở tệp PDF trực tiếp từ máy.'));
+  documentPane.append(element('h4', '', 'Tài liệu học tập (PDF / Google Drive)'), element('p', 'focus-muted', 'Dán link Google Drive/Docs hoặc mở tệp PDF trực tiếp từ máy.'));
   const docInputRow = element('div', 'focus-inline-input-row');
   const documentInput = document.createElement('input');
   documentInput.type = 'url';
@@ -680,7 +681,8 @@ export function renderFocus() {
   documentInput.placeholder = 'Dán link Google Drive/Docs…';
   documentInput.setAttribute('aria-label', 'Liên kết tài liệu');
   const previewDocument = button('Mở link', 'focus-btn primary', () => openDocumentLink());
-  const pickPdfBtn = button('📂 Chọn PDF', 'focus-btn', () => pdf.click());
+  const pickPdfBtn = button('Chọn PDF', 'focus-btn', () => pdf.click());
+  pickPdfBtn.prepend(icon('library'));
   const clearDocument = button('Xóa', 'focus-btn', () => {
     documentInput.value = '';
     documentFrame.removeAttribute('src');
@@ -750,7 +752,7 @@ export function renderFocus() {
     documentOpen.href = pdfURL;
     documentOpen.hidden = false;
     documentOpen.textContent = 'Mở PDF trong tab mới ↗';
-    resourceStatus.textContent = `📄 Đang xem PDF từ máy: ${file.name}`;
+    resourceStatus.textContent = `Đang xem PDF từ máy: ${file.name}`;
   });
   documentPane.append(docInputRow, pdf, documentFrame, documentOpen);
 
@@ -771,7 +773,7 @@ export function renderFocus() {
   notesFrame.allow = 'clipboard-read; clipboard-write; fullscreen';
   notesFrame.allowFullscreen = true;
 
-  const fullNotes = button('⛶ Toàn màn hình', 'focus-btn is-sm', async () => {
+  const fullNotes = button('Toàn màn hình', 'focus-btn is-sm', async () => {
     try {
       if (document.fullscreenElement) { await document.exitFullscreen(); return; }
       await notesFrame.requestFullscreen();
@@ -779,7 +781,9 @@ export function renderFocus() {
       notesStatus.textContent = 'Trình duyệt không cho phép toàn màn hình tự động; hãy bấm Mở tab riêng.';
     }
   });
-  const popNotes = button('↗ Mở tab riêng', 'focus-btn is-sm', () => window.open('/focus-notes/index.html?app=board', '_blank', 'noopener,noreferrer'));
+  fullNotes.prepend(icon('maximize'));
+  const popNotes = button('Mở tab riêng', 'focus-btn is-sm', () => window.open('/focus-notes/index.html?app=board', '_blank', 'noopener,noreferrer'));
+  popNotes.prepend(icon('external'));
   notesActions.append(fullNotes, popNotes);
   notesTopBar.append(notesStatus, notesActions);
   notesPane.append(notesTopBar, notesFrame);
@@ -971,7 +975,7 @@ export function renderFocus() {
       drawStats();
     }
     if (!auth?.currentUser) {
-      status.textContent = '● Đang đếm giờ học trên thiết bị (đăng nhập Google để đồng bộ lên bảng xếp hạng).';
+      status.textContent = 'Đang đếm giờ học trên thiết bị (đăng nhập Google để đồng bộ lên bảng xếp hạng).';
       return true;
     }
     if (sessionStopping || sessionStarting || sessionId) return true;
@@ -984,10 +988,10 @@ export function renderFocus() {
       sessionOrigin = source;
       saveSession(sessionId, sessionOrigin);
       showStats(data.stats, true);
-      status.textContent = source === 'pomodoro' ? '● Đồng hồ đang chạy & đồng bộ giờ học.' : '● Đang ghi nhận giờ học trực tuyến.';
+      status.textContent = source === 'pomodoro' ? 'Đồng hồ đang chạy và đồng bộ giờ học.' : 'Đang ghi nhận giờ học trực tuyến.';
       return true;
     } catch {
-      status.textContent = '● Đang đếm giờ học liên tục trên thiết bị (tự động đồng bộ lại khi mạng ổn định).';
+      status.textContent = 'Đang đếm giờ học liên tục trên thiết bị (tự động đồng bộ lại khi mạng ổn định).';
       return true;
     } finally {
       sessionStarting = false;
@@ -1153,7 +1157,7 @@ export function renderFocus() {
       element('p', '', `Bạn vừa rời tab ${labelTime} trong Focus Mode (${focusConfig.allowlist.map(x => x.label).join(', ')}). Bạn có đang học trên các web/ứng dụng đã chọn không?`)
     );
     const btnRow = element('div', 'focus-return-actions');
-    const keepBtn = button(`✓ Có, cộng +${labelTime}`, 'focus-btn is-sm primary', async () => {
+    const keepBtn = button(`Có, cộng +${labelTime}`, 'focus-btn is-sm primary', async () => {
       const claim = pendingAwayMs;
       pendingAwayMs = 0;
       focusReturnBanner.hidden = true;
@@ -1173,7 +1177,7 @@ export function renderFocus() {
       }
       status.textContent = `Đã giữ ${labelTime} thời gian học trong Focus Mode.`;
     });
-    const dropBtn = button('✕ Không cộng khoảng này', 'focus-btn is-sm', () => {
+    const dropBtn = button('Không cộng khoảng này', 'focus-btn is-sm', () => {
       pendingAwayMs = 0;
       focusReturnBanner.hidden = true;
       status.textContent = 'Đã bỏ qua thời gian ngoài trang HTVVM.';

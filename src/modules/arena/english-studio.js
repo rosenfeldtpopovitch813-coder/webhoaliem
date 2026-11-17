@@ -52,7 +52,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
   const heroTop = element('div', 'eng-hero-top');
   const titleGroup = element('div', 'eng-title-group');
   titleGroup.append(
-    element('span', 'arena-eyebrow', 'ARENA · TIẾNG ANH STUDIO (QUIZLET STYLE)'),
+    element('span', 'arena-eyebrow', 'Tiếng Anh THPT & Đánh giá năng lực'),
     element('h2', 'eng-title', 'Từ vựng, Flashcard 3D, Viết lại câu & Ngữ pháp')
   );
   const heroActions = element('div', 'eng-hero-actions');
@@ -330,7 +330,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
         button('1. Chưa thuộc', 'exam-tab', () => rate('new')),
         button('2. Đang học', 'exam-tab', () => rate('learning')),
         button('3. Đã thuộc ✓', 'primary-btn', () => rate('mastered')),
-        button('Sau →', 'exam-tab', () => { flipped = false; idx = (idx + 1) % deck.length; paintCard(); })
+        button('Thẻ sau', 'exam-tab', () => { flipped = false; idx = (idx + 1) % deck.length; paintCard(); })
       );
     };
 
@@ -373,7 +373,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
       o.value = v;
       statusSel.append(o);
     }
-    const launchFcBtn = button('Ôn nhóm này bằng Flashcard →', 'primary-btn', () => switchSubTab('flashcards', { theme }));
+    const launchFcBtn = button('Ôn nhóm này bằng Flashcard', 'primary-btn', () => switchSubTab('flashcards', { theme }));
     filterRow.append(qInput, statusSel, launchFcBtn);
 
     const grid = element('div', 'eng-vocab-grid');
@@ -569,7 +569,7 @@ export function renderEnglishStudio(rootHost, { onBack = null } = {}) {
 
       const navRow = element('div', 'exam-tabs');
       if (idx > 0) navRow.append(button('← Chuyên đề trước', 'exam-tab', () => { activeGrammarId = GRAMMAR_TOPICS[idx - 1].id; drawSidebar(); drawDetail(); }));
-      if (idx < GRAMMAR_TOPICS.length - 1) navRow.append(button('Chuyên đề tiếp →', 'primary-btn', () => { activeGrammarId = GRAMMAR_TOPICS[idx + 1].id; drawSidebar(); drawDetail(); }));
+      if (idx < GRAMMAR_TOPICS.length - 1) navRow.append(button('Chuyên đề tiếp', 'primary-btn', () => { activeGrammarId = GRAMMAR_TOPICS[idx + 1].id; drawSidebar(); drawDetail(); }));
       detail.append(navRow);
     };
 

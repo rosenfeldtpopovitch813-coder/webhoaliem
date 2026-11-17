@@ -1080,10 +1080,6 @@ export default function GeometryTools({ onClose, onDraw: _onDraw }: Props) {
             className={'scrble-geo-tab ' + (state.kind === k ? 'active' : '')}
             onClick={() => setKind(k)}
           >
-            {k === 'ruler' && '📏 '}
-            {k === 'setSquare' && '📐 '}
-            {k === 'protractor' && '⌓ '}
-            {k === 'compass' && '🧭 '}
             <span>{TOOL_NAMES[k]}</span>
           </button>
         ))}
@@ -1102,7 +1098,7 @@ export default function GeometryTools({ onClose, onDraw: _onDraw }: Props) {
           }))
         }
       >
-        🧲 Bám cạnh: {state.snapEnabled ? 'Bật' : 'Tắt'}
+        Bám cạnh: {state.snapEnabled ? 'Bật' : 'Tắt'}
       </button>
 
       {state.kind !== 'compass' && (
@@ -1228,11 +1224,11 @@ export default function GeometryTools({ onClose, onDraw: _onDraw }: Props) {
           title="Dựng nét nhanh theo vị trí dụng cụ hiện tại"
           onClick={() => triggerQuickGeometryAction('primary')}
         >
-          {state.kind === 'ruler' && '✏️ Kẻ mép trên'}
-          {state.kind === 'setSquare' && '✏️ Kẻ góc vuông'}
+          {state.kind === 'ruler' && 'Kẻ mép trên'}
+          {state.kind === 'setSquare' && 'Kẻ góc vuông'}
           {state.kind === 'protractor' &&
-            `✏️ Kẻ góc ${Math.round(state.protractorRayDeg)}°`}
-          {state.kind === 'compass' && '✏️ Quay 360°'}
+            `Kẻ góc ${Math.round(state.protractorRayDeg)}°`}
+          {state.kind === 'compass' && 'Quay 360°'}
         </button>
         {state.kind === 'protractor' && (
           <button
@@ -1241,7 +1237,7 @@ export default function GeometryTools({ onClose, onDraw: _onDraw }: Props) {
             title="Vẽ cung tròn theo góc tia ngắm"
             onClick={() => triggerQuickGeometryAction('secondary')}
           >
-            ⌒ Vẽ cung
+            Vẽ cung
           </button>
         )}
         {state.kind === 'setSquare' && (
@@ -1251,7 +1247,7 @@ export default function GeometryTools({ onClose, onDraw: _onDraw }: Props) {
             title="Kẻ khép kín 3 cạnh tam giác"
             onClick={() => triggerQuickGeometryAction('secondary')}
           >
-            △ Kẻ 3 cạnh
+            Kẻ 3 cạnh
           </button>
         )}
       </div>

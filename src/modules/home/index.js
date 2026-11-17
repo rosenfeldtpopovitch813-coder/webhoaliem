@@ -20,7 +20,6 @@ export function renderHome() {
   const wrap = element('div', 'home-page');
   const hero = element('section', 'hero home-hero');
   hero.append(
-    element('div', 'eyebrow', 'KHÔNG GIAN HỌC TẬP HTVVM'),
     element('h2', 'hero-title', 'Luyện thi & Học tập trực tuyến'),
     element('p', 'hero-subtitle', 'Soạn đề A4, làm bài thi theo thời gian thực, tra cứu 118 nguyên tố, theo dõi giờ tự học và hỏi đáp bài tập.')
   );
@@ -75,7 +74,7 @@ export function renderHome() {
   const examProgressHeader = element('div', 'home-exam-stats-header');
   const examProgressTitle = element('div', '');
   examProgressTitle.append(element('h3', 'section-heading', 'Tiến trình luyện thi'), element('p', 'home-board-subtitle', 'Tổng hợp các lượt thi đã nộp trên máy chủ.'));
-  const examOpen = button('Mở phòng thi →', 'primary-btn', () => navigate('/exam'));
+  const examOpen = button('Mở phòng thi', 'primary-btn', () => navigate('/exam'));
   examProgressHeader.append(examProgressTitle, examOpen);
   const examProgressBody = element('div', 'home-exam-stats-body');
   examProgress.append(examProgressHeader, examProgressBody);
@@ -88,7 +87,7 @@ export function renderHome() {
     const card = element('button', 'module-card'); card.type = 'button';
     const modIcon = element('span', 'module-icon');
     modIcon.append(icon(iconName, 22));
-    card.append(modIcon, element('strong', 'module-title', title), element('span', 'module-description', description), element('span', 'module-link', 'Khám phá →'));
+    card.append(modIcon, element('strong', 'module-title', title), element('span', 'module-description', description), element('span', 'module-link', 'Mở mục'));
     card.addEventListener('click', () => navigate(path)); grid.append(card);
   }
   wrap.append(grid);

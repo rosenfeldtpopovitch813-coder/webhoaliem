@@ -4,7 +4,7 @@ import { element, button } from '../../core/dom.js';
 
 export function renderHandbook() {
   const root = element('div', 'handbook-root'), hero = element('div', 'hero exam-hero');
-  hero.append(element('div', 'eyebrow', 'SỔ TAY HỌC TẬP'), element('h1', 'hero-title', 'Sổ tay khoa học & Máy vẽ đồ thị'), element('p', 'hero-subtitle', 'Tra cứu đủ 118 nguyên tố, xem mô hình nguyên tử và ảnh mẫu thực tế, tra phổ hồng ngoại IR và vẽ nhiều hàm số với trục tùy chỉnh.'));
+  hero.append(element('h1', 'hero-title', 'Sổ tay khoa học & Máy vẽ đồ thị'), element('p', 'hero-subtitle', 'Tra cứu đủ 118 nguyên tố, xem mô hình nguyên tử và ảnh mẫu thực tế, tra phổ hồng ngoại IR và vẽ nhiều hàm số với trục tùy chỉnh.'));
   const tabs = element('div', 'exam-tabs'), panel = element('section', 'exam-panel'); root.append(hero, tabs, panel);
   const names = [['element', 'Bảng tuần hoàn'], ['ir', 'Phổ hồng ngoại IR'], ['graph', 'Máy vẽ đồ thị']];
   let elementModal = null;
@@ -23,7 +23,7 @@ export function renderHandbook() {
     const dialog = element('section', 'element-modal-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', 'Chi tiết nguyên tố'); dialog.tabIndex = -1;
     const modalTop = element('div', 'element-modal-top'); modalTop.append(element('span', '', 'CHI TIẾT NGUYÊN TỐ'));
     const closeModal = () => { modal.hidden = true; };
-    modalTop.append(button('Đóng ✕', 'element-modal-close', closeModal));
+    modalTop.append(button('Đóng', 'element-modal-close', closeModal));
     const detail = element('section', 'element-detail element-detail-empty', 'Thông tin nguyên tố sẽ hiện ở đây.');
     dialog.append(modalTop, detail); modal.append(dialog); root.append(modal); elementModal = modal;
     modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
@@ -135,7 +135,7 @@ export function renderHandbook() {
     }
     side.append(ranges);
     const actionRow = element('div', 'graph-actions'); actionRow.append(button('Vẽ lại', 'primary-btn', draw), button('Đặt lại khung', 'exam-tab', () => { setRange(-10, 10, -10, 10); draw(); })); side.append(actionRow);
-    const nav = element('div', 'graph-nav-controls'); nav.append(button('＋ Phóng to', 'exam-tab', () => scaleRange(.75)), button('− Thu nhỏ', 'exam-tab', () => scaleRange(1.33)), button('←', 'exam-tab', () => panRange(-.18, 0)), button('→', 'exam-tab', () => panRange(.18, 0)), button('↑', 'exam-tab', () => panRange(0, .18)), button('↓', 'exam-tab', () => panRange(0, -.18))); side.append(nav);
+    const nav = element('div', 'graph-nav-controls'); nav.append(button('Phóng to', 'exam-tab', () => scaleRange(.75)), button('Thu nhỏ', 'exam-tab', () => scaleRange(1.33)), button('←', 'exam-tab', () => panRange(-.18, 0)), button('→', 'exam-tab', () => panRange(.18, 0)), button('↑', 'exam-tab', () => panRange(0, .18)), button('↓', 'exam-tab', () => panRange(0, -.18))); side.append(nav);
     const canvas = document.createElement('canvas'); canvas.className = 'graph-canvas'; canvas.width = 1440; canvas.height = 820; canvas.setAttribute('aria-label', 'Đồ thị hàm số với trục toạ độ');
     const legend = element('div', 'graph-legend'), valueTable = element('div', 'graph-values'); const msg = element('div', 'exam-message graph-status', 'Sẵn sàng vẽ.');
     canvasColumn.append(canvas, legend, valueTable, msg); form.append(side, canvasColumn); panel.append(form);

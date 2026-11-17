@@ -43,7 +43,6 @@ export function renderArena() {
   const root = element('div', 'exam-root arena-root');
   const hero = element('section', 'hero exam-hero');
   hero.append(
-    element('div', 'eyebrow', 'HTVVM STUDIO · ARENA'),
     element('h2', 'hero-title', 'Đấu trường học tập đa môn'),
     element('p', 'hero-subtitle', 'Minigame Online & Offline: Đối kháng 200 HP, Tiếng Anh phong cách Quizlet, Ai là Triệu Phú 15 câu & Đấu trường 100 quét mã QR.')
   );
@@ -119,25 +118,25 @@ export function renderArena() {
         id: 'battle', tag: 'ONLINE & OFFLINE · ĐA MÔN', tags: ['online', 'offline'], accent: 'is-emerald',
         title: 'Đối kháng 200 HP',
         desc: 'Đấu Online 2–8 người theo mã phòng/QR (đã sửa lỗi vào phòng trên server) hoặc luyện 1v1 Offline với AI Bot.',
-        cta: 'Vào Đối kháng →'
+        cta: 'Vào Đối kháng'
       },
       {
         id: 'english', tag: 'OFFLINE · QUIZLET STYLE', tags: ['offline'], accent: 'is-indigo',
         title: 'Tiếng Anh Studio (5-in-1)',
         desc: 'Luyện qua Flashcard 3D lật thẻ + phát âm, Sổ từ vựng tự thêm từ, Trắc nghiệm, Viết lại câu & 10+ chuyên đề Ngữ pháp.',
-        cta: 'Mở Tiếng Anh Studio →'
+        cta: 'Mở Tiếng Anh Studio'
       },
       {
         id: 'millionaire', tag: 'OFFLINE / BỘ ĐỀ GIÁO VIÊN', tags: ['offline', 'online'], accent: 'is-amber',
         title: 'Ai là Triệu Phú (15 câu)',
         desc: 'Chinh phục 15 câu hỏi tăng dần qua 3 mốc an toàn với quyền trợ giúp 50:50, Hỏi khán giả và Gợi ý chuyên gia.',
-        cta: 'Chơi Ai là Triệu Phú →'
+        cta: 'Chơi Ai là Triệu Phú'
       },
       {
         id: 'hundred', tag: 'ONLINE · QUÉT MÃ QR', tags: ['online'], accent: 'is-rose',
         title: 'Đấu trường 100 (Loại trực tiếp)',
         desc: 'Giáo viên mở phòng tạo mã QR để học sinh quét vào thi Trắc nghiệm hoặc Nhập đáp án; sai bị loại tới người thắng cuối.',
-        cta: 'Mở Đấu trường 100 →'
+        cta: 'Mở Đấu trường 100'
       }
     ];
 

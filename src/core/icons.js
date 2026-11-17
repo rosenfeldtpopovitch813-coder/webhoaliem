@@ -26,7 +26,9 @@ const PATHS = {
   flame: '<path d="M12 2.5c.6 3.5 3.8 5.2 4.4 8.7.5 3.1-1.6 6.8-4.9 8.3-3.1-1.4-4.9-4.5-4.4-7.6.2-1.5.9-2.8 1.9-3.9-.1 1.3.4 2.3 1.4 2.9-.5-2.6.2-5.7 1.6-8.4Z"/>',
   book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19v20H6.5a2.5 2.5 0 0 1 0-5H19"/>',
   qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M17 17h4v4h-4z"/><path d="M14 20h1"/>',
-  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>'
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/>',
+  video: '<rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 10.5 17 13.5 22 17 22 7"/>'
 };
 
 export function icon(name, size = 18) {

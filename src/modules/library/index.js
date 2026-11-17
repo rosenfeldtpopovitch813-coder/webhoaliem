@@ -1,4 +1,5 @@
 import { element, button } from '../../core/dom.js';
+import { icon } from '../../core/icons.js';
 
 const E = element;
 const safeHttpUrl = (value) => {
@@ -9,10 +10,11 @@ const safeHttpUrl = (value) => {
 export function renderLibrary() {
   const root = E('div', 'library-page');
   const hero = E('section', 'hero library-hero');
-  hero.append(E('div', 'eyebrow', 'HỌC LIỆU HTVVM'), E('h1', 'hero-title', 'Thư viện tài liệu'), E('p', 'hero-subtitle', 'Tài liệu được đồng bộ từ Google Sheets. Mở xem trước, đọc tài liệu hoặc tải xuống; thư mục chỉ có nút mở thư mục.'));
+  hero.append(E('h1', 'hero-title', 'Thư viện tài liệu'), E('p', 'hero-subtitle', 'Tài liệu được đồng bộ từ Google Sheets. Mở xem trước, đọc tài liệu hoặc tải xuống; thư mục chỉ có nút mở thư mục.'));
   const toolbar = E('div', 'library-toolbar');
   const search = document.createElement('input'); search.type = 'search'; search.className = 'exam-input'; search.placeholder = 'Tìm tên tài liệu, môn học hoặc mô tả…'; search.setAttribute('aria-label', 'Tìm tài liệu trong thư viện');
-  const refresh = button('↻ Làm mới', 'exam-tab', loadItems);
+  const refresh = button('Làm mới', 'exam-tab', loadItems);
+  refresh.prepend(icon('refresh', 14));
   const count = E('span', 'library-count', 'Đang tải…');
   toolbar.append(search, count, refresh);
   const status = E('p', 'exam-message', 'Đang kết nối bảng học liệu…');
@@ -21,7 +23,7 @@ export function renderLibrary() {
   const modal = E('div', 'library-preview-backdrop'); modal.hidden = true;
   const dialog = E('section', 'library-preview-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', 'Xem trước học liệu'); dialog.tabIndex = -1;
   const modalHeader = E('div', 'library-preview-header'); const modalTitle = E('h2', '', 'Xem trước tài liệu');
-  const modalClose = button('Đóng ✕', 'element-modal-close', closePreview); modalHeader.append(modalTitle, modalClose);
+  const modalClose = button('Đóng', 'element-modal-close', closePreview); modalHeader.append(modalTitle, modalClose);
   const previewFrame = document.createElement('iframe'); previewFrame.className = 'library-preview-frame'; previewFrame.title = 'Khung xem trước học liệu'; previewFrame.referrerPolicy = 'strict-origin-when-cross-origin';
   const previewFallback = E('p', 'library-preview-fallback', 'Nếu không hiển thị được, hãy mở tài liệu ở tab mới.');
   const previewOpen = document.createElement('a'); previewOpen.className = 'focus-resource-open'; previewOpen.target = '_blank'; previewOpen.rel = 'noopener noreferrer'; previewOpen.textContent = 'Mở tài liệu ở tab mới ↗';
@@ -51,7 +53,8 @@ export function renderLibrary() {
     if (!visible.length) { grid.append(E('p', 'exam-message', items.length ? 'Không có học liệu phù hợp từ khóa.' : 'Bảng tính chưa có tài liệu có liên kết.')); return; }
     for (const item of visible) {
       const card = E('article', 'library-card');
-      const icon = E('div', `library-card-icon ${item.kind === 'folder' ? 'is-folder' : item.kind === 'video' ? 'is-video' : 'is-document'}`, item.kind === 'folder' ? '📁' : item.kind === 'video' ? '▶' : '▤');
+      const cardBadge = E('div', `library-card-icon ${item.kind === 'folder' ? 'is-folder' : item.kind === 'video' ? 'is-video' : 'is-document'}`);
+      cardBadge.append(icon(item.kind === 'folder' ? 'library' : item.kind === 'video' ? 'video' : 'exam-paper', 20));
       const name = E('h3', '', item.name);
       const typeText = item.kind === 'folder' ? 'Thư mục Google Drive' : item.kind === 'video' ? 'Video' : `${item.extension && item.extension !== 'com' ? item.extension.toUpperCase() : 'Tài liệu'}${item.subject ? ` · ${item.subject}` : ''}`;
       const meta = E('small', 'library-card-meta', typeText);
@@ -71,7 +74,7 @@ export function renderLibrary() {
           if (downloadUrl) { const download = document.createElement('a'); download.className = 'library-link-btn'; download.href = downloadUrl; download.target = '_blank'; download.rel = 'noopener noreferrer'; download.textContent = 'Tải xuống ↓'; download.setAttribute('download', ''); actions.append(download); }
         }
       }
-      card.append(icon, name, meta, description, actions); grid.append(card);
+      card.append(cardBadge, name, meta, description, actions); grid.append(card);
     }
   }
 
@@ -90,7 +93,7 @@ export function renderLibrary() {
       status.textContent = error.message || 'Không tải được thư viện.';
       grid.replaceChildren(E('p', 'library-load-error', `${status.textContent} Kiểm tra bảng tính đã Publish to web dạng CSV và triển khai API /api/library.`));
       count.textContent = 'Chưa tải được';
-    } finally { loading = false; refresh.disabled = false; refresh.textContent = '↻ Làm mới'; }
+    } finally { loading = false; refresh.disabled = false; refresh.textContent = 'Làm mới'; refresh.prepend(icon('refresh', 14)); }
   }
   search.addEventListener('input', draw);
   loadItems();

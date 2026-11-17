@@ -255,21 +255,9 @@ export function renderExam() {
   const showcase = E('section', 'exam-showcase');
   const copy = E('div', 'exam-showcase-copy');
   copy.append(
-    E('div', 'exam-showcase-eyebrow', 'PHÒNG THI TRỰC TUYẾN HTVVM'),
-    E('h2', 'exam-showcase-title', 'Làm bài thi & Chấm điểm tự động'),
-    E('p', 'exam-showcase-subtitle', 'Tách đôi đề thi và phiếu OMR, đồng hồ chạy liên tục ngay cả khi thoát màn hình và tự động nộp khi hết giờ, lưu từng lượt thi cùng bảng xếp hạng theo đề.'),
+    E('h2', 'exam-showcase-title', 'Phòng thi & chấm điểm tự động'),
+    E('p', 'exam-showcase-subtitle', 'Tách đôi đề thi và phiếu OMR, đồng hồ chạy liên tục ngay cả khi thoát màn hình và tự động nộp khi hết giờ, lưu từng lượt thi cùng bảng xếp hạng theo đề.')
   );
-  const trust = E('div', 'exam-showcase-trust');
-  for (const [symbol, text] of [
-    ['↻', 'Tự lưu bài làm'],
-    ['✓', 'Chấm điểm tự động'],
-    ['◷', 'Lịch sử kết quả']
-  ]) {
-    const item = E('span', 'exam-showcase-trust-item');
-    item.append(E('b', '', symbol), E('span', '', text));
-    trust.append(item);
-  }
-  copy.append(trust);
   const bar = E('div', 'exam-tabs');
   const body = E('div', 'exam-body');
   const openList = () => {
@@ -284,8 +272,8 @@ export function renderExam() {
   };
   const ctas = E('div', 'exam-showcase-actions');
   ctas.append(
-    button('Mở kho đề thi →', 'primary-btn', openList),
-    button('Xem lịch sử & thống kê', 'exam-showcase-secondary', openHistory)
+    button('Mở kho đề thi', 'primary-btn', openList),
+    button('Lịch sử & thống kê', 'exam-showcase-secondary', openHistory)
   );
   copy.append(ctas);
   showcase.append(copy);
@@ -442,7 +430,7 @@ async function showList(host) {
             await api('update-lock', { id: x.id, manualLocked: false, deadlineAt: parsedTs, maxAttempts: nextLimit });
             showList(host);
           } catch (err) {
-            lockStatusMsg.textContent = `⚠ ${err.message || String(err)}`;
+            lockStatusMsg.textContent = `${err.message || String(err)}`;
             saveLockBtn.disabled = false;
           }
         });
@@ -461,7 +449,7 @@ async function showList(host) {
             }
             showList(host);
           } catch (err) {
-            lockStatusMsg.textContent = `⚠ ${err.message || String(err)}`;
+            lockStatusMsg.textContent = `${err.message || String(err)}`;
             instantBtn.disabled = false;
           }
         });
@@ -471,7 +459,7 @@ async function showList(host) {
             await api('update-lock', { id: x.id, manualLocked: false, deadlineAt: null });
             showList(host);
           } catch (err) {
-            lockStatusMsg.textContent = `⚠ ${err.message || String(err)}`;
+            lockStatusMsg.textContent = `${err.message || String(err)}`;
             clearDlBtn.disabled = false;
           }
         });
@@ -561,7 +549,7 @@ async function begin(host, id, options = {}) {
         });
       } catch (err) {
         busy = false;
-        status.textContent = `⚠ Chưa nộp được (${err.message || 'lỗi mạng'}). Bấm Nộp bài để gửi lại.`;
+        status.textContent = `Chưa nộp được (${err.message || 'lỗi mạng'}). Bấm Nộp bài để gửi lại.`;
         status.classList.add('exam-save-warning');
         if (remaining() > 0 && !ticker) ticker = setInterval(update, 250);
       }
@@ -968,7 +956,7 @@ async function begin(host, id, options = {}) {
     const update = () => {
       if (!host.isConnected) { clearTimer(); return; }
       const ms = remaining(), seconds = Math.ceil(ms / 1000);
-      timer.textContent = `⏱ ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
       timer.classList.toggle('exam-timer-urgent', ms <= 60000);
       if (ms <= 0) submit(true);
     };
@@ -995,8 +983,8 @@ async function begin(host, id, options = {}) {
         if (hidden) {
           leaveScreenCount += 1;
           violationBadge.hidden = false;
-          violationBadge.textContent = `⚠ Rời màn hình: ${leaveScreenCount}`;
-          status.textContent = `⚠ Rời màn hình (${leaveScreenCount} lần) — đồng hồ vẫn đang chạy liên tục.`;
+          violationBadge.textContent = `Rời màn hình: ${leaveScreenCount}`;
+          status.textContent = `Rời màn hình (${leaveScreenCount} lần) — đồng hồ vẫn đang chạy liên tục.`;
           status.classList.add('exam-save-warning');
         } else {
           update();
@@ -1038,9 +1026,10 @@ function showResult(host, result, id, meta = {}) {
     const docBox = E('div', 'exam-pdf-pages');
     docBox.hidden = true;
     let docLoaded = false;
-    const toggleDocBtn = button('📄 Mở lại đề thi gốc (PDF / Drive)', 'exam-tab', () => {
+    const toggleDocBtn = button('Mở lại đề thi gốc (PDF / Drive)', 'exam-tab', () => {
       docBox.hidden = !docBox.hidden;
-      toggleDocBtn.textContent = docBox.hidden ? '📄 Mở lại đề thi gốc (PDF / Drive)' : '📄 Ẩn đề thi gốc';
+      toggleDocBtn.textContent = docBox.hidden ? 'Mở lại đề thi gốc (PDF / Drive)' : 'Ẩn đề thi gốc';
+      toggleDocBtn.prepend(icon('exam-paper', 14));
       if (!docBox.hidden && !docLoaded) {
         docLoaded = true;
         docBox.replaceChildren(E('p', 'exam-message', 'Đang tải đề thi gốc…'));
@@ -1049,10 +1038,11 @@ function showResult(host, result, id, meta = {}) {
           frame.className = 'exam-source-document';
           frame.src = meta.sourceUrl;
           frame.title = 'Tài liệu đề thi gốc';
-          docBox.replaceChildren(frame);
+    docBox.replaceChildren(frame);
         });
       }
     });
+    toggleDocBtn.prepend(icon('exam-paper', 14));
     docWrap.append(toggleDocBtn, docBox);
     p.append(docWrap);
   }

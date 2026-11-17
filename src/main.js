@@ -58,7 +58,7 @@ function createShell() {
   left.append(makeButton('☰', 'mobile-menu', () => { sidebarOpen = !sidebarOpen; updateSidebar(); }), element('div', 'page-title', 'Tổng quan'));
   left.lastChild.id = 'page-title';
   const right = element('div', 'top-right');
-  const status = element('span', 'server-status', '◌ Đang đồng bộ giờ'); status.id = 'server-status';
+  const status = element('span', 'server-status', 'Đang đồng bộ giờ'); status.id = 'server-status';
   const select = element('select', 'theme-select'); select.id = 'theme-select'; select.setAttribute('aria-label', 'Chọn giao diện');
   Object.entries(THEMES).forEach(([key, label]) => { const option = document.createElement('option'); option.value = key; option.textContent = label; select.append(option); });
   select.addEventListener('change', () => changeTheme(select.value));
@@ -91,14 +91,14 @@ function drawEntryScreen() {
   entryScreen = screen;
   if (authLoading) {
     const loading = element('div', 'entry-loading-card');
-    loading.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'HTVVM STUDIO'), element('h1', 'entry-title', 'Đang kiểm tra phiên đăng nhập'), element('p', 'entry-copy', 'Đang kết nối an toàn với không gian học tập…'));
+    loading.append(element('span', 'entry-logo', 'H'), element('h1', 'entry-title', 'Đang kiểm tra phiên đăng nhập'), element('p', 'entry-copy', 'Đang kết nối tới tài khoản Google của bạn…'));
     screen.append(loading);
   } else if (!user) {
     const layout = element('div', 'entry-layout');
     const intro = element('div', 'entry-intro');
-    intro.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'HTVVM STUDIO'), element('h1', 'entry-title', 'Không gian học tập của bạn.'), element('p', 'entry-copy', 'Luyện thi, hệ thống kiến thức, tập trung và theo dõi tiến trình học trên một nền tảng duy nhất.'));
+    intro.append(element('span', 'entry-logo', 'H'), element('h1', 'entry-title', 'HTVVM Studio'), element('p', 'entry-copy', 'Soạn đề A4 chuẩn in, tổ chức thi trên phiếu OMR theo giờ máy chủ và ôn tập Hóa – Toán – Anh.'));
     const featureList = element('div', 'entry-feature-list');
-    for (const [iconName, title, desc] of [['exam-room','Phòng thi','Đề bên trái, phiếu OMR bên phải'],['exam-paper','Soạn đề A4','Soạn đề nhiều trang chuẩn như Word'],['focus','Góc tập trung','Pomodoro, tài liệu và âm nhạc']]) {
+    for (const [iconName, title, desc] of [['exam-room','Phòng thi OMR','Tách đôi đề PDF/Drive bên trái và phiếu tô bên phải'],['exam-paper','Soạn đề A4','Tự ngắt trang, chèn công thức KaTeX và xuất .docx / PDF'],['focus','Góc tập trung','Bấm giờ Pomodoro, Focus Mode và tài liệu học tập']]) {
       const item = element('div', 'entry-feature'); const ic = element('span',''); ic.append(icon(iconName, 18)); item.append(ic, element('div','', ''));
       item.lastChild.append(element('strong','',title), element('small','',desc)); featureList.append(item);
     }
@@ -167,11 +167,13 @@ function drawEntryScreen() {
     layout.append(intro, login); screen.append(layout);
   } else if (!safeWelcomeSeen(user.uid)) {
     const card = element('div', 'entry-welcome-card');
-    card.append(element('span', 'entry-logo', 'H'), element('p', 'entry-eyebrow', 'SẴN SÀNG HỌC TẬP'), element('h1', 'entry-title', `Chào mừng${user.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}!`), element('p', 'entry-copy', 'Không gian học tập đã sẵn sàng. Chọn mục tiêu hôm nay và bắt đầu từ bước nhỏ nhất.'));
-    const checklist = element('div', 'entry-welcome-points');
-    checklist.append(element('span','','✓  Theo dõi thời gian học'), element('span','','✓  Lưu tài liệu và nhạc học'), element('span','','✓  Hỏi trợ lý AI bất cứ lúc nào'));
-    const enter = makeButton('Vào không gian học tập →', 'entry-google-button', () => { markWelcomeSeen(user.uid); removeEntryScreen(); });
-    card.append(checklist, enter); screen.append(card);
+    card.append(
+      element('span', 'entry-logo', 'H'),
+      element('h1', 'entry-title', `Chào ${user.displayName ? user.displayName.split(' ').slice(-1)[0] : 'bạn'}`),
+      element('p', 'entry-copy', 'Tài khoản đã đồng bộ. Bạn có thể vào ngay bảng điều khiển để làm đề thi, soạn bài A4 hoặc luyện tập.')
+    );
+    const enter = makeButton('Mở bảng điều khiển', 'entry-google-button', () => { markWelcomeSeen(user.uid); removeEntryScreen(); });
+    card.append(enter); screen.append(card);
   } else {
     entryScreen = null;
     return;
@@ -280,7 +282,7 @@ function updateNotice() {
   frame.notice.hidden = !message;
   frame.notice.textContent = message;
 }
-function setSyncBadge() { frame.status.textContent = AppClock.isSynced ? '● Giờ máy chủ đã đồng bộ' : '◌ Giờ máy chủ chưa đồng bộ'; frame.status.classList.toggle('synced', AppClock.isSynced); }
+function setSyncBadge() { frame.status.textContent = AppClock.isSynced ? 'Giờ máy chủ đã đồng bộ' : 'Giờ máy chủ chưa đồng bộ'; frame.status.classList.toggle('synced', AppClock.isSynced); }
 async function syncClock() { await AppClock.syncWithServer(); AppStore.set('timeSynced', AppClock.isSynced); setSyncBadge(); }
 
 initializeTheme(); createShell(); mountAIBot(); mountPersistentMusicPlayer(); startRouter(); startAuth();

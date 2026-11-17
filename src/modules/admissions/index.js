@@ -5,7 +5,7 @@ const fieldsFor = Object.fromEntries(COMBINATIONS.map((combo) => [combo.code, co
 export function renderAdmissions() {
   const root = element('section', 'admissions-root');
   const hero = element('section', 'hero admissions-hero');
-  hero.append(element('div', 'eyebrow', 'TUYỂN SINH HTVVM'), element('h2', 'hero-title', 'Tính điểm tổ hợp & Xét tuyển'), element('p', 'hero-subtitle', 'Nhập điểm các môn để ghép tổ hợp hợp lệ, tính điểm ưu tiên theo công thức giảm tuyến tính bạn đang cấu hình và xem nhóm ngành tham khảo.'));
+  hero.append(element('h2', 'hero-title', 'Tính điểm tổ hợp & Xét tuyển'), element('p', 'hero-subtitle', 'Nhập điểm các môn để ghép tổ hợp hợp lệ, tính điểm ưu tiên theo công thức giảm tuyến tính bạn đang cấu hình và xem nhóm ngành tham khảo.'));
   root.append(hero);
   const layout = element('div', 'admissions-layout');
   const inputPanel = element('section', 'exam-panel admissions-panel');
