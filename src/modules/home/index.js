@@ -66,8 +66,9 @@ export function renderHome() {
   let alive = true;
   const unsubscribeUser = AppStore.subscribe('user', () => { if (alive) { loadBoard(); loadExamProgress(); } });
   const unsubscribeStreak = AppStore.subscribe('loginStreak', () => { if (alive) loadBoard(); });
+  const unsubscribeStats = AppStore.subscribe('studyStats', (stats) => { if (alive && stats) paintMyBanner(stats); });
   const watcher = new MutationObserver(() => {
-    if (!wrap.isConnected) { alive = false; unsubscribeUser(); unsubscribeStreak(); watcher.disconnect(); }
+    if (!wrap.isConnected) { alive = false; unsubscribeUser(); unsubscribeStreak(); unsubscribeStats(); watcher.disconnect(); }
   });
   watcher.observe(document.getElementById('main-content') || document.body, { childList: true });
   const examProgress = element('section', 'home-exam-stats-panel');
@@ -130,7 +131,7 @@ export function renderHome() {
       const details = element('div', 'home-board-person');
       const subText = activeBoardTab === 'login'
         ? `Kỷ lục ${row.bestLoginStreak || row.loginStreak || 1} ngày · ${row.title || 'Đang học'}`
-        : `${row.title || 'Đang học'}${row.loginStreak ? ` · Đăng nhập ${row.loginStreak} ngày` : ''}`;
+        : `${row.title || 'Đang học'}${row.streak ? ` · Chuỗi học ${row.streak} ngày` : ''}${row.loginStreak ? ` · Đăng nhập ${row.loginStreak} ngày` : ''}`;
       details.append(element('strong', '', row.name || 'Người học'), element('small', '', subText));
       const metric = activeBoardTab === 'login'
         ? `${row.loginStreak || 0} ngày`
@@ -138,6 +139,26 @@ export function renderHome() {
       line.append(rank, details, element('strong', 'home-board-time', metric));
       board.append(line);
     });
+  }
+
+  function paintMyBanner(my = {}) {
+    if (!auth?.currentUser) {
+      myStreakBanner.hidden = true;
+      return;
+    }
+    const storeStats = AppStore.get('studyStats') || {};
+    const streakNow = Math.max(Number(my.loginStreak) || 0, Number(storeStats.loginStreak) || 0, Number(AppStore.get('loginStreak')) || 0);
+    const streakBest = Math.max(Number(my.bestLoginStreak) || 0, Number(storeStats.bestLoginStreak) || 0, streakNow);
+    const studyStreak = Math.max(Number(my.streak) || 0, Number(storeStats.streak) || 0);
+    const totalSec = Number.isFinite(Number(my.totalSeconds)) ? Number(my.totalSeconds) : (Number(storeStats.totalSeconds) || 0);
+    const todaySec = Number.isFinite(Number(my.todaySeconds)) ? Number(my.todaySeconds) : (Number(storeStats.todaySeconds) || 0);
+    myStreakBanner.hidden = false;
+    myStreakBanner.replaceChildren(
+      icon('flame', 15),
+      element('span', '', 'Chuỗi đăng nhập: '),
+      element('strong', '', `${streakNow} ngày liên tiếp`),
+      element('small', '', `(Kỷ lục ${streakBest} ngày · Chuỗi học ${studyStreak} ngày · Hôm nay ${fmt(todaySec)} · Tổng ${fmt(totalSec)})`)
+    );
   }
 
   async function loadBoard() {
@@ -163,15 +184,7 @@ export function renderHome() {
       cachedBoardData = data;
       const my = data.myStats || {};
       shareToggle.checked = Boolean(my.sharing);
-      const streakNow = Math.max(Number(my.loginStreak) || 0, Number(AppStore.get('loginStreak')) || 0);
-      const streakBest = Math.max(Number(my.bestLoginStreak) || 0, streakNow);
-      myStreakBanner.hidden = false;
-      myStreakBanner.replaceChildren(
-        icon('flame', 15),
-        element('span', '', `Chuỗi đăng nhập của bạn: `),
-        element('strong', '', `${streakNow} ngày liên tiếp`),
-        element('small', '', `(Kỷ lục ${streakBest} ngày)`)
-      );
+      paintMyBanner(my);
       renderBoardRows();
     } catch (error) {
       if (alive) board.replaceChildren(element('p', 'home-board-empty', error.message || 'Không tải được bảng xếp hạng.'));

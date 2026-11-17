@@ -27,3 +27,14 @@ export function normalizeRemaining(value, duration) {
   if (!validFocusDuration(duration) || !Number.isFinite(value)) return duration;
   return Math.max(0, Math.min(duration, Math.floor(value)));
 }
+
+/** Study time increments only while focus Pomodoro runs or manual session is active. */
+export function shouldCountStudy({ running = false, mode = 'focus', manualActive = false } = {}) {
+  return (Boolean(running) && mode === 'focus') || Boolean(manualActive);
+}
+
+/** Isolate browser fallback study snapshots by Firebase uid. */
+export function studyStorageKeyForUid(uid) {
+  const safe = String(uid || '').trim().replace(/[^A-Za-z0-9_-]/g, '');
+  return `htvvm-local-study-stats-v3:${safe || 'guest'}`;
+}

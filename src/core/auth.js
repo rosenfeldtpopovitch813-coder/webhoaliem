@@ -3,10 +3,27 @@ import { observeAuth, settleRedirect, upsertUserProfile, getUserTheme, consumeRe
 import { applyTheme } from './theme.js';
 import { getVNDateString } from '../../shared/time-utils.js';
 
+export function syncStudyStatsToStore(stats) {
+  if (!stats || typeof stats !== 'object') return;
+  const loginStreak = Math.max(0, Math.floor(Number(stats.loginStreak) || 0));
+  const bestLoginStreak = Math.max(Math.floor(Number(stats.bestLoginStreak) || 0), loginStreak);
+  AppStore.set('studyStats', {
+    totalSeconds: Math.max(0, Math.floor(Number(stats.totalSeconds) || 0)),
+    todaySeconds: Math.max(0, Math.floor(Number(stats.todaySeconds) || 0)),
+    streak: Math.max(0, Math.floor(Number(stats.streak) || 0)),
+    loginStreak,
+    bestLoginStreak,
+    title: stats.title || '',
+    sharing: Boolean(stats.sharing)
+  });
+  AppStore.set('loginStreak', loginStreak);
+  AppStore.set('bestLoginStreak', bestLoginStreak);
+}
+
 async function syncDailyLoginCheckin(user) {
   if (!user?.uid) return;
   const dayKey = getVNDateString();
-  const cacheKey = `htvvm-login-checkin:${user.uid}:${dayKey}`;
+  const cacheKey = `htvvm-login-checkin-v2:${user.uid}:${dayKey}`;
   let alreadyCheckedToday = false;
   try { alreadyCheckedToday = localStorage.getItem(cacheKey) === '1'; } catch {}
   try {
@@ -20,9 +37,10 @@ async function syncDailyLoginCheckin(user) {
     if (!res.ok) return;
     const data = await res.json().catch(() => null);
     if (data?.stats) {
-      AppStore.set('loginStreak', Number(data.stats.loginStreak) || 1);
-      AppStore.set('bestLoginStreak', Number(data.stats.bestLoginStreak) || Number(data.stats.loginStreak) || 1);
-      try { localStorage.setItem(cacheKey, '1'); } catch {}
+      syncStudyStatsToStore(data.stats);
+      if ((Number(data.stats.loginStreak) || 0) >= 1) {
+        try { localStorage.setItem(cacheKey, '1'); } catch {}
+      }
     }
   } catch { /* non-blocking background streak sync */ }
 }
@@ -59,6 +77,9 @@ export function startAuth() {
           AppStore.set('notice', 'Trình duyệt di động không giữ được phiên đăng nhập (thường do WebView Zalo/Messenger hoặc chặn cookie chéo trang). Hãy mở bằng Chrome hoặc Safari.');
         }
         pendingRedirect = false;
+        AppStore.set('studyStats', null);
+        AppStore.set('loginStreak', 0);
+        AppStore.set('bestLoginStreak', 0);
         AppStore.set('authLoading', false);
         return;
       }

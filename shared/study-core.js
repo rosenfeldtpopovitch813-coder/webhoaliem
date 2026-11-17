@@ -6,7 +6,7 @@ export const MAX_ALLOWLIST_ITEMS = 3;
 export const SESSION_TTL_MS = 90000;
 export const TITLES = Object.freeze([{seconds:0,label:'Nước tinh khiết'},{seconds:3600,label:'Caffein'},{seconds:7200,label:'Dopamine'},{seconds:10800,label:'Adrenaline'},{seconds:14400,label:'Serotonin'},{seconds:18000,label:'Cortisol'}]);
 export function titleFor(seconds){ return [...TITLES].reverse().find(x=>seconds>=x.seconds)?.label||TITLES[0].label; }
-export function streakNext(previousDay,previousStreak,timestamp){const day=getVNDayIndex(timestamp);return previousDay===day?previousStreak:previousDay===day-1?previousStreak+1:1;}
+export function streakNext(previousDay,previousStreak,timestamp){const day=getVNDayIndex(timestamp);const prev=Math.max(0,Math.floor(Number(previousStreak)||0));return previousDay===day?Math.max(1,prev):previousDay===day-1?prev+1:1;}
 export function safeIncrement(lastPing,now){if(!Number.isFinite(lastPing)||now<lastPing)return 0;return Math.min(MAX_GAP_MS,Math.max(0,now-lastPing));}
 export function applyHeartbeat(current,now,sessionId,name){const day=getVNDayIndex(now);const state=current&&typeof current==='object'?current:{};const session=state.session;
  if(session&&session.id!==sessionId&&now-session.lastPing<SESSION_TTL_MS)return {state,accepted:false,reason:'another-session'};
@@ -133,30 +133,61 @@ export function activeLoginStreakFor(state = {}, day = getVNDayIndex()) {
 
 /** Update consecutive daily login streak using server VN day index (UTC+7). */
 export function applyLoginStreak(current, now = Date.now(), name = 'Người học') {
- const day = getVNDayIndex(now);
- const state = current && typeof current === 'object' ? current : {};
- const prevDay = Number(state.lastLoginDay);
- let loginStreak = Math.max(0, Math.floor(Number(state.loginStreak) || 0));
- let incremented = false;
- if (prevDay === day) {
-   loginStreak = Math.max(1, loginStreak);
- } else if (prevDay === day - 1) {
-   loginStreak = loginStreak + 1;
-   incremented = true;
- } else {
-   loginStreak = 1;
-   incremented = true;
- }
- const bestLoginStreak = Math.max(Math.floor(Number(state.bestLoginStreak) || 0), loginStreak);
- return {
-   incremented,
-   state: {
-     ...state,
-     displayName: String(name || state.displayName || 'Người học').slice(0, 80),
-     lastLoginDay: day,
-     lastLoginAt: now,
-     loginStreak,
-     bestLoginStreak
-   }
- };
+  const day = getVNDayIndex(now);
+  const state = current && typeof current === 'object' ? current : {};
+  const prevDay = Number(state.lastLoginDay);
+  const activeStudyStreak = Number(state.lastStudyDay) >= day - 1
+    ? Math.max(0, Math.floor(Number(state.streak) || 0))
+    : 0;
+  let loginStreak = Math.max(0, Math.floor(Number(state.loginStreak) || 0));
+  let incremented = false;
+  if (prevDay === day) {
+    loginStreak = Math.max(1, loginStreak);
+  } else if (prevDay === day - 1) {
+    loginStreak = loginStreak + 1;
+    incremented = true;
+  } else {
+    loginStreak = 1;
+    incremented = true;
+  }
+  // Carry over pre-existing active consecutive study streak once if account lacked loginSeeded.
+  if (!state.loginSeeded && activeStudyStreak > loginStreak) {
+    loginStreak = activeStudyStreak;
+  }
+  const bestLoginStreak = Math.max(Math.floor(Number(state.bestLoginStreak) || 0), loginStreak, activeStudyStreak);
+  return {
+    incremented,
+    state: {
+      ...state,
+      displayName: String(name || state.displayName || 'Người học').slice(0, 80),
+      lastLoginDay: day,
+      lastLoginAt: now,
+      loginStreak,
+      bestLoginStreak,
+      loginSeeded: true
+    }
+  };
+}
+
+/** Serialize canonical server study + streak stats shared across tracker and leaderboard APIs. */
+export function summarizeStudyStats(s = {}, now = Date.now()) {
+  const day = getVNDayIndex(now);
+  const totalSeconds = Math.floor((s?.totalMs || 0) / 1000);
+  const todaySeconds = s?.dayIndex === day ? Math.floor((s?.dailyMs || 0) / 1000) : 0;
+  const streak = Number(s?.lastStudyDay) >= day - 1 ? Math.max(0, Math.floor(Number(s?.streak) || 0)) : 0;
+  const rawLoginStreak = activeLoginStreakFor(s, day);
+  const loginStreak = !s?.loginSeeded && streak > rawLoginStreak ? streak : rawLoginStreak;
+  const bestLoginStreak = Math.max(Math.floor(Number(s?.bestLoginStreak) || 0), loginStreak, streak);
+  return {
+    totalSeconds,
+    todaySeconds,
+    streak,
+    loginStreak,
+    bestLoginStreak,
+    lastStudyDay: s?.lastStudyDay ?? null,
+    lastLoginDay: s?.lastLoginDay ?? null,
+    title: titleFor(totalSeconds),
+    sharing: !!s?.sharing,
+    serverNow: now
+  };
 }

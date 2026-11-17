@@ -11,6 +11,7 @@ import {
 } from '../../core/music-player.js';
 import { auth } from '../../core/firebase.js';
 import { AppStore } from '../../core/store.js';
+import { syncStudyStatsToStore } from '../../core/auth.js';
 import {
   HEARTBEAT_MS,
   MAX_ALLOWLIST_ITEMS,
@@ -20,8 +21,16 @@ import {
   rankProgressFor,
   titleFor
 } from '../../../shared/study-core.js';
-import { DEFAULT_FOCUS_SECONDS, durationFromFields, normalizeRemaining, validFocusDuration } from '../../../shared/focus-timer.js';
+import {
+  DEFAULT_FOCUS_SECONDS,
+  durationFromFields,
+  normalizeRemaining,
+  shouldCountStudy,
+  studyStorageKeyForUid,
+  validFocusDuration
+} from '../../../shared/focus-timer.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
+import { getVNDateString } from '../../../shared/time-utils.js';
 
 const fmt = s => {
   const safe = Math.max(0, Math.floor(Number(s) || 0));
@@ -120,19 +129,15 @@ export function renderFocus() {
 
   let duration = restoredTimer?.duration || initialDuration;
   let selectedMode = restoredTimer?.mode === 'break' ? 'break' : 'focus';
-  let running = Boolean(restoredTimer?.running && Number.isFinite(restoredTimer?.endTimeMs));
-  let endTimeMs = running ? Number(restoredTimer.endTimeMs) : 0;
-  let seconds = running
-    ? Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000))
+  // Always open Focus Zone paused so study time never increments before user starts the timer.
+  let running = false;
+  let endTimeMs = 0;
+  let seconds = restoredTimer && restoredTimer.running && Number.isFinite(restoredTimer.endTimeMs)
+    ? normalizeRemaining(Math.ceil((restoredTimer.endTimeMs - Date.now()) / 1000) || duration, duration)
     : restoredTimer && Number.isFinite(restoredTimer.remaining)
       ? normalizeRemaining(restoredTimer.remaining, duration)
       : duration;
-
-  if (running && seconds <= 0) {
-    running = false;
-    seconds = duration;
-    endTimeMs = 0;
-  }
+  if (seconds <= 0) seconds = duration;
 
   let modeButtons = [];
   const modes = element('div', 'focus-preset-pills');
@@ -143,7 +148,7 @@ export function renderFocus() {
   const progressTrack = element('div', 'focus-progress-track');
   const progressBar = element('div', 'focus-progress-bar');
   progressTrack.append(progressBar);
-  const timerHint = element('p', 'focus-timer-subnote', running ? 'Đồng hồ đang đếm ngược ổn định (không bị ngắt khi chuyển tab).' : 'Sẵn sàng bắt đầu phiên tập trung.');
+  const timerHint = element('p', 'focus-timer-subnote', 'Sẵn sàng bắt đầu phiên tập trung.');
   clockDisplayWrap.append(modeBadge, digits, progressTrack, timerHint);
 
   function updateProgressUI() {
@@ -158,7 +163,7 @@ export function renderFocus() {
   function saveTimerState() {
     try {
       localStorage.setItem('htvvm-focus-duration-v1', String(duration));
-      localStorage.setItem('htvvm-focus-mode-v1', selectedMode);
+      localStorage.setItem('htvvm-focus-timer-mode-v1', selectedMode);
       localStorage.setItem(
         'htvvm-focus-timer-state-v3',
         JSON.stringify({
@@ -172,6 +177,7 @@ export function renderFocus() {
       );
     } catch {}
   }
+  saveTimerState();
 
   function updateControls() {
     toggle.textContent = running ? 'Tạm dừng' : 'Bắt đầu';
@@ -192,6 +198,13 @@ export function renderFocus() {
     });
   }
 
+  function haltPomodoroCounting(msg) {
+    sessionSeq += 1;
+    if (!manualActive && (sessionOrigin === 'pomodoro' || sessionId || sessionStarting)) {
+      void stopSession(msg);
+    }
+  }
+
   async function selectPreset(s, mode) {
     running = false;
     endTimeMs = 0;
@@ -205,9 +218,7 @@ export function renderFocus() {
     syncModeButtons();
     saveTimerState();
     updateControls();
-    if (sessionOrigin === 'pomodoro' && sessionId) {
-      void stopSession('Đã chuyển mốc đồng hồ và lưu phiên học.');
-    }
+    haltPomodoroCounting('Đã chuyển mốc đồng hồ và lưu phiên học.');
   }
 
   for (const [label, s, mode] of [
@@ -231,9 +242,7 @@ export function renderFocus() {
       timerHint.textContent = 'Đồng hồ đang tạm dừng. Bấm Bắt đầu để chạy tiếp.';
       saveTimerState();
       updateControls();
-      if (sessionOrigin === 'pomodoro' && sessionId) {
-        void stopSession('Đã tạm dừng đồng hồ; thời gian học đã được lưu.');
-      }
+      haltPomodoroCounting('Đã tạm dừng đồng hồ; thời gian học đã được lưu.');
       return;
     }
 
@@ -259,9 +268,7 @@ export function renderFocus() {
     timerHint.textContent = 'Đã đặt lại đồng hồ về ban đầu.';
     saveTimerState();
     updateControls();
-    if (sessionOrigin === 'pomodoro' && sessionId) {
-      void stopSession('Đã đặt lại đồng hồ và lưu phiên học.');
-    }
+    haltPomodoroCounting('Đã đặt lại đồng hồ và lưu phiên học.');
   });
   controls.append(toggle, reset);
 
@@ -291,9 +298,7 @@ export function renderFocus() {
     durationEditor.hidden = true;
     saveTimerState();
     updateControls();
-    if (sessionOrigin === 'pomodoro' && sessionId) {
-      void stopSession('Đã thay thời lượng và lưu phiên học trước đó.');
-    }
+    haltPomodoroCounting('Đã thay thời lượng và lưu phiên học trước đó.');
   });
   durationFields.append(minutesInput, element('span', 'focus-duration-unit', 'phút'), secondsInput, element('span', 'focus-duration-unit', 'giây'), applyDuration);
   const customStatus = element('p', 'focus-muted', `Đang dùng ${Math.floor(duration / 60)} phút ${duration % 60} giây.`);
@@ -332,10 +337,12 @@ export function renderFocus() {
   const actions = element('div', 'focus-actions');
   const begin = button('Ghi nhận giờ học', 'focus-btn primary', () => startSession('manual'));
   const end = button('Lưu & Kết thúc phiên', 'focus-btn', async () => {
+    sessionSeq += 1;
     if (running) {
       seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
       running = false;
       endTimeMs = 0;
+      timerHint.textContent = 'Đã kết thúc phiên tập trung.';
       saveTimerState();
       updateControls();
     }
@@ -803,36 +810,40 @@ export function renderFocus() {
   }
   setWorkspaceMode('split');
 
-  // --- ĐỒNG BỘ GIỜ HỌC VỚI MÁY CHỦ & BỘ ĐẾM ĐỊA PHƯƠNG KHÔNG BAO GIỜ NGẮT ---
+  // --- ĐỒNG BỘ GIỜ HỌC VỚI MÁY CHỦ & BỘ ĐẾM ĐỊA PHƯƠNG THEO TÀI KHOẢN ---
   const SESSION_STORAGE_KEY = 'htvvm-study-session-v1';
-  const LOCAL_STUDY_KEY = 'htvvm-local-study-stats-v2';
-  const todayKey = () => new Date().toLocaleDateString('en-CA');
+  const todayKey = () => getVNDateString();
+  const currentUid = () => auth?.currentUser?.uid || AppStore.get('user')?.uid || '';
 
-  function readLocalStudy() {
+  function readLocalStudy(uid = currentUid()) {
     try {
-      const raw = JSON.parse(localStorage.getItem(LOCAL_STUDY_KEY) || 'null');
+      const raw = JSON.parse(localStorage.getItem(studyStorageKeyForUid(uid)) || 'null');
       if (raw && typeof raw === 'object') {
         const isToday = raw.dayKey === todayKey();
         return {
           totalSeconds: Math.max(0, Math.floor(Number(raw.totalSeconds) || 0)),
           todaySeconds: isToday ? Math.max(0, Math.floor(Number(raw.todaySeconds) || 0)) : 0,
           streak: Math.max(0, Math.floor(Number(raw.streak) || 0)),
+          loginStreak: Math.max(0, Math.floor(Number(raw.loginStreak) || 0)),
+          bestLoginStreak: Math.max(0, Math.floor(Number(raw.bestLoginStreak) || 0)),
           sharing: !!raw.sharing
         };
       }
     } catch {}
-    return { totalSeconds: 0, todaySeconds: 0, streak: 0, sharing: false };
+    return { totalSeconds: 0, todaySeconds: 0, streak: 0, loginStreak: 0, bestLoginStreak: 0, sharing: false };
   }
 
-  function writeLocalStudy(snap) {
+  function writeLocalStudy(snap, uid = currentUid()) {
     try {
       localStorage.setItem(
-        LOCAL_STUDY_KEY,
+        studyStorageKeyForUid(uid),
         JSON.stringify({
           dayKey: todayKey(),
           totalSeconds: snap.totalSeconds || 0,
           todaySeconds: snap.todaySeconds || 0,
           streak: snap.streak || 0,
+          loginStreak: snap.loginStreak || 0,
+          bestLoginStreak: snap.bestLoginStreak || 0,
           sharing: !!snap.sharing,
           updatedAt: Date.now()
         })
@@ -840,9 +851,14 @@ export function renderFocus() {
     } catch {}
   }
 
-  let sessionId = null, sessionOrigin = null, pingBusy = false, alive = true, sessionStopping = false, sessionStarting = false;
+  let sessionId = null, sessionOrigin = null, sessionSeq = 0, pingBusy = false, alive = true, sessionStopping = false, sessionStarting = false;
   let manualActive = false;
-  let statsSnapshot = readLocalStudy();
+  let statsSnapshot = (() => {
+    const uid = currentUid();
+    const cached = readLocalStudy(uid);
+    const storeStats = AppStore.get('studyStats');
+    return uid && storeStats ? { ...cached, ...storeStats } : cached;
+  })();
   let pendingMs = 0, lastStatsRenderPerf = performance.now(), lastTimerPersist = 0;
 
   async function request(path, method = 'GET', body, options = {}) {
@@ -889,16 +905,20 @@ export function renderFocus() {
     } catch { return null; }
   }
 
-  const isCountingStudy = () => (running && selectedMode === 'focus') || manualActive || Boolean(sessionId);
+  const isCountingStudy = () => shouldCountStudy({ running, mode: selectedMode, manualActive });
 
   function flushPendingToSnapshot() {
+    if (!isCountingStudy()) {
+      pendingMs = 0;
+      return;
+    }
     const wholeSec = Math.floor(pendingMs / 1000);
     if (wholeSec > 0) {
       statsSnapshot = {
         ...statsSnapshot,
         totalSeconds: (statsSnapshot.totalSeconds || 0) + wholeSec,
         todaySeconds: (statsSnapshot.todaySeconds || 0) + wholeSec,
-        streak: Math.max(1, statsSnapshot.streak || 0)
+        streak: auth?.currentUser ? (statsSnapshot.streak || 0) : Math.max(1, statsSnapshot.streak || 0)
       };
       pendingMs -= wholeSec * 1000;
       writeLocalStudy(statsSnapshot);
@@ -909,11 +929,13 @@ export function renderFocus() {
     const liveSeconds = isCountingStudy() ? Math.floor(pendingMs / 1000) : 0;
     const totalSeconds = (statsSnapshot.totalSeconds || 0) + liveSeconds;
     const todaySeconds = (statsSnapshot.todaySeconds || 0) + liveSeconds;
+    const studyStreak = Math.max(statsSnapshot.streak || 0, !auth?.currentUser && todaySeconds > 0 ? 1 : 0);
+    const loginStreak = Math.max(statsSnapshot.loginStreak || 0, Number(AppStore.get('loginStreak')) || 0);
     stats.replaceChildren();
     for (const [label, val] of [
       ['Hôm nay', fmtFull(todaySeconds)],
       ['Tổng giờ', fmtFull(totalSeconds)],
-      ['Streak', `${statsSnapshot.streak || (todaySeconds > 0 ? 1 : 0)} ngày`],
+      ['Chuỗi (Học / ĐN)', `${studyStreak} / ${loginStreak} ngày`],
       ['Danh hiệu', titleFor(totalSeconds)]
     ]) {
       const item = element('div', 'focus-stat');
@@ -947,11 +969,14 @@ export function renderFocus() {
   function showStats(s, reconcile = true) {
     if (!s) return;
     if (reconcile) {
-      flushPendingToSnapshot();
+      // Server stats are authoritative whenever synced; keep only sub-second live tick if still running.
+      pendingMs = isCountingStudy() ? (pendingMs % 1000) : 0;
       statsSnapshot = {
-        totalSeconds: Math.max(statsSnapshot.totalSeconds || 0, s.totalSeconds || 0),
-        todaySeconds: Math.max(statsSnapshot.todaySeconds || 0, s.todaySeconds || 0),
-        streak: Math.max(statsSnapshot.streak || 0, s.streak || 0),
+        totalSeconds: Math.max(0, Math.floor(Number(s.totalSeconds) || 0)),
+        todaySeconds: Math.max(0, Math.floor(Number(s.todaySeconds) || 0)),
+        streak: Math.max(0, Math.floor(Number(s.streak) || 0)),
+        loginStreak: Math.max(0, Math.floor(Number(s.loginStreak) || 0)),
+        bestLoginStreak: Math.max(0, Math.floor(Number(s.bestLoginStreak) || 0)),
         sharing: !!s.sharing
       };
       writeLocalStudy(statsSnapshot);
@@ -959,13 +984,14 @@ export function renderFocus() {
       statsSnapshot = { ...statsSnapshot, sharing: !!s.sharing };
       writeLocalStudy(statsSnapshot);
     }
+    syncStudyStatsToStore({ ...statsSnapshot, ...s });
     drawStats();
   }
 
   function updateSessionButtons() {
-    const activeAny = Boolean(sessionId) || manualActive;
+    const activeAny = isCountingStudy();
     begin.disabled = activeAny || sessionStopping || sessionStarting;
-    end.disabled = !activeAny;
+    end.disabled = !activeAny && !sessionStarting;
   }
 
   async function startSession(source = 'manual') {
@@ -978,14 +1004,23 @@ export function renderFocus() {
       status.textContent = 'Đang đếm giờ học trên thiết bị (đăng nhập Google để đồng bộ lên bảng xếp hạng).';
       return true;
     }
-    if (sessionStopping || sessionStarting || sessionId) return true;
+    if (sessionStarting || sessionId) return true;
+    const mySeq = ++sessionSeq;
     sessionStarting = true;
     updateSessionButtons();
     try {
       const data = await request('/api/study-tracker', 'POST', { action: 'start' });
-      if (!alive) return false;
-      sessionId = data.sessionId;
+      const startedId = data?.sessionId;
+      const desired = alive && mySeq === sessionSeq && (source === 'manual' ? manualActive : (running && selectedMode === 'focus'));
+      if (!desired) {
+        if (startedId) {
+          request('/api/study-tracker', 'POST', { action: 'stop', sessionId: startedId }, { keepalive: true }).catch(() => {});
+        }
+        return false;
+      }
+      sessionId = startedId;
       sessionOrigin = source;
+      pendingMs = 0;
       saveSession(sessionId, sessionOrigin);
       showStats(data.stats, true);
       status.textContent = source === 'pomodoro' ? 'Đồng hồ đang chạy và đồng bộ giờ học.' : 'Đang ghi nhận giờ học trực tuyến.';
@@ -1000,23 +1035,20 @@ export function renderFocus() {
   }
 
   async function loadStatus() {
+    statsSnapshot = readLocalStudy();
     drawStats();
     if (!auth?.currentUser) return;
     try {
+      const saved = getSavedSession();
+      if (saved?.id && !isCountingStudy()) {
+        // Close abandoned session from an earlier visit instead of silently resuming counting.
+        clearSavedSession();
+        await request('/api/study-tracker', 'POST', { action: 'stop', sessionId: saved.id }, { keepalive: true }).catch(() => {});
+      }
       const data = await request('/api/study-tracker');
       if (!alive) return;
       showStats(data.stats, true);
-      const saved = getSavedSession();
-      if (saved && saved.origin !== 'stopping' && Date.now() - (saved.savedAt || 0) < 80000) {
-        const resumed = await request('/api/study-tracker', 'POST', { action: 'resume', sessionId: saved.id }).catch(() => null);
-        if (resumed && alive) {
-          sessionId = saved.id;
-          sessionOrigin = saved.origin || 'manual';
-          saveSession(sessionId, sessionOrigin);
-          updateSessionButtons();
-          showStats(resumed.stats, true);
-        }
-      }
+      updateSessionButtons();
     } catch {
       // Giữ nguyên bộ đếm địa phương mượt mà
     }
@@ -1029,17 +1061,13 @@ export function renderFocus() {
     pingBusy = true;
     try {
       if (!sessionId) {
-        const started = await request('/api/study-tracker', 'POST', { action: 'start' });
-        if (alive && started?.sessionId) {
-          sessionId = started.sessionId;
-          sessionOrigin = running ? 'pomodoro' : 'manual';
-          saveSession(sessionId, sessionOrigin);
-          showStats(started.stats, true);
+        if (!sessionStarting && isCountingStudy()) {
+          await startSession(running ? 'pomodoro' : 'manual');
         }
       } else {
         const id = sessionId;
         const data = await request('/api/study-tracker', 'POST', { action: 'ping', sessionId: id });
-        if (alive && sessionId === id) {
+        if (alive && sessionId === id && isCountingStudy()) {
           showStats(data.stats, true);
           touchSavedSession();
         }
@@ -1057,8 +1085,10 @@ export function renderFocus() {
   }
 
   async function stopSession(msg = 'Đã lưu phiên học.') {
+    sessionSeq += 1;
     manualActive = false;
     flushPendingToSnapshot();
+    pendingMs = 0;
     const id = sessionId;
     sessionId = null;
     sessionOrigin = null;
@@ -1108,6 +1138,8 @@ export function renderFocus() {
       if (pendingMs >= 5000) {
         flushPendingToSnapshot();
       }
+    } else if (pendingMs !== 0) {
+      pendingMs = 0;
     }
 
     if (running) {
@@ -1144,7 +1176,26 @@ export function renderFocus() {
 
   const heartbeat = setInterval(ping, HEARTBEAT_MS);
   const unsubUser = AppStore.subscribe('user', () => {
-    if (alive && auth?.currentUser) void loadStatus();
+    if (!alive) return;
+    pendingMs = 0;
+    statsSnapshot = readLocalStudy();
+    if (auth?.currentUser) void loadStatus();
+    else drawStats();
+  });
+  const unsubStudySync = AppStore.subscribe('studyStats', (stats) => {
+    if (!alive || !stats) return;
+    statsSnapshot = {
+      ...statsSnapshot,
+      loginStreak: Math.max(0, Number(stats.loginStreak) || 0),
+      bestLoginStreak: Math.max(0, Number(stats.bestLoginStreak) || 0),
+      ...(!isCountingStudy() ? {
+        totalSeconds: Math.max(0, Number(stats.totalSeconds) || 0),
+        todaySeconds: Math.max(0, Number(stats.todaySeconds) || 0),
+        streak: Math.max(0, Number(stats.streak) || 0),
+        sharing: Boolean(stats.sharing)
+      } : {})
+    };
+    drawStats();
   });
 
   const showReturnConfirm = (awayMs) => {
@@ -1230,9 +1281,18 @@ export function renderFocus() {
   cleanup = () => {
     if (!alive) return;
     alive = false;
-    flushPendingToSnapshot();
+    sessionSeq += 1;
+    if (running && endTimeMs > 0) {
+      seconds = Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000));
+    }
+    running = false;
+    manualActive = false;
+    endTimeMs = 0;
+    pendingMs = 0;
+    clearSavedSession();
     saveTimerState();
     unsubUser();
+    unsubStudySync();
     unsubMusic();
     clearInterval(timerInterval);
     clearInterval(heartbeat);
@@ -1243,7 +1303,9 @@ export function renderFocus() {
     if (sessionId && auth?.currentUser) {
       const id = sessionId;
       sessionId = null;
-      request('/api/study-tracker', 'POST', { action: 'stop', sessionId: id }, { keepalive: true }).catch(() => {});
+      request('/api/study-tracker', 'POST', { action: 'stop', sessionId: id }, { keepalive: true })
+        .then((res) => { if (res?.stats) syncStudyStatsToStore(res.stats); })
+        .catch(() => {});
     }
   };
 

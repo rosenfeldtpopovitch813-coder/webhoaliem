@@ -1,39 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { identity, fail, assert } from '../lib/exam-server.js';
-import { rtdbGet, rtdbPut } from '../lib/rtdb-rest.js';
+import { rtdbGet, rtdbTransaction, abortTx } from '../lib/rtdb-rest.js';
 import {
+  SESSION_TTL_MS,
   applyHeartbeat,
   resumeHeartbeat,
   claimFocusAway,
   applyLoginStreak,
-  activeLoginStreakFor,
-  titleFor
+  summarizeStudyStats
 } from '../shared/study-core.js';
-import { getVNDayIndex } from '../shared/time-utils.js';
-
-const summarize = (s = {}, now = Date.now()) => {
-  const day = getVNDayIndex(now);
-  const loginStreak = activeLoginStreakFor(s, day);
-  return {
-    totalSeconds: Math.floor((s.totalMs || 0) / 1000),
-    todaySeconds: s.dayIndex === day ? Math.floor((s.dailyMs || 0) / 1000) : 0,
-    streak: s.lastStudyDay >= day - 1 ? s.streak || 0 : 0,
-    loginStreak,
-    bestLoginStreak: Math.max(Math.floor(Number(s.bestLoginStreak) || 0), loginStreak),
-    title: titleFor(Math.floor((s.totalMs || 0) / 1000)),
-    sharing: !!s.sharing
-  };
-};
-
-async function readUserNode(uid) {
-  const data = await rtdbGet(`study_tracking/${uid}`);
-  return data && typeof data === 'object' ? data : {};
-}
-
-async function writeUserNode(uid, nextState) {
-  const res = await rtdbPut(`study_tracking/${uid}`, nextState);
-  return res.val && typeof res.val === 'object' ? res.val : nextState;
-}
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -42,68 +17,91 @@ export default async function handler(req, res) {
     const user = await identity(req);
     const body = req.body || {};
     const action = req.method === 'GET' ? 'status' : String(body.action || '');
+    const userPath = `study_tracking/${user.uid}`;
     const now = Date.now();
 
     if (action === 'status') {
-      const cur = await readUserNode(user.uid);
-      return res.json({ stats: summarize(cur, now) });
+      const cur = (await rtdbGet(userPath)) || {};
+      return res.json({ stats: summarizeStudyStats(cur, now) });
     }
 
     if (action === 'login-checkin') {
-      const cur = await readUserNode(user.uid);
-      const { state: nextState, incremented } = applyLoginStreak(cur, now, user.name);
-      const saved = await writeUserNode(user.uid, nextState);
-      return res.json({ stats: summarize(saved, now), incremented });
+      let incremented = false;
+      const txRes = await rtdbTransaction(userPath, (raw) => {
+        const cur = raw && typeof raw === 'object' ? raw : {};
+        const applied = applyLoginStreak(cur, Date.now(), user.name);
+        incremented = applied.incremented;
+        return applied.state;
+      });
+      return res.json({ stats: summarizeStudyStats(txRes.val, Date.now()), incremented });
     }
 
     if (action === 'start') {
       const sessionId = randomUUID();
-      const cur = await readUserNode(user.uid);
-      const next = applyHeartbeat(
-        { ...cur, session: { id: sessionId, lastPing: now } },
-        now,
-        sessionId,
-        user.name
-      ).state;
-      const saved = await writeUserNode(user.uid, next);
-      return res.json({ sessionId, stats: summarize(saved, now) });
+      const txRes = await rtdbTransaction(userPath, (raw) => {
+        const cur = raw && typeof raw === 'object' ? raw : {};
+        const txNow = Date.now();
+        return applyHeartbeat(
+          { ...cur, session: { id: sessionId, lastPing: txNow } },
+          txNow,
+          sessionId,
+          user.name
+        ).state;
+      });
+      return res.json({ sessionId, stats: summarizeStudyStats(txRes.val, Date.now()) });
     }
 
     if (action === 'resume') {
       const id = String(body.sessionId || '');
       assert(/^[0-9a-f-]{36}$/i.test(id), 'Phiên không hợp lệ.');
-      const cur = await readUserNode(user.uid);
-      const resumed = resumeHeartbeat(cur, now, id, user.name);
-      const nextState = resumed.accepted
-        ? resumed.state
-        : applyHeartbeat({ ...cur, session: { id, lastPing: now } }, now, id, user.name).state;
-      const saved = await writeUserNode(user.uid, nextState);
-      return res.json({ sessionId: id, stats: summarize(saved, now), resumed: true });
+      const txRes = await rtdbTransaction(userPath, (raw) => {
+        const cur = raw && typeof raw === 'object' ? raw : {};
+        const txNow = Date.now();
+        const resumed = resumeHeartbeat(cur, txNow, id, user.name);
+        if (resumed.accepted) return resumed.state;
+        return applyHeartbeat({ ...cur, session: { id, lastPing: txNow } }, txNow, id, user.name).state;
+      });
+      return res.json({ sessionId: id, stats: summarizeStudyStats(txRes.val, Date.now()), resumed: true });
     }
 
     if (action === 'ping' || action === 'stop') {
       const id = String(body.sessionId || '');
       assert(/^[0-9a-f-]{36}$/i.test(id), 'Phiên không hợp lệ.');
-      const cur = await readUserNode(user.uid);
-      const baseCur = !cur?.session || cur.session.id !== id
-        ? { ...cur, session: { id, lastPing: cur?.session?.lastPing || now } }
-        : cur;
+      let addedMs = 0;
       const focusAwayMs = Number(body.focusAwayMs);
-      const updated = (action === 'ping' && body.focusMode === true && Number.isFinite(focusAwayMs) && focusAwayMs > 0)
-        ? claimFocusAway(baseCur, now, id, user.name, focusAwayMs)
-        : applyHeartbeat(baseCur, now, id, user.name);
-      const nextState = { ...updated.state };
-      if (action === 'stop') delete nextState.session;
-      const saved = await writeUserNode(user.uid, nextState);
-      return res.json({ stats: summarize(saved, now), awayAddedSeconds: Math.floor((updated.added || 0) / 1000) });
+      const txRes = await rtdbTransaction(userPath, (raw) => {
+        const cur = raw && typeof raw === 'object' ? raw : {};
+        const txNow = Date.now();
+        if (cur.session && cur.session.id !== id && txNow - (Number(cur.session.lastPing) || 0) < SESSION_TTL_MS) {
+          if (action === 'stop') return undefined;
+          return abortTx('Phiên học đã được thay thế ở tab hoặc cửa sổ khác.', 409);
+        }
+        const baseCur = !cur.session || cur.session.id !== id
+          ? { ...cur, session: { id, lastPing: txNow } }
+          : cur;
+        const updated = (action === 'ping' && body.focusMode === true && Number.isFinite(focusAwayMs) && focusAwayMs > 0)
+          ? claimFocusAway(baseCur, txNow, id, user.name, focusAwayMs)
+          : applyHeartbeat(baseCur, txNow, id, user.name);
+        if (!updated.accepted) return abortTx('Phiên học không hợp lệ hoặc đã thay đổi.', 409);
+        addedMs = updated.added || 0;
+        const nextState = { ...updated.state };
+        if (action === 'stop') delete nextState.session;
+        return nextState;
+      });
+      const finalState = txRes.val && typeof txRes.val === 'object' ? txRes.val : {};
+      return res.json({
+        stats: summarizeStudyStats(finalState, Date.now()),
+        awayAddedSeconds: Math.floor(addedMs / 1000)
+      });
     }
 
     if (action === 'sharing') {
       assert(typeof body.enabled === 'boolean', 'Giá trị chia sẻ không hợp lệ.');
-      const cur = await readUserNode(user.uid);
-      const nextState = { ...cur, sharing: body.enabled, displayName: user.name };
-      const saved = await writeUserNode(user.uid, nextState);
-      return res.json({ stats: summarize(saved, now) });
+      const txRes = await rtdbTransaction(userPath, (raw) => {
+        const cur = raw && typeof raw === 'object' ? raw : {};
+        return { ...cur, sharing: body.enabled, displayName: user.name };
+      });
+      return res.json({ stats: summarizeStudyStats(txRes.val, Date.now()) });
     }
 
     assert(false, 'Thao tác không hợp lệ.');
