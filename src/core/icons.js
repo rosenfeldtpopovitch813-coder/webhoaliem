@@ -28,7 +28,8 @@ const PATHS = {
   qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M17 17h4v4h-4z"/><path d="M14 20h1"/>',
   volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
   sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/>',
-  video: '<rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 10.5 17 13.5 22 17 22 7"/>'
+  video: '<rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 10.5 17 13.5 22 17 22 7"/>',
+  flask: '<path d="M9 3h6"/><path d="M10 3v5.4L4.7 17.5A2.2 2.2 0 0 0 6.6 21h10.8a2.2 2.2 0 0 0 1.9-3.5L14 8.4V3"/><path d="M7.5 15h9"/>'
 };
 
 export function icon(name, size = 18) {

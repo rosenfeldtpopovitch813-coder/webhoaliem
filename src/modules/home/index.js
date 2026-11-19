@@ -9,6 +9,7 @@ const modules = [
   ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay, dựng hình không gian, vẽ đồ thị và ghi chú lên PDF', '/whiteboard'],
   ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR bên phải, chấm điểm tự động', '/exam'],
   ['arena', 'Đấu trường học tập', 'Đối kháng theo vòng, ôn Tiếng Anh, Ai là Triệu Phú và Đấu trường 100', '/arena'],
+  ['flask', 'Mô hình thí nghiệm', 'Chọn môn học, xem cơ sở lý thuyết 6 mục và thực hành mô phỏng 3D tương tác', '/experiments'],
   ['handbook', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
   ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
   ['library', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
