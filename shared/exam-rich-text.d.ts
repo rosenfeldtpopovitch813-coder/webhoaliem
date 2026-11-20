@@ -39,6 +39,7 @@ export declare function cleanWordClipboardHtml(rawHtml?: string, fallbackPlain?:
 export declare function matchLeadPrefix(plainLine?: string): { label: string; space: string; rest: string } | null;
 export declare function autoFormatLeadPrefixHtml(rawHtml?: string, tag?: 'strong' | 'b'): string;
 export declare function parseFlexibleOptionTokens(line?: string): Array<{ letter: string; text: string }>;
+export declare function shouldSmartParseWordPaste(rawText?: string): boolean;
 export declare function parseSmartExamClipboardText(rawText?: string): {
   prologue: string;
   blocks: Array<any>;

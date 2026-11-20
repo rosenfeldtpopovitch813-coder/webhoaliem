@@ -11,6 +11,7 @@ import {
   sanitizeFontFamily,
   sanitizeFontSizePt,
   sanitizeInlineRichHtml,
+  shouldSmartParseWordPaste,
   stripRichHtmlToPlainText
 } from '../../../../shared/exam-rich-text.js';
 import { renderRichExamText } from './examTemplates';
@@ -224,6 +225,7 @@ type Props = {
   onTurnIntoVariant?: (variant: ExamParagraphVariant, cleanHtml: string) => void;
   onNavigateVertical?: (dir: -1 | 1) => void;
   onSlashTrigger?: (info: { blockId: string; query: string; rect: DOMRect } | null) => void;
+  onStructuredExamPaste?: (cleanedHtml: string) => boolean;
   onPasteMultiParagraph?: (pastedHtml: string, beforeHtml: string, afterHtml: string) => void;
   onPasteImageFile?: (file: File) => void;
   onNormalizeBlockFormula?: () => void;
@@ -335,6 +337,7 @@ export default function RichEditableBlock({
   onTurnIntoVariant,
   onNavigateVertical,
   onSlashTrigger,
+  onStructuredExamPaste,
   onPasteMultiParagraph,
   onPasteImageFile,
   onNormalizeBlockFormula,
@@ -505,6 +508,10 @@ export default function RichEditableBlock({
             }
           }
           if (!hasText) return;
+          if (onStructuredExamPaste && shouldSmartParseWordPaste(safe) && onStructuredExamPaste(safe)) {
+            onSlashTrigger?.(null);
+            return;
+          }
           const el = ref.current;
           if (allowBlockSplit && onPasteMultiParagraph && /<\s*br\s*\/?>/i.test(safe)) {
             const [beforeHtml, afterHtml] = el

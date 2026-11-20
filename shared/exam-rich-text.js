@@ -148,6 +148,23 @@ function decodeBasicEntities(raw) {
     .replace(/&nbsp;/gi, ' ')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;/gi, '–')
+    .replace(/&mdash;/gi, '—')
+    .replace(/&lsquo;|&rsquo;/gi, "'")
+    .replace(/&ldquo;|&rdquo;/gi, '"')
+    .replace(/&hellip;/gi, '…')
+    .replace(/&times;/gi, '×')
+    .replace(/&divide;/gi, '÷')
+    .replace(/&plusmn;/gi, '±')
+    .replace(/&deg;/gi, '°')
+    .replace(/&#(\d+);/g, (_m, dec) => {
+      const cp = Number(dec);
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => {
+      const cp = parseInt(hex, 16);
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
+    })
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&amp;/gi, '&');
@@ -162,7 +179,10 @@ const TAG_ALIAS = {
   font: 'span'
 };
 
-function sanitizeSpanStyle(attrText) {
+const NEUTRAL_DARK_INK = new Set(['#000000', '#0d0d0d', '#111111', '#111827', '#0f172a', '#1e293b', '#222222', '#333333']);
+const NEUTRAL_LIGHT_BG = new Set(['#ffffff', '#fff', 'transparent']);
+
+function sanitizeSpanStyle(attrText, { stripNeutralPaste = false } = {}) {
   const styles = [];
   const styleMatch = /style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/i.exec(attrText);
   const rawStyle = styleMatch ? (styleMatch[1] ?? styleMatch[2] ?? styleMatch[3] ?? '') : '';
@@ -174,14 +194,14 @@ function sanitizeSpanStyle(attrText) {
       const val = part.slice(colon + 1).trim();
       if (prop === 'color') {
         const c = sanitizeColor(val);
-        if (c) styles.push(`color:${c}`);
+        if (c && (!stripNeutralPaste || !NEUTRAL_DARK_INK.has(c))) styles.push(`color:${c}`);
       } else if (prop === 'background-color' || prop === 'background') {
         const bg = sanitizeColor(val);
-        if (bg) styles.push(`background-color:${bg}`);
-      } else if (prop === 'font-size') {
+        if (bg && (!stripNeutralPaste || !NEUTRAL_LIGHT_BG.has(bg))) styles.push(`background-color:${bg}`);
+      } else if (prop === 'font-size' && !stripNeutralPaste) {
         const pt = sanitizeFontSizePt(val);
         if (pt !== null) styles.push(`font-size:${pt}pt`);
-      } else if (prop === 'font-family') {
+      } else if (prop === 'font-family' && !stripNeutralPaste) {
         const ff = sanitizeFontFamily(val);
         if (ff) styles.push(`font-family:${ff}`);
       }
@@ -191,12 +211,14 @@ function sanitizeSpanStyle(attrText) {
   const colorAttr = /\bcolor\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrText);
   if (colorAttr && !styles.some((s) => s.startsWith('color:'))) {
     const c = sanitizeColor(colorAttr[1] ?? colorAttr[2] ?? colorAttr[3]);
-    if (c) styles.push(`color:${c}`);
+    if (c && (!stripNeutralPaste || !NEUTRAL_DARK_INK.has(c))) styles.push(`color:${c}`);
   }
-  const faceAttr = /\bface\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrText);
-  if (faceAttr && !styles.some((s) => s.startsWith('font-family:'))) {
-    const ff = sanitizeFontFamily(faceAttr[1] ?? faceAttr[2]);
-    if (ff) styles.push(`font-family:${ff}`);
+  if (!stripNeutralPaste) {
+    const faceAttr = /\bface\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrText);
+    if (faceAttr && !styles.some((s) => s.startsWith('font-family:'))) {
+      const ff = sanitizeFontFamily(faceAttr[1] ?? faceAttr[2]);
+      if (ff) styles.push(`font-family:${ff}`);
+    }
   }
   return styles.join(';');
 }
@@ -206,16 +228,17 @@ function sanitizeSpanStyle(attrText) {
  * Removes scripts/styles/iframes/images/events/javascript: URIs and keeps only
  * whitelisted formatting tags & validated CSS properties.
  */
-export function sanitizeInlineRichHtml(raw) {
+export function sanitizeInlineRichHtml(raw, { stripNeutralPaste = false } = {}) {
   let src = String(raw ?? '');
   if (!src) return '';
 
-  // Remove dangerous element trees and Word non-XML conditional markers (<![if ...]> / <![endif]>)
+  // Remove dangerous element trees, XML/doctype declarations, and Word conditional markers FIRST
   src = src
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<!\[(?:if\b[^\]]*|endif)\]>/gi, '')
+    .replace(/<\?xml[\s\S]*?\?>|<!DOCTYPE[^>]*>/gi, '')
     .replace(/<\s*(script|style|iframe|object|embed|svg|math|noscript|template)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    .replace(/<\s*(script|style|iframe|object|embed|svg|img|link|meta|base)\b[^>]*\/?>/gi, '');
+    .replace(/<\s*(script|style|iframe|object|embed|svg|img|link|meta|base)\b[^>]*\/?>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!\[(?:if\b[^\]]*|endif)\]>/gi, '');
 
   // Convert block dividers from contentEditable (<div>, <p>) into line breaks
   src = src
@@ -243,7 +266,7 @@ export function sanitizeInlineRichHtml(raw) {
         if (!isClose) out.push('<br>');
       } else if (!isClose) {
         if (mapped === 'span') {
-          const safeStyle = sanitizeSpanStyle(attrs);
+          const safeStyle = sanitizeSpanStyle(attrs, { stripNeutralPaste });
           if (safeStyle) {
             out.push(`<span style="${safeStyle.replace(/"/g, '&quot;')}">`);
             openStack.push('span');
@@ -292,27 +315,38 @@ function extractWordOmmlToText(ommlHtml) {
   for (let pass = 0; pass < 8; pass++) {
     const next = s
       .replace(/<m:f\b[^>]*>((?:(?!<m:f\b)[\s\S])*?)<\/m:f>/gi, (_m, body) => {
+        const num = innerTag('num', body).trim();
+        const den = innerTag('den', body).trim();
+        if (!num && !den) return '';
+        if (!num || !den) return `${num}${den}`;
         hasLatex = true;
-        return `\\frac{${innerTag('num', body).trim()}}{${innerTag('den', body).trim()}}`;
+        return `\\frac{${num}}{${den}}`;
       })
       .replace(/<m:sSup\b[^>]*>((?:(?!<m:sSup\b)[\s\S])*?)<\/m:sSup>/gi, (_m, body) => {
+        const base = innerTag('e', body).trim();
+        const sup = innerTag('sup', body).trim();
+        if (!sup) return base;
         hasLatex = true;
-        return `${innerTag('e', body).trim()}^{${innerTag('sup', body).trim()}}`;
+        return `${base}^{${sup}}`;
       })
       .replace(/<m:sSub\b[^>]*>((?:(?!<m:sSub\b)[\s\S])*?)<\/m:sSub>/gi, (_m, body) => {
+        const base = innerTag('e', body).trim();
+        const sub = innerTag('sub', body).trim();
+        if (!sub) return base;
         hasLatex = true;
-        return `${innerTag('e', body).trim()}_{${innerTag('sub', body).trim()}}`;
+        return `${base}_{${sub}}`;
       })
       .replace(/<m:rad\b[^>]*>((?:(?!<m:rad\b)[\s\S])*?)<\/m:rad>/gi, (_m, body) => {
+        const base = innerTag('e', body).trim();
+        if (!base) return '';
         hasLatex = true;
         const deg = innerTag('deg', body).trim();
-        const base = innerTag('e', body).trim();
         return deg ? `\\sqrt[${deg}]{${base}}` : `\\sqrt{${base}}`;
       });
     if (next === s) break;
     s = next;
   }
-  const plain = s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const plain = decodeBasicEntities(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
   if (!plain) return '';
   return hasLatex ? `$${plain}$` : plain;
 }
@@ -331,29 +365,29 @@ function normalizeWordSpans(html) {
       const styleMatch = /style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/i.exec(attrs);
       const rawStyle = styleMatch ? (styleMatch[1] ?? styleMatch[2] ?? styleMatch[3] ?? '') : '';
       const closeTags = [];
-      const safeStyle = sanitizeSpanStyle(attrs);
+      const safeStyle = sanitizeSpanStyle(attrs, { stripNeutralPaste: true });
       if (safeStyle) {
         out += `<span style="${safeStyle.replace(/"/g, '&quot;')}">`;
         closeTags.push('span');
       }
-      if (/\bfont-weight\s*:\s*(?:bold|bolder|[6-9]\d{2})\b/i.test(rawStyle)) {
+      if (/(?:^|[;\s])font-weight\s*:\s*(?:bold|bolder|[6-9]\d{2})\b/i.test(rawStyle)) {
         out += '<strong>';
         closeTags.push('strong');
       }
-      if (/\bfont-style\s*:\s*(?:italic|oblique)\b/i.test(rawStyle)) {
+      if (/(?:^|[;\s])font-style\s*:\s*(?:italic|oblique)\b/i.test(rawStyle)) {
         out += '<em>';
         closeTags.push('em');
       }
-      if (/\btext-decoration(?:-line)?\s*:[^;"']*\bunderline\b/i.test(rawStyle)) {
+      if (/(?:^|[;\s])text-decoration(?:-line)?\s*:[^;"']*\bunderline\b/i.test(rawStyle)) {
         out += '<u>';
         closeTags.push('u');
       }
-      if (/\btext-decoration(?:-line)?\s*:[^;"']*\bline-through\b/i.test(rawStyle)) {
+      if (/(?:^|[;\s])text-decoration(?:-line)?\s*:[^;"']*\bline-through\b/i.test(rawStyle)) {
         out += '<s>';
         closeTags.push('s');
       }
-      const vAlign = /\bvertical-align\s*:\s*(super|sub)\b/i.exec(rawStyle);
-      const raiseMatch = /\bmso-text-raise\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:pt|%)/i.exec(rawStyle);
+      const vAlign = /(?:^|[;\s])vertical-align\s*:\s*(super|sub)\b/i.exec(rawStyle);
+      const raiseMatch = /(?:^|[;\s])mso-text-raise\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:pt|%)/i.exec(rawStyle);
       if (vAlign) {
         const tag = vAlign[1].toLowerCase() === 'super' ? 'sup' : 'sub';
         out += `<${tag}>`;
@@ -384,7 +418,7 @@ function normalizeWordSpans(html) {
 
 /**
  * Clean clipboard HTML pasted from Microsoft Word / Google Docs / Web while preserving
- * bold, italic, underline, colors, sizes, superscript, subscript, tables, lists, and `<=>` arrows.
+ * bold, italic, underline, real accent colors, superscript, subscript, tables, lists, and `<=>` arrows.
  */
 export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
   const html = String(rawHtml ?? '').trim();
@@ -403,6 +437,11 @@ export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
     fragment = fragment.slice(startFrag.index + startFrag[0].length, endFrag.index);
   }
 
+  // Strip dangerous/metadata subtrees BEFORE comments so malformed CSS comments in <style> never leak
+  fragment = fragment
+    .replace(/<\?xml[\s\S]*?\?>|<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<\s*(xml|style|script|head|title|noscript)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
+
   // Convert Word OMML equation blocks before stripping comments; drop redundant sibling !msEquation image fallback
   fragment = fragment.replace(
     /<!--\[if\s+gte\s+msEquation[^\]]*\]>([\s\S]*?)<!\[endif\]-->\s*(?:<!\[if\s+!msEquation\]>[\s\S]*?<!\[endif\]>)?/gi,
@@ -416,8 +455,6 @@ export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
     // Remove standard HTML comments and MSO conditional delimiters while keeping inner text (e.g. list numbers inside !supportLists)
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!\[(?:if\b[^\]]*|endif)\]>/gi, '')
-    // Remove <xml>, <style>, <script>, <head>, <title>, <noscript> blocks
-    .replace(/<\s*(xml|style|script|head|title|noscript)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
     // Remove Word namespace tags like <o:p></o:p>, <w:...>, <v:...>
     .replace(/<\/?\s*(?:o|w|v|m|st1):[a-zA-Z0-9_-]+(?:\s[^<>]*)?\/?>/gi, '')
     // Collapse soft line-wraps (\r\n) that Word inserts inside paragraphs/attributes
@@ -437,7 +474,7 @@ export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
     });
   });
 
-  // Convert nested Word spans (bold/italic/underline/strike/sub/sup + safe colors/sizes)
+  // Convert nested Word spans (bold/italic/underline/strike/sub/sup + accent colors, without #000000/font bloat)
   cleaned = normalizeWordSpans(cleaned)
     // Preserve readable spacing between table cells while breaking on rows/blocks
     .replace(/<\s*\/\s*(?:td|th)\s*>(?!\s*<\s*\/\s*tr\b)/gi, ' \u00A0 ')
@@ -446,7 +483,14 @@ export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
     .replace(/[ \t]*@@WORD_BR@@[ \t]*/g, '<br>')
     .replace(/(?:<br>\s*){3,}/gi, '<br><br>');
 
-  const result = sanitizeInlineRichHtml(cleaned).replace(/^(?:<br>\s*)+|(?:<br>\s*)+$/gi, '');
+  let result = sanitizeInlineRichHtml(cleaned, { stripNeutralPaste: true })
+    .replace(/^(?:<br>\s*)+|(?:<br>\s*)+$/gi, '');
+  // Merge adjacent identical tags created when Word splits a Vietnamese word across spellcheck/IME runs
+  for (let pass = 0; pass < 3; pass++) {
+    const merged = result.replace(/<\/(strong|em|u|s|sup|sub)>(\s*)<\1>/gi, '$2');
+    if (merged === result) break;
+    result = merged;
+  }
   if (!stripRichHtmlToPlainText(result).trim() && stripRichHtmlToPlainText(plainFallback).trim()) {
     return plainFallback;
   }
@@ -560,22 +604,106 @@ export function parseFlexibleOptionTokens(line) {
   return [];
 }
 
+const SUP_UNICODE = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','(':'⁽',')':'⁾','=':'⁼','n':'ⁿ' };
+const SUB_UNICODE = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋','(':'₍',')':'₎','=':'₌' };
+
+function htmlToCleanOptionPlain(rawHtml) {
+  const mapped = String(rawHtml ?? '')
+    .replace(/<\s*sup\s*>([^<>]+)<\s*\/\s*sup\s*>/gi, (m, inner) =>
+      [...inner].every((c) => SUP_UNICODE[c]) ? [...inner].map((c) => SUP_UNICODE[c]).join('') : `^${inner}`
+    )
+    .replace(/<\s*sub\s*>([^<>]+)<\s*\/\s*sub\s*>/gi, (m, inner) =>
+      [...inner].every((c) => SUB_UNICODE[c]) ? [...inner].map((c) => SUB_UNICODE[c]).join('') : inner
+    );
+  return stripRichHtmlToPlainText(mapped).replace(/\u00A0/g, ' ').trim();
+}
+
+function sliceRichHtmlAfterPlainPrefix(richHtml, plainPrefixLen) {
+  const s = String(richHtml ?? '');
+  if (plainPrefixLen <= 0) return s.trim();
+  const stack = [];
+  let i = 0;
+  let visible = 0;
+  while (i < s.length && visible < plainPrefixLen) {
+    if (s[i] === '<') {
+      const end = s.indexOf('>', i);
+      if (end > i) {
+        const tag = s.slice(i, end + 1);
+        const closeM = /^<\s*\/\s*([a-z0-9]+)/i.exec(tag);
+        if (closeM) {
+          const closeName = closeM[1].toLowerCase();
+          for (let k = stack.length - 1; k >= 0; k--) {
+            if (stack[k].name === closeName) {
+              stack.splice(k, stack.length - k);
+              break;
+            }
+          }
+        } else if (!/\/>\s*$/.test(tag)) {
+          const openM = /^<\s*([a-z0-9]+)/i.exec(tag);
+          if (openM && openM[1].toLowerCase() !== 'br') {
+            stack.push({ name: openM[1].toLowerCase(), opener: tag });
+          }
+        }
+        i = end + 1;
+        continue;
+      }
+    }
+    if (s[i] === '&') {
+      const semi = s.indexOf(';', i);
+      if (semi > i && semi - i <= 10) {
+        visible += 1;
+        i = semi + 1;
+        continue;
+      }
+    }
+    visible += 1;
+    i += 1;
+  }
+  const opener = stack.map((x) => x.opener).join('');
+  return sanitizeInlineRichHtml(opener + s.slice(i)).replace(/^\s+/, '');
+}
+
 /**
- * Smart multi-question & Word paste parser.
+ * Determine whether pasted text/HTML represents a multi-question or structured exam excerpt
+ * suitable for direct parsing into Section / MCQ / TF / Essay / Short blocks.
+ */
+export function shouldSmartParseWordPaste(rawInput) {
+  const plain = stripRichHtmlToPlainText(String(rawInput ?? '').replace(/<\s*br\s*\/?>/gi, '\n'));
+  if (!plain) return false;
+  const qMatches = plain.match(/(?:^|\n)\s*(?:Câu|Question)\s*\d+\s*(?:\([^)\n]+\))?\s*[.:]/gi);
+  const hasSection = /(?:^|\n)\s*PHẦN\s+[IVX0-9]+/i.test(plain);
+  const hasMcqLine = /(?:^|\n)\s*A\s*[.:)]\s+\S+[\s\S]*?(?:\n|\s{2,}|\t)B\s*[.:)]\s+\S+/i.test(plain) ||
+    (/(?:^|\n)\s*A\s*[.:)]\s+/i.test(plain) && /(?:^|\n)\s*B\s*[.:)]\s+/i.test(plain));
+  const hasTfLines = /(?:^|\n)\s*a\s*[.)]\s+/i.test(plain) && /(?:^|\n)\s*b\s*[.)]\s+/i.test(plain);
+  if (qMatches && qMatches.length >= 2) return true;
+  if (hasSection && ((qMatches && qMatches.length >= 1) || hasMcqLine || hasTfLines)) return true;
+  if (qMatches && qMatches.length >= 1 && (hasMcqLine || hasTfLines)) return true;
+  return false;
+}
+
+/**
+ * Smart multi-question & Word paste parser (supports BOTH plain text AND cleaned Word rich HTML).
  * Recognizes:
  * - Prologue lines before PHẦN I / Câu 1 (e.g., "Cho biết nguyên tử khối...", "Cho các hằng số...")
  * - PHẦN I, PHẦN II, PHẦN III...
- * - Câu 1., Câu 1:, Question 1:
+ * - Câu 1., Câu 1:, Question 1: (turns into MCQ/TF/Short/Essay WITHOUT fake option placeholders)
  * - A. B. C. D. on 1 line, 2 lines (2x2 or tab-separated), or 4 separate lines
  * - True/False a) b) c) d) statements across lines
  * - Đáp án: / Lời giải: / Hướng dẫn giải:
  */
 export function parseSmartExamClipboardText(rawText) {
-  const lines = String(rawText ?? '')
+  const rawLines = String(rawText ?? '')
     .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((l) => l.replace(/\u00A0/g, ' ').trim())
-    .filter(Boolean);
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .split('\n');
+
+  const parsedLines = rawLines
+    .map((rawLn) => {
+      const rich = sanitizeInlineRichHtml(rawLn).replace(/^(?:&nbsp;|[ \t\u00A0])+|(?:&nbsp;|[ \t\u00A0])+$/g, '');
+      const plain = stripRichHtmlToPlainText(rich).replace(/\u00A0/g, ' ').trim();
+      return { rich, plain };
+    })
+    .filter((item) => Boolean(item.plain));
 
   const prologueLines = [];
   const blocks = [];
@@ -603,6 +731,13 @@ export function parseSmartExamClipboardText(rawText) {
       ];
       currentQ.optionCols = optionLineCount === 1 ? 4 : optionLineCount === 2 ? 2 : 1;
       currentQ.correctChoice = currentQ.correctChoice || 'A';
+    } else if (inTfSection || (currentQ.statements && currentQ.statements.length > 0)) {
+      currentQ.questionType = 'tf';
+      currentQ.statements = currentQ.statements || [];
+    } else if (currentQ.shortAnswer !== undefined || currentQ.points) {
+      currentQ.questionType = currentQ.shortAnswer !== undefined ? 'short' : 'essay';
+    } else {
+      currentQ.questionType = 'essay';
     }
     blocks.push(currentQ);
     currentQ = null;
@@ -610,47 +745,48 @@ export function parseSmartExamClipboardText(rawText) {
     optionLineCount = 0;
   };
 
-  for (const line of lines) {
-    if (/^PHẦN\s+[IVX0-9]+/i.test(line)) {
+  for (const { rich, plain } of parsedLines) {
+    if (/^PHẦN\s+[IVX0-9]+/i.test(plain)) {
       flushQuestion();
       seenSectionOrQuestion = true;
-      inTfSection = /đúng\s*sai/i.test(line);
+      inTfSection = /đúng\s*sai/i.test(plain);
       blocks.push({
         id: makeId(),
         type: 'section',
-        title: line
+        title: hasRichInlineTags(rich) ? rich : plain
       });
       continue;
     }
 
-    const qMatch = /^(?:Câu|Question)\s*(\d+)\s*(?:\(([^)]+)\))?\s*[.:]\s*(.*)$/i.exec(line);
+    const qMatch = /^(?:Câu|Question)\s*(\d+)\s*(?:\(([^)]+)\))?\s*[.:]\s*([\s\S]*)$/i.exec(plain);
     if (qMatch) {
       flushQuestion();
       seenSectionOrQuestion = true;
       const points = qMatch[2]?.trim();
-      const restPrompt = qMatch[3]?.trim() || '';
+      const restPlain = (qMatch[3] || '').trim();
+      const prefixLen = restPlain ? plain.length - qMatch[3].length : plain.length;
+      const restHtml = hasRichInlineTags(rich)
+        ? (sliceRichHtmlAfterPlainPrefix(rich, prefixLen) || restPlain)
+        : restPlain;
       currentQ = {
         id: makeId(),
         type: 'question',
-        questionType: inTfSection ? 'tf' : points ? 'short' : 'mcq',
+        questionType: inTfSection ? 'tf' : 'essay',
         ...(points ? { points } : {}),
-        prompt: restPrompt,
-        ...(inTfSection
-          ? { statements: [] }
-          : points
-            ? { shortAnswer: '', solution: '' }
-            : { options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'], optionCols: 4, correctChoice: 'A' })
+        prompt: restHtml,
+        ...(inTfSection ? { statements: [] } : {})
       };
       continue;
     }
 
-    if (!seenSectionOrQuestion && /^(?:Cho\s+biết|Nguyên\s+tử\s+khối|Biết\s+nguyên\s+tử\s+khối|Hằng\s+số|Ghi\s+chú)/i.test(line)) {
-      prologueLines.push(autoFormatLeadPrefixHtml(line));
+    if (!seenSectionOrQuestion && /^(?:Cho\s+biết|Nguyên\s+tử\s+khối|Biết\s+nguyên\s+tử\s+khối|Hằng\s+số|Ghi\s+chú)/i.test(plain)) {
+      prologueLines.push(autoFormatLeadPrefixHtml(hasRichInlineTags(rich) ? rich : plain));
       continue;
     }
 
     if (currentQ) {
-      const optTokens = parseFlexibleOptionTokens(line);
+      const optClean = htmlToCleanOptionPlain(rich);
+      const optTokens = parseFlexibleOptionTokens(optClean);
       if (optTokens.length > 0 && (optTokens.length >= 2 || Object.keys(optionMap).length > 0 || optTokens[0].letter === 'A')) {
         optionLineCount += 1;
         for (const tk of optTokens) {
@@ -659,7 +795,7 @@ export function parseSmartExamClipboardText(rawText) {
         continue;
       }
 
-      const tfMatch = /^([abcd])\s*[.)]\s*(.+)$/i.exec(line);
+      const tfMatch = /^([abcd])\s*[.)]\s*(.+)$/i.exec(optClean);
       if (tfMatch) {
         currentQ.questionType = 'tf';
         const label = tfMatch[1].toLowerCase();
@@ -681,7 +817,7 @@ export function parseSmartExamClipboardText(rawText) {
         continue;
       }
 
-      const ansMatch = /^Đáp\s*án\s*[.:]\s*(.+)$/i.exec(line);
+      const ansMatch = /^Đáp\s*án\s*[.:]\s*(.+)$/i.exec(plain);
       if (ansMatch) {
         const val = ansMatch[1].trim();
         if (/^[ABCD]$/i.test(val)) {
@@ -695,25 +831,30 @@ export function parseSmartExamClipboardText(rawText) {
         continue;
       }
 
-      const solMatch = /^(?:Lời\s*giải|Hướng\s*dẫn(?:\s*giải)?)\s*[.:]\s*(.+)$/i.exec(line);
+      const solMatch = /^(?:Lời\s*giải|Hướng\s*dẫn(?:\s*giải)?)\s*[.:]\s*([\s\S]+)$/i.exec(plain);
       if (solMatch) {
-        currentQ.solution = solMatch[1].trim();
+        const solRestPlain = solMatch[1].trim();
+        const solPrefixLen = plain.length - solMatch[1].length;
+        currentQ.solution = hasRichInlineTags(rich)
+          ? (sliceRichHtmlAfterPlainPrefix(rich, solPrefixLen) || solRestPlain)
+          : solRestPlain;
         continue;
       }
 
-      // Continuation of question prompt or solution
+      // Continuation of question prompt or solution preserving rich inline formatting
+      const lineOut = hasRichInlineTags(rich) ? rich : plain;
       if (currentQ.solution !== undefined && currentQ.solution.length > 0) {
-        currentQ.solution += '\n' + line;
+        currentQ.solution += (hasRichInlineTags(currentQ.solution) || hasRichInlineTags(lineOut) ? '<br>' : '\n') + lineOut;
       } else {
-        currentQ.prompt = currentQ.prompt ? `${currentQ.prompt}\n${line}` : line;
+        const sep = currentQ.prompt ? (hasRichInlineTags(currentQ.prompt) || hasRichInlineTags(lineOut) ? '<br>' : '\n') : '';
+        currentQ.prompt = `${currentQ.prompt || ''}${sep}${lineOut}`;
       }
-    } else if (!seenSectionOrQuestion) {
-      prologueLines.push(autoFormatLeadPrefixHtml(line));
     } else {
+      const pHtml = hasRichInlineTags(rich) ? rich : autoFormatLeadPrefixHtml(plain);
       blocks.push({
         id: makeId(),
         type: 'paragraph',
-        text: autoFormatLeadPrefixHtml(line)
+        text: pHtml
       });
     }
   }

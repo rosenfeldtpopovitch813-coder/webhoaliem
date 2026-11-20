@@ -20,7 +20,6 @@ import {
   Highlighter,
   ImagePlus,
   Italic,
-  Keyboard,
   Palette,
   Pencil,
   Plus,
@@ -59,7 +58,8 @@ import {
   autoNormalizeFormulaText,
   cleanWordClipboardHtml,
   convertFormulaDisplayMode,
-  parseSmartExamClipboardText
+  parseSmartExamClipboardText,
+  shouldSmartParseWordPaste
 } from '../../../../shared/exam-rich-text.js';
 import {
   CHEMISTRY_TEMPLATES,
@@ -129,8 +129,6 @@ export default function ExamPaperStudio({
   const [formulaModal, setFormulaModal] = useState<'math' | 'chem' | null>(null);
   const [customLatex, setCustomLatex] = useState('\\int_{0}^{1} (3x^2 + 2x)\\,dx');
   const [formulaDisplayMode, setFormulaDisplayMode] = useState<'inline' | 'display' | 'boxed' | 'numbered'>('inline');
-  const [smartText, setSmartText] = useState('');
-  const [smartComposerOpen, setSmartComposerOpen] = useState(false);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const [saveBadge, setSaveBadge] = useState('✓ Tự động lưu khi gõ');
   const [slashMenu, setSlashMenu] = useState<{ blockId: string; query: string; rect: DOMRect } | null>(null);
@@ -904,7 +902,6 @@ export default function ExamPaperStudio({
   windowPasteHandlerRef.current = (e: ClipboardEvent) => {
     const target = e.target as HTMLElement | null;
     if (
-      smartComposerOpen ||
       formulaModal ||
       headerFooterOpen ||
       target?.closest('input, textarea, select, [contenteditable="true"]')
@@ -919,6 +916,10 @@ export default function ExamPaperStudio({
     const hasText = Boolean(stripRichHtmlToPlainText(safe).trim());
     if (hasText) {
       e.preventDefault();
+      if (shouldSmartParseWordPaste(safe)) {
+        const anchorId = focusedBlockId && !focusedBlockId.startsWith('hdr:') ? focusedBlockId : null;
+        if (applySmartParsedText(safe, anchorId)) return;
+      }
       pasteHtmlIntoPaperBlocks(null, safe);
       return;
     }
@@ -1337,14 +1338,16 @@ export default function ExamPaperStudio({
     const parsed = parseSmartExamClipboardText(rawInput);
     if (!parsed.blocks.length && !parsed.prologue) return false;
 
+    const lastInsertedId = parsed.blocks.length ? (parsed.blocks[parsed.blocks.length - 1] as ExamBlock).id : null;
     setPaper(prev => {
       let nextPrologue = prev.header.prologue || '';
       if (parsed.prologue) {
         nextPrologue = nextPrologue ? `${nextPrologue}<br>${parsed.prologue}` : parsed.prologue;
       }
       const nextBlocks = [...prev.blocks];
-      if (anchorBlockId) {
-        const idx = nextBlocks.findIndex(b => b.id === anchorBlockId);
+      const targetAnchorId = anchorBlockId || (focusedBlockId && !focusedBlockId.startsWith('hdr:') ? focusedBlockId : null);
+      if (targetAnchorId) {
+        const idx = nextBlocks.findIndex(b => b.id === targetAnchorId);
         if (idx >= 0) {
           const anchor = nextBlocks[idx];
           const isEmptyAnchor =
@@ -1359,7 +1362,12 @@ export default function ExamPaperStudio({
           nextBlocks.push(...(parsed.blocks as ExamBlock[]));
         }
       } else {
-        nextBlocks.push(...(parsed.blocks as ExamBlock[]));
+        const last = nextBlocks[nextBlocks.length - 1];
+        if (last && last.type === 'paragraph' && !stripRichHtmlToPlainText(last.text).trim()) {
+          nextBlocks.splice(nextBlocks.length - 1, 1, ...(parsed.blocks as ExamBlock[]));
+        } else {
+          nextBlocks.push(...(parsed.blocks as ExamBlock[]));
+        }
       }
 
       return {
@@ -1372,16 +1380,12 @@ export default function ExamPaperStudio({
         updatedAt: Date.now()
       };
     });
+    if (lastInsertedId) {
+      setFocusedBlockId(lastInsertedId);
+      setEditingPromptId(null);
+    }
     setSaveBadge(`✓ Đã tách tự động ${parsed.questionCount || parsed.blocks.length} mục từ Word`);
     return true;
-  };
-
-  const parseSmartTextToBlocks = () => {
-    if (!smartText.trim()) return;
-    if (applySmartParsedText(smartText, focusedBlockId && !focusedBlockId.startsWith('hdr:') ? focusedBlockId : null)) {
-      setSmartText('');
-      setSmartComposerOpen(false);
-    }
   };
 
   /**
@@ -1616,47 +1620,60 @@ export default function ExamPaperStudio({
     };
 
     const fontPt = paper.fontSizePt || 12;
-    const linePx = Math.round(fontPt * 1.333 * 1.55);
-    const charsPerLine = Math.max(42, Math.round(620 / (fontPt * 0.65)));
+    const linePx = Math.round(fontPt * 1.333 * 1.48);
+    const charsPerLine = Math.max(46, Math.round(640 / (fontPt * 0.56)));
+    const countPlainLines = (rawHtml: string, extraChars = 0) => {
+      const plain = stripRichHtmlToPlainText(rawHtml || '');
+      if (!plain) return 1;
+      return plain
+        .split(/\r?\n/)
+        .reduce((sum, ln, idx) => sum + Math.max(1, Math.ceil((Math.max(1, ln.length) + (idx === 0 ? extraChars : 0)) / charsPerLine)), 0);
+    };
 
     const estimateHeight = (block: RenderableBlock): number => {
       if (block.type === 'section') {
-        return 54 + (block.subtitle ? 26 : 0);
+        return 46 + (block.subtitle ? countPlainLines(block.subtitle) * linePx : 0);
       }
       if (block.type === 'paragraph') {
-        const lines = Math.max(1, Math.ceil((block.text?.length || 1) / charsPerLine));
+        const textH = countPlainLines(block.text || '') * linePx;
         const figsH = (block.figures || []).reduce(
-          (sum, f) => sum + Math.round((f.width || 250) * 0.76) + 18,
+          (sum, f) => sum + Math.round((f.width || 250) * 0.72) + 12,
           0
         );
-        return lines * linePx + figsH + 16;
+        return Math.max(24, textH + figsH + 6);
       }
-      const promptLines = (block.prompt || '')
-        .split(/\r?\n/)
-        .reduce((sum, ln) => sum + Math.max(1, Math.ceil((ln.length + 10) / charsPerLine)), 0);
-      const figsH = (block.figures || []).reduce(
-        (sum, f) => sum + Math.round((f.width || 250) * 0.76) + 20,
-        0
-      );
+      const promptLines = countPlainLines(block.prompt || '', 10);
+      const figs = block.figures || [];
+      const sideFigH = figs
+        .filter(f => f.layout === 'float-right' || f.layout === 'float-left')
+        .reduce((maxH, f) => Math.max(maxH, Math.round((f.width || 240) * 0.72) + 12), 0);
+      const stackFigsH = figs
+        .filter(f => f.layout !== 'float-right' && f.layout !== 'float-left')
+        .reduce((sum, f) => sum + Math.round((f.width || 250) * 0.72) + 14, 0);
       let optsH = 0;
       if (block.questionType === 'mcq' && block.options) {
         const cols = block.optionCols || 4;
-        const maxOptLen = Math.max(...block.options.map(o => o.length), 1);
-        if (cols === 4) optsH = (maxOptLen > 18 ? 2 : 1) * linePx + 14;
-        else if (cols === 2) optsH = 2 * linePx + 18;
-        else optsH = 4 * linePx + 24;
+        const maxOptLen = Math.max(...block.options.map(o => stripRichHtmlToPlainText(o).length), 1);
+        if (cols === 4) optsH = (maxOptLen > 20 ? 2 : 1) * linePx + 10;
+        else if (cols === 2) optsH = 2 * linePx + 14;
+        else optsH = 4 * linePx + 18;
       } else if (block.questionType === 'tf' && block.statements) {
-        optsH = block.statements.length * (linePx + 8) + 12;
+        optsH = block.statements.length * (linePx + 6) + 10;
       } else if (block.questionType === 'short') {
-        optsH = 36;
+        optsH = 30;
       }
       const solH =
         block.solution !== undefined
-          ? Math.max(1, Math.ceil((block.solution.length + 12) / charsPerLine)) * linePx + 22
+          ? countPlainLines(block.solution, 12) * linePx + 16
           : 0;
-      return promptLines * linePx + figsH + optsH + solH + 24;
+      const mainH = Math.max(promptLines * linePx + optsH, sideFigH);
+      return mainH + stackFigsH + solH + 16;
     };
 
+    const prologueH = paper.header.prologue?.trim()
+      ? countPlainLines(paper.header.prologue) * linePx + 28
+      : 0;
+    const p1Budget = Math.max(360, (paper.header.showStudentInfo ? 825 : 855) - prologueH);
     const result: PageBucket[] = [];
     let current: PageBucket = { pageNumber: 1, blocks: [] };
     let usedH = 0;
@@ -1675,7 +1692,7 @@ export default function ExamPaperStudio({
 
       const h = estimateHeight(block);
       const isFirstPage = result.length === 0;
-      const budget = isFirstPage ? (paper.header.showStudentInfo ? 720 : 755) : 900;
+      const budget = isFirstPage ? p1Budget : 920;
 
       if (block.pageBreakBefore && (current.blocks.length > 0 || result.length > 0)) {
         result.push(current);
@@ -2094,16 +2111,6 @@ export default function ExamPaperStudio({
             title="Tạo ngay trang A4 tiếp theo (Trang 2, Trang 3…)"
           >
             <FilePlus2 size={13} /> Thêm trang mới
-          </button>
-          <button
-            className="exam-chip-btn"
-            style={{
-              borderColor: smartComposerOpen ? '#7c3aed' : undefined,
-              color: smartComposerOpen ? '#6d28d9' : undefined
-            }}
-            onClick={() => setSmartComposerOpen(v => !v)}
-          >
-            <Keyboard size={13} /> Gõ / Dán nhanh nhiều câu như Word
           </button>
           <button
             className="exam-chip-btn"
@@ -2539,7 +2546,7 @@ export default function ExamPaperStudio({
                     value={paper.header.prologue || ''}
                     isFocused={focusedBlockId === 'hdr:prologue'}
                     allowBlockSplit={false}
-                    placeholder="Nhấp để nhập thông tin đầu đề trước Phần I (ví dụ: Cho biết nguyên tử khối: H = 1; C = 12; O = 16... hoặc bấm nút chèn nhanh ở trên, ấn Ctrl+I để chuẩn hóa công thức)"
+                    placeholder="Nhấp để nhập thông tin đầu đề trước Phần I (Nguyên tử khối, hằng số…)"
                     onFocusBlock={() => {
                       setFocusedBlockId('hdr:prologue');
                       setBlockMenu(null);
@@ -2551,43 +2558,11 @@ export default function ExamPaperStudio({
                       }))
                     }
                     onNormalizeBlockFormula={() => normalizeBlockFormulasById('hdr:prologue')}
+                    onStructuredExamPaste={safe => applySmartParsedText(safe, null)}
                     onPasteImageFile={f => handlePasteImageFile(f, null)}
                     onSelectionChange={refreshSelectionToolbar}
                   />
                 </div>
-
-                {/* OPTIONAL SMART COMPOSER BOX */}
-                {smartComposerOpen && (
-                  <div className="exam-smart-composer">
-                    <div className="exam-smart-composer-top">
-                      <strong>
-                        Gõ hoặc dán đề tự nhiên (tự nhận diện PHẦN I, Câu 1., A. ... B. ... C. ... D. ..., a) b) c) d), Đáp án:, Lời giải:)
-                      </strong>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          className="exam-chip-btn"
-                          onClick={parseSmartTextToBlocks}
-                        >
-                          ✓ Đưa vào trang A4
-                        </button>
-                        <button
-                          className="exam-chip-btn"
-                          onClick={() => setSmartComposerOpen(false)}
-                        >
-                          Đóng
-                        </button>
-                      </div>
-                    </div>
-                    <textarea
-                      className="exam-smart-textarea"
-                      value={smartText}
-                      onChange={e => setSmartText(e.target.value)}
-                      placeholder={
-                        'Ví dụ:\nCâu 1. Cho hàm số $y = x^3 - 3x$. Giá trị cực đại bằng:\nA. 2   B. -2   C. 1   D. 0\nĐáp án: A\nLời giải: Đạo hàm y\' = 3x^2 - 3 = 0...'
-                      }
-                    />
-                  </div>
-                )}
               </>
             )}
 
@@ -2706,6 +2681,7 @@ export default function ExamPaperStudio({
                         }))
                       }
                       onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
+                      onStructuredExamPaste={safe => applySmartParsedText(safe, block.id)}
                       onSelectionChange={refreshSelectionToolbar}
                     />
                     <RichEditableBlock
@@ -2777,8 +2753,10 @@ export default function ExamPaperStudio({
                               : variant === 'h3'
                                 ? 'Tiêu đề nhỏ…'
                                 : variant === 'callout'
-                                  ? 'Ghi chú / lưu ý cho học sinh…'
-                                  : 'Nhập nội dung (gõ câu 1: để tự động in đậm, Ctrl+I chuẩn hóa công thức, hoặc gõ / để chèn nhanh)…'
+                                  ? 'Ghi chú…'
+                                  : isFocused
+                                    ? 'Gõ nội dung hoặc "/"…'
+                                    : ''
                         }
                         onFocusBlock={() => {
                           setFocusedBlockId(block.id);
@@ -2810,6 +2788,7 @@ export default function ExamPaperStudio({
                         }}
                         onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
                         onSlashTrigger={(info) => setSlashMenu(info)}
+                        onStructuredExamPaste={safe => applySmartParsedText(safe, block.id)}
                         onPasteMultiParagraph={(pastedHtml, beforeHtml, afterHtml) =>
                           pasteHtmlIntoPaperBlocks(block.id, pastedHtml, beforeHtml, afterHtml)
                         }
@@ -3058,6 +3037,7 @@ export default function ExamPaperStudio({
                             }}
                             onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
                             onSlashTrigger={(info) => setSlashMenu(info)}
+                            onStructuredExamPaste={safe => applySmartParsedText(safe, block.id)}
                             onPasteImageFile={f => handlePasteImageFile(f, block.id)}
                             onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
                             onSelectionChange={refreshSelectionToolbar}
@@ -3454,7 +3434,7 @@ export default function ExamPaperStudio({
                 title="Nhấp vào đây để gõ tiếp trên trang (hoặc gõ /)"
                 onClick={() => ensureWritableBottomBlock(pg.blocks)}
               >
-                Nhấp để gõ tiếp, hoặc nhập <code>/</code> để chèn nhanh…
+                Nhấp để gõ tiếp…
               </div>
             )}
 
