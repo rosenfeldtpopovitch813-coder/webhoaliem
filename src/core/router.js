@@ -1,7 +1,7 @@
 import { AppStore } from './store.js';
 export const ROUTES = Object.freeze({
   '/': { title: 'Tổng quan', module: 'home' },
-  '/exam-paper': { title: 'Soạn đề A4', module: 'exam-paper' },
+  '/exam-paper': { title: 'Soạn đề', module: 'exam-paper' },
   '/whiteboard': { title: 'Bảng vẽ Mực', module: 'whiteboard' },
   '/exam': { title: 'Phòng thi', module: 'exam-room' },
   '/arena': { title: 'Đấu trường học tập', module: 'arena' },

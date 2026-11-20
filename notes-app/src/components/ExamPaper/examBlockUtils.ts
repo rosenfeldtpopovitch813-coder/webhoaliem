@@ -40,19 +40,45 @@ export function duplicateExamBlock(
   return { blocks: next, createdId };
 }
 
+export function reorderExamBlock(
+  blocks: ExamBlock[],
+  sourceId: string,
+  targetId: string
+): ExamBlock[] {
+  if (!sourceId || !targetId || sourceId === targetId) return blocks;
+  const from = blocks.findIndex(b => b.id === sourceId);
+  const to = blocks.findIndex(b => b.id === targetId);
+  if (from < 0 || to < 0) return blocks;
+  const next = [...blocks];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
 export function getFocusedSelectionLabel(
   blocks: ExamBlock[],
   focusedBlockId: string | null,
   questionNumbers: Map<string, number>
 ): string {
-  if (!focusedBlockId) return 'Chưa chọn câu (sẽ thêm vào cuối)';
+  if (!focusedBlockId) return 'Nhấp vào trang để gõ ngay';
   const block = blocks.find(b => b.id === focusedBlockId);
-  if (!block) return 'Chưa chọn câu';
+  if (!block) return 'Nhấp vào trang để gõ ngay';
   if (block.type === 'question') {
     const num = questionNumbers.get(block.id);
     return num ? `Đang chọn: Câu ${num}` : 'Đang chọn: Câu hỏi';
   }
   if (block.type === 'section') return 'Đang chọn: Tiêu đề phần';
-  if (block.type === 'paragraph') return 'Đang chọn: Đoạn văn bản';
+  if (block.type === 'paragraph') {
+    const labels: Record<string, string> = {
+      h1: 'Tiêu đề lớn (H1)',
+      h2: 'Tiêu đề vừa (H2)',
+      h3: 'Tiêu đề nhỏ (H3)',
+      bullet: 'Danh sách chấm đầu dòng',
+      numbered: 'Danh sách đánh số',
+      callout: 'Hộp ghi chú / Lưu ý',
+      text: 'Đoạn văn bản'
+    };
+    return `Đang chọn: ${labels[block.variant || 'text'] || 'Đoạn văn bản'}`;
+  }
   return 'Đang chọn khối nội dung';
 }

@@ -297,7 +297,7 @@ export function renderExam() {
     if (AppStore.get('examLockdown')) return;
     navigate('/exam-paper');
   });
-  openA4Top.append(icon('exam-paper', 15), document.createTextNode(' Khu Soạn đề A4 riêng →'));
+  openA4Top.append(icon('exam-paper', 15), document.createTextNode(' Mở Soạn đề →'));
   bar.append(openA4Top);
   wrap.append(showcase, bar, body);
   let hasPendingPaper = false;
@@ -1637,9 +1637,9 @@ function showCreator(host) {
 
   const tabs = E('div', 'exam-creator-tabs');
   const roomTab = button('1. Đề bên trái · Phiếu OMR bên phải (PDF / Drive)', 'exam-creator-tab is-active', () => switchMode('room'));
-  const authorTab = button('2. Soạn từng câu / Đề chuyển từ Khu A4', 'exam-creator-tab', () => switchMode('author'));
+  const authorTab = button('2. Soạn từng câu / Đề chuyển từ Soạn đề', 'exam-creator-tab', () => switchMode('author'));
   const openA4SuiteBtn = button('', 'exam-tab', () => navigate('/exam-paper'));
-  openA4SuiteBtn.append(icon('exam-paper', 15), document.createTextNode(' Mở Khu Soạn đề A4 riêng →'));
+  openA4SuiteBtn.append(icon('exam-paper', 15), document.createTextNode(' Mở mục Soạn đề →'));
   tabs.append(roomTab, authorTab, openA4SuiteBtn);
 
   const content = E('div', 'exam-creator-content');
@@ -1660,7 +1660,7 @@ function showCreator(host) {
       if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
         data = parsed.questions;
         if (parsed.title) title.value = parsed.title;
-        message.textContent = `✅ Đã nhận ${data.length} câu hỏi từ Khu Soạn đề A4! Kiểm tra bên dưới rồi bấm "Lưu & mở phòng thi".`;
+        message.textContent = `Đã nhận ${data.length} câu hỏi từ mục Soạn đề. Kiểm tra bên dưới rồi bấm "Lưu & mở phòng thi".`;
         localStorage.removeItem('htvvm_pending_exam_paper');
       }
     }
@@ -1733,9 +1733,9 @@ function showCreator(host) {
   function renderAuthor() {
     content.replaceChildren();
     const intro = E('div', 'exam-creator-intro');
-    intro.append(E('h4', '', 'Danh sách câu hỏi chi tiết & Nhập JSON'), E('p', '', 'Kiểm tra hoặc chỉnh sửa từng câu hỏi đã chuyển từ Khu Soạn đề A4, hoặc thêm câu hỏi thủ công / dán JSON.'));
+    intro.append(E('h4', '', 'Danh sách câu hỏi chi tiết & Nhập JSON'), E('p', '', 'Kiểm tra hoặc chỉnh sửa từng câu hỏi đã chuyển từ mục Soạn đề, hoặc thêm câu hỏi thủ công / dán JSON.'));
     const help = E('div', 'exam-markdown-help');
-    help.innerHTML = '<strong>Cú pháp nhanh:</strong> <code>**đậm**</code> · <code>*nghiêng*</code> · <code>$x^2$</code> · <code>\\ce{H2SO4}</code>. Muốn gõ đề trực quan trên giấy A4 nhiều trang như Word, hãy mở mục <strong>📝 Soạn đề A4</strong> ở thanh bên trái.';
+    help.innerHTML = '<strong>Cú pháp nhanh:</strong> <code>**đậm**</code> · <code>*nghiêng*</code> · <code>$x^2$</code> · <code>\\ce{H2SO4}</code>. Muốn gõ đề trực quan nhiều trang, hãy mở mục <strong>Soạn đề</strong> ở thanh bên trái.';
     intro.append(help);
     const questions = E('div', 'exam-editor');
     const addButtons = E('div', 'exam-tabs');
@@ -1751,7 +1751,7 @@ function showCreator(host) {
 
     function renderQuestionEditors() {
       questions.replaceChildren();
-      if (!data.length) questions.append(E('p', 'exam-message', 'Chưa có câu hỏi nào. Hãy bấm nút thêm câu ở trên hoặc chuyển câu hỏi từ Khu Soạn đề A4 sang.'));
+      if (!data.length) questions.append(E('p', 'exam-message', 'Chưa có câu hỏi nào. Hãy bấm nút thêm câu ở trên hoặc chuyển câu hỏi từ mục Soạn đề sang.'));
       data.forEach((q, idx) => {
         q.options = Array.isArray(q.options) ? q.options : ['', '', '', ''];
         const card = E('article', 'exam-question exam-author-question');

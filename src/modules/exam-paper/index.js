@@ -6,13 +6,13 @@ export function renderExamPaperApp() {
   const wrap = element('section', 'standalone-suite-wrap');
   const bar = element('div', 'standalone-suite-bar');
   const info = element('span', 'standalone-suite-caption');
-  info.append(icon('exam-paper', 15), document.createTextNode(' Khu Soạn đề thi khổ A4 độc lập — Tự động sang Trang 2, Trang 3… như Word, xuất .docx & PDF.'));
+  info.append(icon('exam-paper', 15), document.createTextNode(' Soạn đề — Gõ trực tiếp trên trang, định dạng từng đoạn, công thức Toán/Hóa và xuất .docx & PDF.'));
   const actions = element('div', 'standalone-suite-actions');
 
   const iframe = document.createElement('iframe');
   iframe.className = 'standalone-suite-iframe';
   iframe.src = '/focus-notes/index.html?app=exam';
-  iframe.title = 'Trình soạn đề thi khổ A4';
+  iframe.title = 'Trình soạn đề';
   iframe.allow = 'clipboard-read; clipboard-write; fullscreen';
   iframe.allowFullscreen = true;
 

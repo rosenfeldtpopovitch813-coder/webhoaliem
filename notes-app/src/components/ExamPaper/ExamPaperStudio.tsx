@@ -16,9 +16,12 @@ import {
   FilePlus2,
   FileText,
   FlaskConical,
+  GripVertical,
+  Highlighter,
   ImagePlus,
   Italic,
   Keyboard,
+  Palette,
   Pencil,
   Plus,
   Printer,
@@ -28,35 +31,59 @@ import {
   Send,
   Shapes,
   Sigma,
+  Strikethrough,
+  Subscript,
+  Superscript,
   Trash2,
+  Underline,
   X
 } from 'lucide-react';
 import {
   duplicateExamBlock,
   getFocusedSelectionLabel,
-  moveExamBlock
+  moveExamBlock,
+  reorderExamBlock
 } from './examBlockUtils';
 import {
   ExamBlock,
+  ExamBlockStyle,
   ExamFigureSource,
   ExamInlineFigure,
   ExamPaperDocument,
+  ExamParagraphVariant,
   ExamStatementTF
 } from '../../types/board';
 import {
   CHEMISTRY_TEMPLATES,
   createDefaultExamPaper,
+  EXAM_BG_COLORS,
+  EXAM_FONT_CATALOG,
+  EXAM_FONT_SIZES,
+  EXAM_TEXT_COLORS,
   MATH_TEMPLATES,
   MOLECULE_PRESETS,
   parseInlineOptionsLine,
   renderFigureSourceToDataUrl,
-  renderRichExamText
+  renderRichExamText,
+  stripRichHtmlToPlainText
 } from './examTemplates';
 import {
   convertExamPaperToOnlineQuestions,
   exportExamPaperToDocx,
   exportExamPaperToPDF
 } from './examExport';
+import RichEditableBlock, {
+  applyInlineStyleToSelection,
+  focusRichBlock,
+  getActiveRichSelection,
+  InlineFormatCommand
+} from './RichEditableBlock';
+import {
+  BlockQuickMenu,
+  FloatingSelectionToolbar,
+  SlashActionId,
+  SlashCommandMenu
+} from './ExamNotionOverlays';
 import './exam-paper.css';
 
 type Props = {
@@ -96,8 +123,30 @@ export default function ExamPaperStudio({
   const [smartText, setSmartText] = useState('');
   const [smartComposerOpen, setSmartComposerOpen] = useState(false);
   const [saveBadge, setSaveBadge] = useState('✓ Tự động lưu khi gõ');
+  const [slashMenu, setSlashMenu] = useState<{ blockId: string; query: string; rect: DOMRect } | null>(null);
+  const [selectionToolbar, setSelectionToolbar] = useState<{ rect: DOMRect; blockId: string } | null>(null);
+  const [blockMenu, setBlockMenu] = useState<{ blockId: string; rect: DOMRect } | null>(null);
+  const [ribbonPicker, setRibbonPicker] = useState<'color' | 'bg' | null>(null);
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
+  const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
   const isFirstRenderRef = useRef(true);
   const imageUploadRef = useRef<HTMLInputElement | null>(null);
+
+  const refreshSelectionToolbar = () => {
+    const active = getActiveRichSelection();
+    if (active) {
+      setSelectionToolbar({ rect: active.rect, blockId: active.blockId });
+      if (active.blockId) setFocusedBlockId(active.blockId);
+    } else {
+      setSelectionToolbar(null);
+    }
+  };
+
+  useEffect(() => {
+    const onSelChange = () => refreshSelectionToolbar();
+    document.addEventListener('selectionchange', onSelChange);
+    return () => document.removeEventListener('selectionchange', onSelChange);
+  }, []);
 
   // Freehand canvas state when source.kind === 'board'
   const freeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -142,14 +191,17 @@ export default function ExamPaperStudio({
           .then(() => setSaveBadge('✓ Đã lưu đề (Ctrl+S)'))
           .catch(() => setSaveBadge('⚠ Chưa lưu được bản nháp'));
       } else if (event.key === 'Escape') {
-        if (formulaModal) setFormulaModal(null);
+        if (slashMenu) setSlashMenu(null);
+        else if (blockMenu) setBlockMenu(null);
+        else if (ribbonPicker) setRibbonPicker(null);
+        else if (formulaModal) setFormulaModal(null);
         else if (downloadMenuOpen) setDownloadMenuOpen(false);
         else if (editingPromptId) setEditingPromptId(null);
       }
     };
     window.addEventListener('keydown', onShortcut);
     return () => window.removeEventListener('keydown', onShortcut);
-  }, [paper, formulaModal, downloadMenuOpen, editingPromptId, onSavePaper]);
+  }, [paper, slashMenu, blockMenu, ribbonPicker, formulaModal, downloadMenuOpen, editingPromptId, onSavePaper]);
 
   const activeSource = useMemo(() => {
     return (
@@ -445,6 +497,369 @@ export default function ExamPaperStudio({
     });
     if (createdId) setFocusedBlockId(createdId);
   };
+
+  const focusedBlock = useMemo(
+    () => paper.blocks.find(b => b.id === focusedBlockId) || null,
+    [paper.blocks, focusedBlockId]
+  );
+
+  const numberedListIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let n = 0;
+    for (const b of paper.blocks) {
+      if (b.type === 'paragraph' && b.variant === 'numbered') {
+        n += 1;
+        map.set(b.id, n);
+      } else {
+        n = 0;
+      }
+    }
+    return map;
+  }, [paper.blocks]);
+
+  const updateBlockStyle = (blockId: string, patch: Partial<ExamBlockStyle>) => {
+    setPaper(prev => ({
+      ...prev,
+      blocks: prev.blocks.map(b =>
+        b.id === blockId && b.type !== 'page-break' ? { ...b, ...patch } : b
+      ),
+      updatedAt: Date.now()
+    }));
+  };
+
+  const applyFormatCommand = (cmd: InlineFormatCommand, val?: string | number) => {
+    const formattedSelection = applyInlineStyleToSelection(cmd, val);
+    if (formattedSelection) {
+      window.setTimeout(refreshSelectionToolbar, 20);
+      return;
+    }
+    if (!focusedBlockId) return;
+    setPaper(prev => ({
+      ...prev,
+      blocks: prev.blocks.map(b => {
+        if (b.id !== focusedBlockId || b.type === 'page-break') return b;
+        if (cmd === 'bold') return { ...b, bold: !b.bold };
+        if (cmd === 'italic') return { ...b, italic: !b.italic };
+        if (cmd === 'underline') return { ...b, underline: !b.underline };
+        if (cmd === 'strike') return { ...b, strike: !b.strike };
+        if (cmd === 'color') return { ...b, textColor: val ? String(val) : undefined };
+        if (cmd === 'bgColor') return { ...b, bgColor: val ? String(val) : undefined };
+        if (cmd === 'fontSize') return { ...b, fontSizePt: val ? Number(val) : undefined };
+        if (cmd === 'fontFamily') return { ...b, fontFamily: val ? String(val) : undefined };
+        if (cmd === 'clear') {
+          return {
+            ...b,
+            bold: false,
+            italic: false,
+            underline: false,
+            strike: false,
+            textColor: undefined,
+            bgColor: undefined,
+            fontSizePt: undefined,
+            fontFamily: undefined
+          };
+        }
+        return b;
+      }),
+      updatedAt: Date.now()
+    }));
+  };
+
+  const insertParagraphBlock = (
+    afterBlockId?: string | null,
+    variant: ExamParagraphVariant = 'text',
+    initialText = ''
+  ) => {
+    const created: ExamBlock = {
+      id: crypto.randomUUID(),
+      type: 'paragraph',
+      variant,
+      text: initialText
+    };
+    setPaper(prev => {
+      const next = [...prev.blocks];
+      const idx = afterBlockId ? next.findIndex(b => b.id === afterBlockId) : -1;
+      if (idx >= 0) next.splice(idx + 1, 0, created);
+      else next.push(created);
+      return { ...prev, blocks: next, updatedAt: Date.now() };
+    });
+    setFocusedBlockId(created.id);
+    focusRichBlock(created.id, 'start');
+    return created.id;
+  };
+
+  const ensureWritableBottomBlock = (pageBlocks: ExamBlock[]) => {
+    const last = pageBlocks[pageBlocks.length - 1];
+    if (last && last.type === 'paragraph' && !stripRichHtmlToPlainText(last.text)) {
+      setFocusedBlockId(last.id);
+      focusRichBlock(last.id, 'end');
+      return;
+    }
+    insertParagraphBlock(last?.id || null, 'text', '');
+  };
+
+  const handleSplitParagraph = (blockId: string, beforeHtml: string, afterHtml: string) => {
+    const source = paper.blocks.find(b => b.id === blockId);
+    if (!source || source.type !== 'paragraph') return;
+    const curVariant = source.variant || 'text';
+    if ((curVariant === 'bullet' || curVariant === 'numbered') && !stripRichHtmlToPlainText(beforeHtml) && !stripRichHtmlToPlainText(afterHtml)) {
+      setPaper(prev => ({
+        ...prev,
+        blocks: prev.blocks.map(b => (b.id === blockId && b.type === 'paragraph' ? { ...b, variant: 'text', text: '' } : b)),
+        updatedAt: Date.now()
+      }));
+      focusRichBlock(blockId, 'start');
+      return;
+    }
+    const nextVariant: ExamParagraphVariant =
+      curVariant === 'bullet' || curVariant === 'numbered' ? curVariant : 'text';
+    const created: ExamBlock = {
+      id: crypto.randomUUID(),
+      type: 'paragraph',
+      variant: nextVariant,
+      text: afterHtml,
+      align: source.align,
+      fontFamily: source.fontFamily,
+      fontSizePt: nextVariant === 'text' && curVariant.startsWith('h') ? undefined : source.fontSizePt,
+      textColor: source.textColor
+    };
+    setPaper(prev => {
+      const idx = prev.blocks.findIndex(b => b.id === blockId);
+      const next = prev.blocks.map(b =>
+        b.id === blockId && b.type === 'paragraph' ? { ...b, text: beforeHtml } : b
+      );
+      if (idx >= 0) next.splice(idx + 1, 0, created);
+      else next.push(created);
+      return { ...prev, blocks: next, updatedAt: Date.now() };
+    });
+    setFocusedBlockId(created.id);
+    focusRichBlock(created.id, 'start');
+  };
+
+  const handleBackspaceEmptyParagraph = (blockId: string) => {
+    const idx = paper.blocks.findIndex(b => b.id === blockId);
+    if (idx < 0) return;
+    const cur = paper.blocks[idx];
+    if (cur.type !== 'paragraph') return;
+    if (cur.variant && cur.variant !== 'text') {
+      setPaper(prev => ({
+        ...prev,
+        blocks: prev.blocks.map(b => (b.id === blockId && b.type === 'paragraph' ? { ...b, variant: 'text' } : b)),
+        updatedAt: Date.now()
+      }));
+      focusRichBlock(blockId, 'start');
+      return;
+    }
+    if (paper.blocks.length <= 1) return;
+    const prevEditable = [...paper.blocks.slice(0, idx)].reverse().find(b => b.type === 'paragraph' || b.type === 'question');
+    setPaper(prev => ({
+      ...prev,
+      blocks: prev.blocks.filter(b => b.id !== blockId),
+      updatedAt: Date.now()
+    }));
+    if (prevEditable) {
+      setFocusedBlockId(prevEditable.id);
+      focusRichBlock(prevEditable.id, 'end');
+    }
+  };
+
+  const handleNavigateVertical = (blockId: string, dir: -1 | 1) => {
+    const editableIds = paper.blocks
+      .filter(b => b.type === 'paragraph' || b.type === 'question')
+      .map(b => b.id);
+    const pos = editableIds.indexOf(blockId);
+    if (pos < 0) return;
+    const targetId = editableIds[pos + dir];
+    if (!targetId) return;
+    setFocusedBlockId(targetId);
+    focusRichBlock(targetId, dir < 0 ? 'end' : 'start');
+  };
+
+  const handleSlashSelect = (action: SlashActionId) => {
+    const trigger = slashMenu;
+    setSlashMenu(null);
+    if (!trigger) return;
+    const { blockId, query } = trigger;
+    const stripSlash = (raw: string) => {
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return raw.replace(new RegExp(`(?:^|\\s)\\/${escaped}$`), '').trimEnd();
+    };
+
+    const target = paper.blocks.find(b => b.id === blockId);
+    const cleanedText = target?.type === 'paragraph'
+      ? stripSlash(target.text)
+      : target?.type === 'question'
+        ? stripSlash(target.prompt)
+        : '';
+
+    const variantActions: SlashActionId[] = ['text', 'h1', 'h2', 'h3', 'bullet', 'numbered', 'callout'];
+    if (variantActions.includes(action)) {
+      const nextVar = action as ExamParagraphVariant;
+      if (target?.type === 'paragraph' && !stripRichHtmlToPlainText(cleanedText)) {
+        setPaper(prev => ({
+          ...prev,
+          blocks: prev.blocks.map(b => (b.id === blockId && b.type === 'paragraph' ? { ...b, variant: nextVar, text: '' } : b)),
+          updatedAt: Date.now()
+        }));
+        setFocusedBlockId(blockId);
+        focusRichBlock(blockId, 'start');
+      } else {
+        if (target?.type === 'paragraph') {
+          setPaper(prev => ({
+            ...prev,
+            blocks: prev.blocks.map(b => (b.id === blockId && b.type === 'paragraph' ? { ...b, text: cleanedText } : b)),
+            updatedAt: Date.now()
+          }));
+        }
+        insertParagraphBlock(blockId, nextVar, '');
+      }
+      return;
+    }
+
+    // Strip the `/query` text first before running exam/modal action
+    if (target?.type === 'paragraph') {
+      const removeEmptyHost = !stripRichHtmlToPlainText(cleanedText) && ['section', 'mcq', 'tf', 'short', 'essay', 'page-break'].includes(action);
+      if (removeEmptyHost) {
+        const idx = paper.blocks.findIndex(b => b.id === blockId);
+        let replacement: ExamBlock | null = null;
+        if (action === 'section') {
+          replacement = { id: crypto.randomUUID(), type: 'section', title: 'PHẦN MỚI.', subtitle: 'Thí sinh trả lời các câu hỏi bên dưới.' };
+        } else if (action === 'mcq') {
+          replacement = { id: crypto.randomUUID(), type: 'question', questionType: 'mcq', prompt: '', options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'], optionCols: 4, correctChoice: 'A' };
+        } else if (action === 'tf') {
+          replacement = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            questionType: 'tf',
+            prompt: '',
+            statements: [
+              { id: crypto.randomUUID(), label: 'a', text: 'Khẳng định a', correct: true },
+              { id: crypto.randomUUID(), label: 'b', text: 'Khẳng định b', correct: false },
+              { id: crypto.randomUUID(), label: 'c', text: 'Khẳng định c', correct: true },
+              { id: crypto.randomUUID(), label: 'd', text: 'Khẳng định d', correct: false }
+            ]
+          };
+        } else if (action === 'short') {
+          replacement = { id: crypto.randomUUID(), type: 'question', questionType: 'short', points: '0,5 điểm', prompt: '', shortAnswer: '', solution: '' };
+        } else if (action === 'essay') {
+          replacement = { id: crypto.randomUUID(), type: 'question', questionType: 'essay', points: '1 điểm', prompt: '', solution: '' };
+        } else if (action === 'page-break') {
+          const breakBlk: ExamBlock = { id: crypto.randomUUID(), type: 'page-break' };
+          const nextPara: ExamBlock = { id: crypto.randomUUID(), type: 'paragraph', variant: 'text', text: '' };
+          setPaper(prev => {
+            const next = [...prev.blocks];
+            next.splice(idx, 1, breakBlk, nextPara);
+            return { ...prev, blocks: next, updatedAt: Date.now() };
+          });
+          setFocusedBlockId(nextPara.id);
+          focusRichBlock(nextPara.id, 'start');
+          return;
+        }
+        if (replacement) {
+          const created = replacement;
+          setPaper(prev => {
+            const next = [...prev.blocks];
+            next.splice(idx, 1, created);
+            return { ...prev, blocks: next, updatedAt: Date.now() };
+          });
+          setFocusedBlockId(created.id);
+          if (created.type === 'question') focusRichBlock(created.id, 'start');
+          return;
+        }
+      } else {
+        setPaper(prev => ({
+          ...prev,
+          blocks: prev.blocks.map(b => (b.id === blockId && b.type === 'paragraph' ? { ...b, text: cleanedText } : b)),
+          updatedAt: Date.now()
+        }));
+      }
+    } else if (target?.type === 'question') {
+      setPaper(prev => ({
+        ...prev,
+        blocks: prev.blocks.map(b => (b.id === blockId && b.type === 'question' ? { ...b, prompt: cleanedText } : b)),
+        updatedAt: Date.now()
+      }));
+    }
+
+    if (action === 'math') setFormulaModal('math');
+    else if (action === 'chem') setFormulaModal('chem');
+    else if (action === 'figure') setSplitBoardOpen(true);
+    else if (action === 'page-break') addNewPage();
+    else if (action === 'essay') {
+      const created: ExamBlock = { id: crypto.randomUUID(), type: 'question', questionType: 'essay', points: '1 điểm', prompt: '', solution: '' };
+      setPaper(prev => {
+        const idx = prev.blocks.findIndex(b => b.id === blockId);
+        const next = [...prev.blocks];
+        if (idx >= 0) next.splice(idx + 1, 0, created);
+        else next.push(created);
+        return { ...prev, blocks: next, updatedAt: Date.now() };
+      });
+      setFocusedBlockId(created.id);
+      focusRichBlock(created.id, 'start');
+    } else if (action === 'section' || action === 'mcq' || action === 'tf' || action === 'short') {
+      addBlock(action);
+    }
+  };
+
+  const blockInlineCss = (block: ExamBlockStyle): React.CSSProperties => ({
+    textAlign: block.align || undefined,
+    fontFamily: block.fontFamily || undefined,
+    fontSize: block.fontSizePt ? `${block.fontSizePt}pt` : undefined,
+    color: block.textColor || undefined,
+    backgroundColor: block.bgColor || undefined,
+    lineHeight: block.lineHeight || undefined,
+    fontWeight: block.bold ? 700 : undefined,
+    fontStyle: block.italic ? 'italic' : undefined,
+    textDecoration:
+      block.underline && block.strike
+        ? 'underline line-through'
+        : block.underline
+          ? 'underline'
+          : block.strike
+            ? 'line-through'
+            : undefined
+  });
+
+  const renderGutter = (block: Exclude<ExamBlock, { type: 'page-break' }>) => (
+    <div className="exam-notion-gutter" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="exam-gutter-btn"
+        title="Thêm dòng mới bên dưới (hoặc gõ /)"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const newId = insertParagraphBlock(block.id, 'text', '');
+          setSlashMenu({ blockId: newId, query: '', rect });
+        }}
+      >
+        <Plus size={13} />
+      </button>
+      <button
+        type="button"
+        className="exam-gutter-btn is-drag"
+        draggable
+        title="Kéo để đổi vị trí · Bấm để định dạng cỡ chữ, màu sắc, kiểu đoạn"
+        onDragStart={(e) => {
+          setDraggingBlockId(block.id);
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/htvvm-block-id', block.id);
+        }}
+        onDragEnd={() => {
+          setDraggingBlockId(null);
+          setDragOverBlockId(null);
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setFocusedBlockId(block.id);
+          const rect = e.currentTarget.getBoundingClientRect();
+          setBlockMenu((cur) => (cur?.blockId === block.id ? null : { blockId: block.id, rect }));
+        }}
+      >
+        <GripVertical size={13} />
+      </button>
+    </div>
+  );
 
   /**
    * Parse freeform Word-like text pasted/typed into the Smart Composer
@@ -919,90 +1334,187 @@ export default function ExamPaperStudio({
           </button>
           <span className="exam-ribbon-sep" />
           <select
-            className="exam-select"
-            value={paper.fontFamily}
-            aria-label="Phông chữ"
-            onChange={e =>
-              setPaper(p => ({ ...p, fontFamily: e.target.value }))
+            className="exam-select exam-font-select"
+            value={
+              focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.fontFamily
+                ? focusedBlock.fontFamily
+                : paper.fontFamily
             }
+            aria-label="Phông chữ"
+            title="Chọn phông chữ (áp dụng cho vùng bôi đen, hoặc toàn đề nếu không bôi đen)"
+            onChange={e => {
+              const val = e.target.value;
+              if (applyInlineStyleToSelection('fontFamily', val)) return;
+              setPaper(p => ({ ...p, fontFamily: val, updatedAt: Date.now() }));
+            }}
           >
-            <option value='"Times New Roman", Times, Georgia, serif'>
-              Times New Roman
-            </option>
-            <option value='"Be Vietnam Pro", Inter, sans-serif'>
-              Be Vietnam Pro
-            </option>
-            <option value='Cambria, Georgia, serif'>Cambria</option>
-            <option value='Arial, Helvetica, sans-serif'>Arial</option>
+            {(['Chuẩn đề thi (Có chân)', 'Hiện đại (Không chân)', 'Đơn cách (Tin học / Công thức)'] as const).map(grp => (
+              <optgroup key={grp} label={grp}>
+                {EXAM_FONT_CATALOG.filter(f => f.group === grp).map(f => (
+                  <option key={f.label} value={f.value} style={{ fontFamily: f.value }}>
+                    {f.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
           </select>
           <select
             className="exam-select"
             value={paper.fontSizePt}
-            aria-label="Cỡ chữ"
+            aria-label="Cỡ chữ chung"
+            title="Cỡ chữ chung toàn đề"
             onChange={e =>
-              setPaper(p => ({ ...p, fontSizePt: Number(e.target.value) }))
+              setPaper(p => ({ ...p, fontSizePt: Number(e.target.value), updatedAt: Date.now() }))
             }
           >
-            {[11, 12, 13, 14, 16].map(sz => (
+            {EXAM_FONT_SIZES.map(sz => (
               <option key={sz} value={sz}>
-                {sz} pt
+                Chung {sz}pt
+              </option>
+            ))}
+          </select>
+          <select
+            className="exam-select"
+            value={
+              focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.fontSizePt
+                ? String(focusedBlock.fontSizePt)
+                : ''
+            }
+            aria-label="Cỡ chữ đoạn đang chọn"
+            title="Chỉnh cỡ chữ riêng cho cụm chữ bôi đen hoặc đoạn đang chọn"
+            onChange={e => {
+              const raw = e.target.value;
+              applyFormatCommand('fontSize', raw ? Number(raw) : undefined);
+            }}
+          >
+            <option value="">Cỡ đoạn</option>
+            {EXAM_FONT_SIZES.map(sz => (
+              <option key={sz} value={sz}>
+                Đoạn {sz}pt
               </option>
             ))}
           </select>
           <span className="exam-ribbon-sep" />
           <button
-            className="exam-icon-btn"
+            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.bold ? 'is-active' : ''}`}
             onMouseDown={e => e.preventDefault()}
-            title="In đậm (**chữ**)"
-            onClick={() => {
-              if (!focusedBlockId) return;
-              setPaper(prev => ({
-                ...prev,
-                blocks: prev.blocks.map(b =>
-                  b.id === focusedBlockId && b.type === 'paragraph'
-                    ? { ...b, bold: !b.bold }
-                    : b
-                )
-              }));
-            }}
+            title="In đậm (Ctrl+B)"
+            onClick={() => applyFormatCommand('bold')}
           >
             <Bold size={15} />
           </button>
           <button
-            className="exam-icon-btn"
+            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.italic ? 'is-active' : ''}`}
             onMouseDown={e => e.preventDefault()}
-            title="In nghiêng (*chữ*)"
-            onClick={() => {
-              if (!focusedBlockId) return;
-              setPaper(prev => ({
-                ...prev,
-                blocks: prev.blocks.map(b =>
-                  b.id === focusedBlockId && b.type === 'paragraph'
-                    ? { ...b, italic: !b.italic }
-                    : b
-                )
-              }));
-            }}
+            title="In nghiêng (Ctrl+I)"
+            onClick={() => applyFormatCommand('italic')}
           >
             <Italic size={15} />
           </button>
+          <button
+            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.underline ? 'is-active' : ''}`}
+            onMouseDown={e => e.preventDefault()}
+            title="Gạch chân (Ctrl+U)"
+            onClick={() => applyFormatCommand('underline')}
+          >
+            <Underline size={15} />
+          </button>
+          <button
+            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.strike ? 'is-active' : ''}`}
+            onMouseDown={e => e.preventDefault()}
+            title="Gạch ngang (Ctrl+Shift+S)"
+            onClick={() => applyFormatCommand('strike')}
+          >
+            <Strikethrough size={15} />
+          </button>
+          <button
+            className="exam-icon-btn"
+            onMouseDown={e => e.preventDefault()}
+            title="Chỉ số trên (x²)"
+            onClick={() => applyFormatCommand('superscript')}
+          >
+            <Superscript size={15} />
+          </button>
+          <button
+            className="exam-icon-btn"
+            onMouseDown={e => e.preventDefault()}
+            title="Chỉ số dưới (H₂O)"
+            onClick={() => applyFormatCommand('subscript')}
+          >
+            <Subscript size={15} />
+          </button>
+
+          <div className="exam-ribbon-popwrap">
+            <button
+              className={`exam-icon-btn ${ribbonPicker === 'color' ? 'is-active' : ''}`}
+              onMouseDown={e => e.preventDefault()}
+              title="Màu chữ (cho chữ bôi đen hoặc đoạn đang chọn)"
+              onClick={() => setRibbonPicker(p => (p === 'color' ? null : 'color'))}
+            >
+              <Palette size={15} />
+            </button>
+            {ribbonPicker === 'color' && (
+              <div className="exam-ribbon-popover" onMouseDown={e => e.preventDefault()}>
+                <small className="exam-pop-label">Màu chữ</small>
+                <div className="exam-color-grid">
+                  {EXAM_TEXT_COLORS.map(c => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      className="exam-color-swatch"
+                      title={c.label}
+                      style={{ background: c.value || '#111827' }}
+                      onClick={() => {
+                        applyFormatCommand('color', c.value);
+                        setRibbonPicker(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="exam-ribbon-popwrap">
+            <button
+              className={`exam-icon-btn ${ribbonPicker === 'bg' ? 'is-active' : ''}`}
+              onMouseDown={e => e.preventDefault()}
+              title="Tô màu nền (Highlight)"
+              onClick={() => setRibbonPicker(p => (p === 'bg' ? null : 'bg'))}
+            >
+              <Highlighter size={15} />
+            </button>
+            {ribbonPicker === 'bg' && (
+              <div className="exam-ribbon-popover" onMouseDown={e => e.preventDefault()}>
+                <small className="exam-pop-label">Màu nền đoạn / chữ</small>
+                <div className="exam-color-grid">
+                  {EXAM_BG_COLORS.map(c => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      className={`exam-color-swatch ${!c.value ? 'is-none' : ''}`}
+                      title={c.label}
+                      style={{ background: c.value || '#ffffff' }}
+                      onClick={() => {
+                        applyFormatCommand('bgColor', c.value);
+                        setRibbonPicker(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {(['left', 'center', 'right', 'justify'] as const).map(al => (
             <button
               key={al}
-              className="exam-icon-btn"
+              className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.align === al ? 'is-active' : ''}`}
               onMouseDown={e => e.preventDefault()}
               title={`Căn lề: ${al}`}
               onClick={() => {
                 if (!focusedBlockId) return;
-                setPaper(prev => ({
-                  ...prev,
-                  blocks: prev.blocks.map(b =>
-                    b.id === focusedBlockId &&
-                    (b.type === 'question' || b.type === 'paragraph')
-                      ? { ...b, align: al }
-                      : b
-                  )
-                }));
+                updateBlockStyle(focusedBlockId, { align: al });
               }}
             >
               {al === 'left' ? (
@@ -1147,6 +1659,13 @@ export default function ExamPaperStudio({
       {/* SUB-BAR: QUICK INSERT, MULTI-PAGE CONTROLS & SMART TYPING */}
       <div className="exam-subbar">
         <div className="exam-subbar-left">
+          <button
+            className="exam-chip-btn"
+            onClick={() => insertParagraphBlock(focusedBlockId, 'text', '')}
+            title="Thêm dòng gõ tự do (hoặc nhấp vào vùng trống trang giấy / gõ dấu /)"
+          >
+            <Plus size={13} /> Dòng văn bản (gõ /)
+          </button>
           <button className="exam-chip-btn" onClick={() => addBlock('section')}>
             <Plus size={13} /> Chia PHẦN (I, II, III)
           </button>
@@ -1373,14 +1892,54 @@ export default function ExamPaperStudio({
             {pg.blocks.map((block, bIdx) => {
               const isFocused = focusedBlockId === block.id;
               const isDropTarget = dropTargetBlockId === block.id;
+              const isReorderTarget = dragOverBlockId === block.id && draggingBlockId !== block.id;
+
+              const onBlockDragOver = (e: React.DragEvent) => {
+                e.preventDefault();
+                if (draggingBlockId) {
+                  if (dragOverBlockId !== block.id) setDragOverBlockId(block.id);
+                } else if (block.type === 'question' || block.type === 'paragraph') {
+                  if (dropTargetBlockId !== block.id) setDropTargetBlockId(block.id);
+                }
+              };
+              const onBlockDragLeave = () => {
+                if (dragOverBlockId === block.id) setDragOverBlockId(null);
+                if (dropTargetBlockId === block.id) setDropTargetBlockId(null);
+              };
+              const onBlockDrop = (e: React.DragEvent) => {
+                e.preventDefault();
+                const draggedBlk = e.dataTransfer.getData('text/htvvm-block-id') || draggingBlockId;
+                if (draggedBlk && draggedBlk !== block.id) {
+                  setPaper(prev => ({
+                    ...prev,
+                    blocks: reorderExamBlock(prev.blocks, draggedBlk, block.id),
+                    updatedAt: Date.now()
+                  }));
+                  setDraggingBlockId(null);
+                  setDragOverBlockId(null);
+                  return;
+                }
+                const srcId =
+                  e.dataTransfer.getData('text/htvvm-figure-source') ||
+                  draggingSourceId ||
+                  activeSource?.id;
+                if (srcId && (block.type === 'question' || block.type === 'paragraph')) {
+                  insertFigureIntoBlock(srcId, block.id);
+                }
+              };
 
               if (block.type === 'section') {
                 return (
                   <section
                     key={block.id}
-                    className={`exam-block ${isFocused ? 'is-focused' : ''}`}
-                    onClick={() => setFocusedBlockId(block.id)}
+                    className={`exam-block has-gutter ${isFocused ? 'is-focused' : ''} ${isReorderTarget ? 'is-reorder-target' : ''}`}
+                    style={blockInlineCss(block)}
+                    onClick={() => { setFocusedBlockId(block.id); setBlockMenu(null); }}
+                    onDragOver={onBlockDragOver}
+                    onDragLeave={onBlockDragLeave}
+                    onDrop={onBlockDrop}
                   >
+                    {renderGutter(block)}
                     <div className="exam-block-controls">
                       <button
                         className="exam-mini-action"
@@ -1486,45 +2045,78 @@ export default function ExamPaperStudio({
               }
 
               if (block.type === 'paragraph') {
+                const variant = block.variant || 'text';
+                const listIdx = numberedListIndexMap.get(block.id) || 1;
+                const variantClass = `exam-para-variant-${variant}`;
                 return (
                   <div
                     key={block.id}
-                    className={`exam-block ${isFocused ? 'is-focused' : ''}`}
-                    style={{ textAlign: block.align || 'left' }}
-                    onClick={() => setFocusedBlockId(block.id)}
+                    className={`exam-block has-gutter exam-notion-para ${variantClass} ${isFocused ? 'is-focused' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${isReorderTarget ? 'is-reorder-target' : ''}`}
+                    style={blockInlineCss(block)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFocusedBlockId(block.id);
+                      setBlockMenu(null);
+                    }}
+                    onDragOver={onBlockDragOver}
+                    onDragLeave={onBlockDragLeave}
+                    onDrop={onBlockDrop}
                   >
-                    <div className="exam-block-controls">
-                      <button
-                        className="exam-mini-action danger"
-                        onClick={() =>
+                    {renderGutter(block)}
+                    <div className="exam-para-inner">
+                      {variant === 'bullet' && <span className="exam-list-bullet" aria-hidden="true">•</span>}
+                      {variant === 'numbered' && <span className="exam-list-num" aria-hidden="true">{listIdx}.</span>}
+                      <RichEditableBlock
+                        blockId={block.id}
+                        field="text"
+                        value={block.text}
+                        variant={variant}
+                        isFocused={isFocused}
+                        slashMenuOpen={Boolean(slashMenu && slashMenu.blockId === block.id)}
+                        placeholder={
+                          variant === 'h1'
+                            ? 'Tiêu đề lớn…'
+                            : variant === 'h2'
+                              ? 'Tiêu đề vừa…'
+                              : variant === 'h3'
+                                ? 'Tiêu đề nhỏ…'
+                                : variant === 'callout'
+                                  ? 'Ghi chú / lưu ý cho học sinh…'
+                                  : 'Nhập nội dung hoặc gõ "/" để chèn câu hỏi, công thức, tiêu đề…'
+                        }
+                        onFocusBlock={() => {
+                          setFocusedBlockId(block.id);
+                          setEditingPromptId(null);
+                          setBlockMenu(null);
+                        }}
+                        onChange={(sanitizedHtml) => {
                           setPaper(p => ({
                             ...p,
-                            blocks: p.blocks.filter(x => x.id !== block.id)
-                          }))
-                        }
-                      >
-                        <Trash2 size={11} /> Xóa dòng
-                      </button>
+                            blocks: p.blocks.map(x =>
+                              x.id === block.id && x.type === 'paragraph'
+                                ? { ...x, text: sanitizedHtml }
+                                : x
+                            )
+                          }));
+                        }}
+                        onEnterSplit={(beforeHtml, afterHtml) => handleSplitParagraph(block.id, beforeHtml, afterHtml)}
+                        onBackspaceEmpty={() => handleBackspaceEmptyParagraph(block.id)}
+                        onTurnIntoVariant={(nextVar, cleanHtml) => {
+                          setPaper(p => ({
+                            ...p,
+                            blocks: p.blocks.map(x =>
+                              x.id === block.id && x.type === 'paragraph'
+                                ? { ...x, variant: nextVar, text: cleanHtml }
+                                : x
+                            ),
+                            updatedAt: Date.now()
+                          }));
+                        }}
+                        onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
+                        onSlashTrigger={(info) => setSlashMenu(info)}
+                        onSelectionChange={refreshSelectionToolbar}
+                      />
                     </div>
-                    <input
-                      className="exam-inline-input"
-                      style={{
-                        fontWeight: block.bold ? 700 : 400,
-                        fontStyle: block.italic ? 'italic' : 'normal'
-                      }}
-                      value={block.text}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setPaper(p => ({
-                          ...p,
-                          blocks: p.blocks.map(x =>
-                            x.id === block.id && x.type === 'paragraph'
-                              ? { ...x, text: val }
-                              : x
-                          )
-                        }));
-                      }}
-                    />
                   </div>
                 );
               }
@@ -1536,38 +2128,28 @@ export default function ExamPaperStudio({
               return (
                 <article
                   key={block.id}
-                  className={`exam-block ${isFocused ? 'is-focused' : ''} ${
+                  className={`exam-block has-gutter ${isFocused ? 'is-focused' : ''} ${
                     isDropTarget ? 'is-drop-target' : ''
-                  }`}
-                  style={{ textAlign: block.align || 'left' }}
-                  onClick={() => setFocusedBlockId(block.id)}
-                  onDragOver={e => {
-                    e.preventDefault();
-                    if (dropTargetBlockId !== block.id) {
-                      setDropTargetBlockId(block.id);
-                    }
-                  }}
-                  onDragLeave={() => {
-                    if (dropTargetBlockId === block.id) {
-                      setDropTargetBlockId(null);
-                    }
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    const srcId =
-                      e.dataTransfer.getData('text/htvvm-figure-source') ||
-                      draggingSourceId ||
-                      activeSource?.id;
-                    if (srcId) insertFigureIntoBlock(srcId, block.id);
-                  }}
+                  } ${isReorderTarget ? 'is-reorder-target' : ''}`}
+                  style={blockInlineCss(block)}
+                  onClick={() => { setFocusedBlockId(block.id); setBlockMenu(null); }}
+                  onDragOver={onBlockDragOver}
+                  onDragLeave={onBlockDragLeave}
+                  onDrop={onBlockDrop}
                 >
+                  {renderGutter(block)}
                   {/* Floating Controls for Question */}
                   <div className="exam-block-controls">
                     <button
                       className="exam-mini-action"
-                      onClick={() =>
-                        setEditingPromptId(isEditingPrompt ? null : block.id)
-                      }
+                      onClick={() => {
+                        if (isEditingPrompt) setEditingPromptId(null);
+                        else {
+                          setFocusedBlockId(block.id);
+                          setEditingPromptId(block.id);
+                          focusRichBlock(block.id, 'end');
+                        }
+                      }}
                     >
                       {isEditingPrompt ? <><Check size={11} /> Xong</> : <><Pencil size={11} /> Sửa đề</>}
                     </button>
@@ -1669,66 +2251,58 @@ export default function ExamPaperStudio({
                     <span className="exam-q-label">.</span>
 
                     <div className="exam-q-prompt-area">
-                      {isEditingPrompt ? (
-                        <textarea
-                          autoFocus
-                          className="exam-q-textarea"
-                          rows={3}
-                          value={block.prompt}
-                          placeholder="Gõ nội dung câu hỏi... Nếu gõ dòng cuối là 'A. ... B. ... C. ... D. ...' máy sẽ tự tách thành 4 phương án thẳng cột!"
-                          onChange={e => {
-                            const rawVal = e.target.value;
-                            // Check if teacher typed "Câu X." at beginning — strip duplicate prefix since auto-numbered
-                            const cleaned = rawVal.replace(
-                              /^\s*Câu\s*\d+\s*[.:]\s*/i,
-                              ''
-                            );
-                            // Check if last line has inline A. ... B. ... C. ... D. ...
-                            const lines = cleaned.split(/\r?\n/);
-                            const lastLine = lines[lines.length - 1] || '';
-                            const autoOpts = parseInlineOptionsLine(lastLine);
-                            if (autoOpts && lines.length > 1) {
-                              const promptWithoutOpts = lines
-                                .slice(0, -1)
-                                .join('\n');
-                              setPaper(p => ({
-                                ...p,
-                                blocks: p.blocks.map(x =>
-                                  x.id === block.id && x.type === 'question'
-                                    ? {
-                                        ...x,
-                                        questionType: 'mcq',
-                                        prompt: promptWithoutOpts,
-                                        options: autoOpts
-                                      }
-                                    : x
-                                )
-                              }));
-                              return;
-                            }
+                      <RichEditableBlock
+                        blockId={block.id}
+                        field="prompt"
+                        value={block.prompt}
+                        isFocused={isFocused || isEditingPrompt}
+                        allowBlockSplit={false}
+                        slashMenuOpen={Boolean(slashMenu && slashMenu.blockId === block.id)}
+                        placeholder="Gõ nội dung câu hỏi trực tiếp… (bôi đen chữ để đổi màu/cỡ chữ, hoặc gõ / để chèn nhanh)"
+                        onFocusBlock={() => {
+                          setFocusedBlockId(block.id);
+                          setEditingPromptId(block.id);
+                          setBlockMenu(null);
+                        }}
+                        onBlurBlock={() => {
+                          if (editingPromptId === block.id) setEditingPromptId(null);
+                        }}
+                        onChange={(sanitizedHtml) => {
+                          const plain = stripRichHtmlToPlainText(sanitizedHtml);
+                          const cleaned = sanitizedHtml.replace(/^\s*Câu\s*\d+\s*[.:]\s*/i, '');
+                          const lines = plain.split(/\r?\n/);
+                          const lastLine = lines[lines.length - 1] || '';
+                          const autoOpts = parseInlineOptionsLine(lastLine);
+                          if (autoOpts && lines.length > 1) {
+                            const promptWithoutOpts = lines.slice(0, -1).join('<br>');
                             setPaper(p => ({
                               ...p,
                               blocks: p.blocks.map(x =>
                                 x.id === block.id && x.type === 'question'
-                                  ? { ...x, prompt: cleaned }
+                                  ? {
+                                      ...x,
+                                      questionType: 'mcq',
+                                      prompt: promptWithoutOpts,
+                                      options: autoOpts
+                                    }
                                   : x
                               )
                             }));
-                          }}
-                          onBlur={() => setEditingPromptId(null)}
-                        />
-                      ) : (
-                        <div
-                          className="exam-q-rendered"
-                          title="Nhấp để sửa nội dung câu hỏi hoặc công thức"
-                          onClick={() => setEditingPromptId(block.id)}
-                          dangerouslySetInnerHTML={{
-                            __html: renderRichExamText(
-                              block.prompt || 'Nhấp vào đây để gõ nội dung câu hỏi…'
+                            return;
+                          }
+                          setPaper(p => ({
+                            ...p,
+                            blocks: p.blocks.map(x =>
+                              x.id === block.id && x.type === 'question'
+                                ? { ...x, prompt: cleaned }
+                                : x
                             )
-                          }}
-                        />
-                      )}
+                          }));
+                        }}
+                        onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
+                        onSlashTrigger={(info) => setSlashMenu(info)}
+                        onSelectionChange={refreshSelectionToolbar}
+                      />
                     </div>
                   </div>
 
@@ -2208,20 +2782,20 @@ export default function ExamPaperStudio({
               );
             })}
 
-            {pg.blocks.length === 0 && (
+            {pg.blocks.length === 0 ? (
               <div
-                style={{
-                  padding: '28px 16px',
-                  border: '1.5px dashed #cbd5e1',
-                  borderRadius: 10,
-                  textAlign: 'center',
-                  color: '#64748b',
-                  fontFamily: '"Be Vietnam Pro", system-ui, sans-serif',
-                  fontSize: 13
-                }}
+                className="exam-notion-canvas-hint"
+                onClick={() => ensureWritableBottomBlock(pg.blocks)}
               >
-                Trang {pg.pageNumber} đang trống — bấm <strong>+ Câu trắc nghiệm</strong>,{' '}
-                <strong>+ Câu Đúng / Sai</strong> hoặc <strong>+ Câu Tự luận</strong> trên thanh công cụ để thêm câu hỏi vào trang này.
+                Trang {pg.pageNumber} đang trống — <strong>nhấp vào đây để đặt con trỏ gõ ngay</strong>, hoặc gõ phím <code>/</code> để chèn câu hỏi, tiêu đề, công thức.
+              </div>
+            ) : (
+              <div
+                className="exam-notion-bottom-zone"
+                title="Nhấp vào đây để gõ tiếp trên trang (hoặc gõ /)"
+                onClick={() => ensureWritableBottomBlock(pg.blocks)}
+              >
+                Nhấp để gõ tiếp, hoặc nhập <code>/</code> để chèn nhanh…
               </div>
             )}
 
@@ -2827,6 +3401,55 @@ export default function ExamPaperStudio({
           </div>
         </div>
       )}
+      {slashMenu && (
+        <SlashCommandMenu
+          rect={slashMenu.rect}
+          query={slashMenu.query}
+          onSelect={handleSlashSelect}
+          onClose={() => setSlashMenu(null)}
+        />
+      )}
+
+      {selectionToolbar && !slashMenu && (
+        <FloatingSelectionToolbar
+          rect={selectionToolbar.rect}
+          onCommand={(cmd, val) => applyFormatCommand(cmd, val)}
+        />
+      )}
+
+      {blockMenu && (() => {
+        const blk = paper.blocks.find(b => b.id === blockMenu.blockId);
+        if (!blk || blk.type === 'page-break') return null;
+        return (
+          <BlockQuickMenu
+            block={blk}
+            rect={blockMenu.rect}
+            onUpdateStyle={(patch) => updateBlockStyle(blk.id, patch)}
+            onTurnVariant={
+              blk.type === 'paragraph'
+                ? (nextVar) =>
+                    setPaper(prev => ({
+                      ...prev,
+                      blocks: prev.blocks.map(x =>
+                        x.id === blk.id && x.type === 'paragraph' ? { ...x, variant: nextVar } : x
+                      ),
+                      updatedAt: Date.now()
+                    }))
+                : undefined
+            }
+            onDuplicate={() => duplicateBlock(blk.id)}
+            onTogglePageBreak={() => togglePageBreakBefore(blk.id)}
+            onDelete={() =>
+              setPaper(prev => ({
+                ...prev,
+                blocks: prev.blocks.filter(x => x.id !== blk.id),
+                updatedAt: Date.now()
+              }))
+            }
+            onClose={() => setBlockMenu(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

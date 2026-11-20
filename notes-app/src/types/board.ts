@@ -71,25 +71,39 @@ export type ExamStatementTF={
   correct:boolean|null;
 };
 
+export type ExamParagraphVariant = 'text' | 'h1' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'callout';
+
+export type ExamBlockStyle = {
+  align?: 'left' | 'center' | 'right' | 'justify';
+  fontSizePt?: number;
+  fontFamily?: string;
+  textColor?: string;
+  bgColor?: string;
+  lineHeight?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+};
+
 export type ExamBlock=
   | {
       id:string;
       type:'page-break';
     }
-  | {
+  | ({
       id:string;
       type:'section';
       title:string;
       subtitle?:string;
       pageBreakBefore?:boolean;
-    }
-  | {
+    } & ExamBlockStyle)
+  | ({
       id:string;
       type:'question';
       questionType:'mcq'|'tf'|'short'|'essay';
       points?:string; // e.g. "1 điểm", "0,25 điểm"
-      prompt:string; // supports inline text, $latex$, \ce{...}
-      align?:'left'|'center'|'right'|'justify';
+      prompt:string; // supports inline rich text, $latex$, \ce{...}
       options?:[string,string,string,string];
       optionCols?:1|2|4; // 4 dòng (1 col), 2 dòng (2 cols), 1 dòng (4 cols)
       correctChoice?:'A'|'B'|'C'|'D'|'';
@@ -98,17 +112,15 @@ export type ExamBlock=
       solution?:string;
       figures?:ExamInlineFigure[];
       pageBreakBefore?:boolean;
-    }
-  | {
+    } & ExamBlockStyle)
+  | ({
       id:string;
       type:'paragraph';
-      text:string;
-      align?:'left'|'center'|'right'|'justify';
-      bold?:boolean;
-      italic?:boolean;
+      variant?:ExamParagraphVariant;
+      text:string; // supports inline rich text, $latex$, \ce{...}
       figures?:ExamInlineFigure[];
       pageBreakBefore?:boolean;
-    };
+    } & ExamBlockStyle);
 
 export type ExamPaperDocument={
   fontFamily:string;

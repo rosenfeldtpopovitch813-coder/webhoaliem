@@ -1,5 +1,24 @@
 import katex from 'katex';
 import { ExamBlock, ExamFigureSource, ExamPaperDocument } from '../../types/board';
+import {
+  EXAM_FONT_CATALOG,
+  EXAM_FONT_SIZES,
+  EXAM_TEXT_COLORS,
+  EXAM_BG_COLORS,
+  compileSafeMathExpression,
+  sanitizeInlineRichHtml,
+  stripRichHtmlToPlainText
+} from '../../../../shared/exam-rich-text.js';
+
+export {
+  EXAM_FONT_CATALOG,
+  EXAM_FONT_SIZES,
+  EXAM_TEXT_COLORS,
+  EXAM_BG_COLORS,
+  compileSafeMathExpression,
+  sanitizeInlineRichHtml,
+  stripRichHtmlToPlainText
+};
 
 export function createDefaultExamPaper(title = 'ĐỀ KIỂM TRA ĐỊNH KỲ'): ExamPaperDocument {
   const fig3dSource: ExamFigureSource = {
@@ -301,18 +320,23 @@ export function renderRichExamText(source: string): string {
     return key;
   };
 
-  // Protect inner [$...$] inside \ce{...} arrows before math delimiter scanning
-  let text = String(source)
+  // Sanitize inline rich formatting first (strict tag & CSS whitelist, zero XSS)
+  let text = sanitizeInlineRichHtml(source)
     .replace(/<=>\[\$([^$]+)\$\]/g, '<=>[@LATEX:$1@]')
     .replace(/->\[\$([^$]+)\$\]/g, '->[@LATEX:$1@]');
 
   // 1) Render $$...$$ or \[...\] or $...$ or \(...\) first (expanding any \ce{...} inside math)
   text = text.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)/g, (all, b1, b2, i1, i2) => {
-    let tex = (b1 ?? b2 ?? i1 ?? i2 ?? '').trim();
+    let tex = (b1 ?? b2 ?? i1 ?? i2 ?? '')
+      .replace(/<\/?[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
     const displayMode = b1 !== undefined || b2 !== undefined;
     tex = tex.replace(/\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m: string, inner: string) => convertCeToLatex(inner));
     try {
-      return stash(katex.renderToString(tex, { throwOnError: false, displayMode, strict: 'ignore' }));
+      return stash(katex.renderToString(tex, { throwOnError: false, displayMode, trust: false, strict: 'ignore' }));
     } catch {
       return escapeHtml(all);
     }
@@ -320,19 +344,22 @@ export function renderRichExamText(source: string): string {
 
   // 2) Render standalone \ce{...} outside $...$
   text = text.replace(/\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m, inner) => {
-    const tex = convertCeToLatex(inner);
+    const cleanInner = String(inner).replace(/<\/?[^>]+>/g, '');
+    const tex = convertCeToLatex(cleanInner);
     try {
-      return stash(katex.renderToString(tex, { throwOnError: false, displayMode: false, strict: 'ignore' }));
+      return stash(katex.renderToString(tex, { throwOnError: false, displayMode: false, trust: false, strict: 'ignore' }));
     } catch {
-      return inner;
+      return cleanInner;
     }
   });
 
-  let safe = escapeHtml(text);
-  safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  safe = safe.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-  safe = safe.replace(/__([^_]+)__/g, '<u>$1</u>');
-  safe = safe.replace(/\r?\n/g, '<br/>');
+  // 3) Apply Markdown shortcuts safely outside HTML tags
+  let safe = text
+    .replace(/\*\*([^*<>]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/__([^_<>]+)__/g, '<u>$1</u>')
+    .replace(/~~([^~<>]+)~~/g, '<s>$1</s>')
+    .replace(/(^|[^*])\*([^*\n<>]+)\*(?!\*)/g, '$1<em>$2</em>')
+    .replace(/\r?\n/g, '<br/>');
 
   for (const [key, html] of tokens) {
     safe = safe.split(key).join(html);
@@ -586,22 +613,9 @@ export function renderFigureSourceToDataUrl(source: ExamFigureSource): string {
     ctx.fillText('y', ox + 10, pad - 2);
     ctx.fillText('O', ox - 16, oy + 16);
 
-    // Evaluate formula safely
-    const raw = (source.graphFormula || 'x^3 - 3*x')
-      .replace(/^\s*y\s*=\s*/i, '')
-      .replace(/−/g, '-')
-      .replace(/\^/g, '**')
-      .replace(/(\d)\s*([a-zA-Z(])/g, '$1*$2');
-
-    let evalFn: (x: number) => number = (x) => x ** 3 - 3 * x;
-    try {
-      // eslint-disable-next-line no-new-func
-      const compiled = new Function('x', `with (Math) { return (${raw}); }`) as (x: number) => number;
-      compiled(1);
-      evalFn = compiled;
-    } catch {
-      // Keep cubic default
-    }
+    // Evaluate formula safely with recursive-descent math parser (zero dynamic code execution)
+    const compiled = compileSafeMathExpression(source.graphFormula || 'x^3 - 3*x');
+    const evalFn: (x: number) => number = compiled || ((x) => x ** 3 - 3 * x);
 
     ctx.save();
     ctx.beginPath();

@@ -1,5 +1,13 @@
-import { ExamBlock, ExamInlineFigure, ExamPaperDocument } from '../../types/board';
+import { ExamBlockStyle, ExamInlineFigure, ExamPaperDocument } from '../../types/board';
 import { renderRichExamText } from './examTemplates';
+import {
+  extractPrimaryFontName,
+  parseRichInlineRuns,
+  sanitizeColor,
+  sanitizeFontFamily,
+  sanitizeFontSizePt,
+  stripRichHtmlToPlainText
+} from '../../../../shared/exam-rich-text.js';
 
 function escapeXml(str: string): string {
   return String(str ?? '')
@@ -171,33 +179,105 @@ function latexToOmmlInner(texInput: string): string {
   return out.join('');
 }
 
-function textWithMathToWordXml(source: string, bold = false, colorHex?: string, underline = false): string {
+type WordRunOpts = {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  colorHex?: string;
+  bgHex?: string;
+  fontSizePt?: number;
+  fontName?: string;
+};
+
+function textWithMathToWordXml(
+  source: string,
+  boldOrOpts: boolean | WordRunOpts = false,
+  colorHex?: string,
+  underline = false
+): string {
+  const opts: WordRunOpts = typeof boldOrOpts === 'object'
+    ? boldOrOpts
+    : { bold: boldOrOpts, colorHex, underline };
+  const defaultFont = opts.fontName || 'Times New Roman';
   const parts: string[] = [];
   const pattern = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  const makeRun = (txt: string, isBold = bold, isUnderline = underline) => {
-    if (!txt) return '';
-    const rPr: string[] = ['<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'];
-    if (isBold) rPr.push('<w:b/>');
-    if (isUnderline) rPr.push('<w:u w:val="single"/>');
-    if (colorHex) rPr.push(`<w:color w:val="${colorHex}"/>`);
-    return `<w:r><w:rPr>${rPr.join('')}</w:rPr><w:t xml:space="preserve">${escapeXml(txt)}</w:t></w:r>`;
+  const makeStyledRuns = (rawSegment: string) => {
+    if (!rawSegment) return '';
+    const runs = parseRichInlineRuns(rawSegment, {
+      bold: opts.bold,
+      italic: opts.italic,
+      underline: opts.underline,
+      strike: opts.strike,
+      textColor: opts.colorHex ? `#${opts.colorHex.replace(/^#/, '')}` : '',
+      bgColor: opts.bgHex ? `#${opts.bgHex.replace(/^#/, '')}` : '',
+      fontSizePt: opts.fontSizePt,
+      fontFamily: defaultFont
+    });
+    return runs.map((run) => {
+      if (run.text === '\n') return '<w:r><w:br/></w:r>';
+      const fName = escapeXml(run.fontFamily || defaultFont);
+      const rPr: string[] = [`<w:rFonts w:ascii="${fName}" w:hAnsi="${fName}" w:cs="${fName}"/>`];
+      if (run.bold) rPr.push('<w:b/>');
+      if (run.italic) rPr.push('<w:i/>');
+      if (run.underline) rPr.push('<w:u w:val="single"/>');
+      if (run.strike) rPr.push('<w:strike/>');
+      if (run.sup) rPr.push('<w:vertAlign w:val="superscript"/>');
+      else if (run.sub) rPr.push('<w:vertAlign w:val="subscript"/>');
+      if (run.colorHex) rPr.push(`<w:color w:val="${run.colorHex}"/>`);
+      if (run.bgHex) rPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${run.bgHex}"/>`);
+      if (run.fontSizePt) {
+        const halfPts = Math.round(run.fontSizePt * 2);
+        rPr.push(`<w:sz w:val="${halfPts}"/><w:szCs w:val="${halfPts}"/>`);
+      }
+      return `<w:r><w:rPr>${rPr.join('')}</w:rPr><w:t xml:space="preserve">${escapeXml(run.text)}</w:t></w:r>`;
+    }).join('');
   };
 
   while ((match = pattern.exec(source)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(makeRun(source.slice(lastIndex, match.index)));
+      parts.push(makeStyledRuns(source.slice(lastIndex, match.index)));
     }
-    const tex = match[1] ?? match[2] ?? match[3] ?? match[4] ?? (match[5] ? `\\ce{${match[5]}}` : '');
-    parts.push(`<m:oMath>${latexToOmmlInner(tex)}</m:oMath>`);
+    const rawTex = match[1] ?? match[2] ?? match[3] ?? match[4] ?? (match[5] ? `\\ce{${match[5]}}` : '');
+    const cleanTex = stripRichHtmlToPlainText(rawTex);
+    parts.push(`<m:oMath>${latexToOmmlInner(cleanTex)}</m:oMath>`);
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < source.length) {
-    parts.push(makeRun(source.slice(lastIndex)));
+    parts.push(makeStyledRuns(source.slice(lastIndex)));
   }
   return parts.join('');
+}
+
+function wordAlign(align?: ExamBlockStyle['align']): string {
+  if (align === 'center' || align === 'right') return align;
+  if (align === 'justify') return 'both';
+  return 'left';
+}
+
+function blockStyleToCss(block: ExamBlockStyle): string {
+  const styles: string[] = [];
+  if (block.align) styles.push(`text-align:${block.align}`);
+  const ff = sanitizeFontFamily(block.fontFamily);
+  if (ff) styles.push(`font-family:${ff}`);
+  const fs = sanitizeFontSizePt(block.fontSizePt);
+  if (fs !== null) styles.push(`font-size:${fs}pt`);
+  const tc = sanitizeColor(block.textColor);
+  if (tc) styles.push(`color:${tc}`);
+  const bg = sanitizeColor(block.bgColor);
+  if (bg) styles.push(`background-color:${bg};padding:4px 8px;border-radius:6px`);
+  if (block.lineHeight && block.lineHeight >= 1.1 && block.lineHeight <= 2.6) {
+    styles.push(`line-height:${block.lineHeight}`);
+  }
+  if (block.bold) styles.push('font-weight:700');
+  if (block.italic) styles.push('font-style:italic');
+  if (block.underline && block.strike) styles.push('text-decoration:underline line-through');
+  else if (block.underline) styles.push('text-decoration:underline');
+  else if (block.strike) styles.push('text-decoration:line-through');
+  return styles.join(';');
 }
 
 /**
@@ -353,8 +433,11 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
   }
 
   let qIndex = 0;
+  let listNumIndex = 0;
+  const docFontName = extractPrimaryFontName(paper.fontFamily);
   for (const block of paper.blocks) {
     if (block.type === 'page-break') {
+      listNumIndex = 0;
       bodyXml.push(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
       continue;
     }
@@ -364,16 +447,39 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
     }
 
     if (block.type === 'section') {
-      qIndex = 0; // Reset or continue numbering per section
-      bodyXml.push(`<w:p><w:pPr><w:spacing w:before="200" w:after="60"/></w:pPr>${textWithMathToWordXml(block.title, true)}</w:p>`);
+      qIndex = 0;
+      listNumIndex = 0;
+      const bFont = block.fontFamily ? extractPrimaryFontName(block.fontFamily) : docFontName;
+      const jc = wordAlign(block.align);
+      const secColor = sanitizeColor(block.textColor).replace(/^#/, '').toUpperCase() || undefined;
+      bodyXml.push(`<w:p><w:pPr><w:jc w:val="${jc}"/><w:spacing w:before="200" w:after="60"/></w:pPr>${textWithMathToWordXml(block.title, { bold: true, colorHex: secColor, fontSizePt: block.fontSizePt, fontName: bFont })}</w:p>`);
       if (block.subtitle) {
-        bodyXml.push(`<w:p><w:pPr><w:spacing w:after="100"/></w:pPr>${textWithMathToWordXml(block.subtitle, false)}</w:p>`);
+        bodyXml.push(`<w:p><w:pPr><w:jc w:val="${jc}"/><w:spacing w:after="100"/></w:pPr>${textWithMathToWordXml(block.subtitle, { italic: true, fontName: bFont })}</w:p>`);
       }
       continue;
     }
 
     if (block.type === 'paragraph') {
-      bodyXml.push(`<w:p>${textWithMathToWordXml(block.text, Boolean(block.bold))}</w:p>`);
+      const variant = block.variant || 'text';
+      if (variant === 'numbered') listNumIndex += 1;
+      else listNumIndex = 0;
+      const prefix = variant === 'bullet' ? '• ' : variant === 'numbered' ? `${listNumIndex}. ` : '';
+      const variantSize = variant === 'h1' ? 18 : variant === 'h2' ? 15 : variant === 'h3' ? 13 : undefined;
+      const bFont = block.fontFamily ? extractPrimaryFontName(block.fontFamily) : docFontName;
+      const jc = wordAlign(block.align);
+      const bgHex = sanitizeColor(block.bgColor).replace(/^#/, '').toUpperCase() || (variant === 'callout' ? 'F1F5F9' : '');
+      const shdXml = bgHex ? `<w:shd w:val="clear" w:color="auto" w:fill="${bgHex}"/>` : '';
+      const indXml = variant === 'bullet' || variant === 'numbered' ? '<w:ind w:left="360"/>' : '';
+      const runOpts: WordRunOpts = {
+        bold: Boolean(block.bold || variant === 'h1' || variant === 'h2' || variant === 'h3'),
+        italic: Boolean(block.italic),
+        underline: Boolean(block.underline),
+        strike: Boolean(block.strike),
+        colorHex: sanitizeColor(block.textColor).replace(/^#/, '').toUpperCase() || undefined,
+        fontSizePt: block.fontSizePt || variantSize,
+        fontName: bFont
+      };
+      bodyXml.push(`<w:p><w:pPr><w:jc w:val="${jc}"/>${indXml}${shdXml}<w:spacing w:before="${variant.startsWith('h') ? 160 : 60}" w:after="80"/></w:pPr>${prefix ? textWithMathToWordXml(prefix, { ...runOpts, bold: true }) : ''}${textWithMathToWordXml(block.text, runOpts)}</w:p>`);
       for (const fig of block.figures || []) {
         const figXml = registerImage(fig);
         if (figXml) bodyXml.push(figXml);
@@ -381,10 +487,24 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
       continue;
     }
 
+    listNumIndex = 0;
     qIndex++;
+    const qFont = block.fontFamily ? extractPrimaryFontName(block.fontFamily) : docFontName;
+    const qColor = sanitizeColor(block.textColor).replace(/^#/, '').toUpperCase() || undefined;
+    const qBg = sanitizeColor(block.bgColor).replace(/^#/, '').toUpperCase() || undefined;
+    const qRunOpts: WordRunOpts = {
+      bold: Boolean(block.bold),
+      italic: Boolean(block.italic),
+      underline: Boolean(block.underline),
+      strike: Boolean(block.strike),
+      colorHex: qColor,
+      fontSizePt: block.fontSizePt,
+      fontName: qFont
+    };
+    const qShd = qBg ? `<w:shd w:val="clear" w:color="auto" w:fill="${qBg}"/>` : '';
     const labelStr = `Câu ${qIndex}${block.points ? ` (${block.points})` : ''}. `;
     bodyXml.push(
-      `<w:p><w:pPr><w:spacing w:before="120" w:after="60"/></w:pPr>${textWithMathToWordXml(labelStr, true)}${textWithMathToWordXml(block.prompt, false)}</w:p>`
+      `<w:p><w:pPr><w:jc w:val="${wordAlign(block.align)}"/>${qShd}<w:spacing w:before="120" w:after="60"/></w:pPr>${textWithMathToWordXml(labelStr, { ...qRunOpts, bold: true })}${textWithMathToWordXml(block.prompt, qRunOpts)}</w:p>`
     );
 
     for (const fig of block.figures || []) {
@@ -448,10 +568,11 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
   ${mediaFiles.map(mf => `<Relationship Id="${mf.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mf.name.split('/').pop()}"/>`).join('\n  ')}
 </Relationships>`;
 
+  const safeDocFont = escapeXml(docFontName);
   const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:docDefaults>
-    <w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="${(paper.fontSizePt || 12) * 2}"/></w:rPr></w:rPrDefault>
+    <w:rPrDefault><w:rPr><w:rFonts w:ascii="${safeDocFont}" w:hAnsi="${safeDocFont}" w:cs="${safeDocFont}"/><w:sz w:val="${(paper.fontSizePt || 12) * 2}"/></w:rPr></w:rPrDefault>
   </w:docDefaults>
 </w:styles>`;
 
@@ -497,10 +618,12 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
     .join('');
 
   let qCounter = 0;
+  let pdfListNum = 0;
   const bodyHtml: string[] = [];
 
   for (const block of paper.blocks) {
     if (block.type === 'page-break') {
+      pdfListNum = 0;
       bodyHtml.push(`<div style="page-break-before:always;break-before:page;height:0"></div>`);
       continue;
     }
@@ -509,14 +632,31 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
     }
     if (block.type === 'section') {
       qCounter = 0;
-      bodyHtml.push(`<div class="pdf-section"><h3>${escapeHtml(block.title)}</h3>${block.subtitle ? `<p>${escapeHtml(block.subtitle)}</p>` : ''}</div>`);
+      pdfListNum = 0;
+      const secStyle = blockStyleToCss(block);
+      bodyHtml.push(`<div class="pdf-section"${secStyle ? ` style="${secStyle}"` : ''}><h3>${renderRichExamText(block.title)}</h3>${block.subtitle ? `<p>${renderRichExamText(block.subtitle)}</p>` : ''}</div>`);
       continue;
     }
     if (block.type === 'paragraph') {
-      bodyHtml.push(`<p class="pdf-para" style="text-align:${block.align || 'left'}">${renderRichExamText(block.text)}</p>`);
+      const variant = block.variant || 'text';
+      if (variant === 'numbered') pdfListNum += 1;
+      else pdfListNum = 0;
+      const pStyle = blockStyleToCss(block);
+      const pFigs = (block.figures || [])
+        .map(f => `<div class="pdf-fig" style="text-align:${f.align || 'center'}"><img src="${escapeHtml(f.src)}" style="width:${f.width || 250}px;max-width:100%" alt="Hình minh họa"/></div>`)
+        .join('');
+      const content = renderRichExamText(block.text);
+      if (variant === 'h1') bodyHtml.push(`<h1 class="pdf-h1"${pStyle ? ` style="${pStyle}"` : ''}>${content}</h1>${pFigs}`);
+      else if (variant === 'h2') bodyHtml.push(`<h2 class="pdf-h2"${pStyle ? ` style="${pStyle}"` : ''}>${content}</h2>${pFigs}`);
+      else if (variant === 'h3') bodyHtml.push(`<h3 class="pdf-h3"${pStyle ? ` style="${pStyle}"` : ''}>${content}</h3>${pFigs}`);
+      else if (variant === 'bullet') bodyHtml.push(`<div class="pdf-list-item"${pStyle ? ` style="${pStyle}"` : ''}><span class="pdf-list-marker">•</span><div>${content}</div></div>${pFigs}`);
+      else if (variant === 'numbered') bodyHtml.push(`<div class="pdf-list-item"${pStyle ? ` style="${pStyle}"` : ''}><span class="pdf-list-marker">${pdfListNum}.</span><div>${content}</div></div>${pFigs}`);
+      else if (variant === 'callout') bodyHtml.push(`<div class="pdf-callout"${pStyle ? ` style="${pStyle}"` : ''}>${content}</div>${pFigs}`);
+      else bodyHtml.push(`<p class="pdf-para"${pStyle ? ` style="${pStyle}"` : ''}>${content}</p>${pFigs}`);
       continue;
     }
 
+    pdfListNum = 0;
     qCounter++;
     const figsHtml = (block.figures || [])
       .map(f => `<div class="pdf-fig" style="text-align:${f.align || 'center'}"><img src="${escapeHtml(f.src)}" style="width:${f.width || 250}px;max-width:100%" alt="Hình câu ${qCounter}"/></div>`)
@@ -552,8 +692,9 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
         ? `<div class="pdf-solution"><strong>Lời giải:</strong> ${renderRichExamText(block.solution)}</div>`
         : '';
 
+    const qStyle = blockStyleToCss(block);
     bodyHtml.push(`
-      <article class="pdf-question" style="text-align:${block.align || 'left'}">
+      <article class="pdf-question"${qStyle ? ` style="${qStyle}"` : ''}>
         <div class="pdf-q-prompt"><strong class="pdf-q-label">Câu ${qCounter}${block.points ? ` (${escapeHtml(block.points)})` : ''}.</strong> ${renderRichExamText(block.prompt)}</div>
         ${figsHtml}
         ${optionsHtml}
@@ -596,6 +737,13 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
     .pdf-section { margin: 14px 0 8px; }
     .pdf-section h3 { margin: 0; font-size: 12pt; font-weight: 700; text-transform: uppercase; }
     .pdf-section p { margin: 2px 0 0; font-style: italic; font-size: 11pt; }
+    .pdf-para { margin: 4px 0 8px; }
+    .pdf-h1 { margin: 14px 0 6px; font-size: 18pt; font-weight: 700; line-height: 1.3; }
+    .pdf-h2 { margin: 12px 0 5px; font-size: 15pt; font-weight: 700; line-height: 1.35; }
+    .pdf-h3 { margin: 10px 0 4px; font-size: 13pt; font-weight: 700; line-height: 1.4; }
+    .pdf-list-item { display: flex; gap: 8px; margin: 3px 0 5px; padding-left: 12px; }
+    .pdf-list-marker { font-weight: 700; flex: none; min-width: 16px; }
+    .pdf-callout { margin: 8px 0; padding: 9px 12px; background: #f8fafc; border-left: 3.5px solid #2563eb; border-radius: 6px; }
     .pdf-question { margin: 0 0 11px; break-inside: avoid; page-break-inside: avoid; }
     .pdf-q-label { font-weight: 700; }
     .pdf-fig { margin: 8px 0; }
@@ -659,30 +807,30 @@ export function convertExamPaperToOnlineQuestions(paper: ExamPaperDocument) {
     const firstFig = block.figures?.[0]?.src || '';
     const image = firstFig.startsWith('data:image/') && firstFig.length <= 300000 ? firstFig : '';
     if (block.questionType === 'mcq') {
-      const opts = (block.options || ['A', 'B', 'C', 'D']).map((o, i) => o.trim() || `Phương án ${'ABCD'[i]}`);
+      const opts = (block.options || ['A', 'B', 'C', 'D']).map((o, i) => stripRichHtmlToPlainText(o) || `Phương án ${'ABCD'[i]}`);
       questions.push({
         part: 'I',
-        prompt: block.prompt.trim() || 'Câu hỏi trắc nghiệm',
+        prompt: stripRichHtmlToPlainText(block.prompt) || 'Câu hỏi trắc nghiệm',
         ...(image ? { image } : {}),
         options: opts,
         answer: block.correctChoice || 'A'
       });
     } else if (block.questionType === 'tf') {
       const sts = block.statements || [];
-      const opts = [0, 1, 2, 3].map(i => sts[i]?.text?.trim() || `Nhận định ${'abcd'[i]}`);
+      const opts = [0, 1, 2, 3].map(i => stripRichHtmlToPlainText(sts[i]?.text) || `Nhận định ${'abcd'[i]}`);
       const ans = [0, 1, 2, 3].map(i => (sts[i]?.correct === false ? false : true));
       questions.push({
         part: 'II',
-        prompt: block.prompt.trim() || 'Câu hỏi đúng sai',
+        prompt: stripRichHtmlToPlainText(block.prompt) || 'Câu hỏi đúng sai',
         ...(image ? { image } : {}),
         options: opts,
         answer: ans
       });
     } else if (block.questionType === 'short') {
-      const numeric = Number(String(block.shortAnswer || '0').trim().replace(',', '.'));
+      const numeric = Number(stripRichHtmlToPlainText(block.shortAnswer || '0').replace(',', '.'));
       questions.push({
         part: 'III',
-        prompt: block.prompt.trim() || 'Câu hỏi trả lời ngắn',
+        prompt: stripRichHtmlToPlainText(block.prompt) || 'Câu hỏi trả lời ngắn',
         ...(image ? { image } : {}),
         answer: Number.isFinite(numeric) ? String(numeric) : '0',
         tolerance: 0.0001

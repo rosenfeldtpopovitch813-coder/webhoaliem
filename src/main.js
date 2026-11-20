@@ -14,7 +14,7 @@ import { mountAIBot } from './modules/ai-bot.js';
 const root = document.getElementById('app');
 const nav = [
   ['/', 'home', 'Tổng quan'],
-  ['/exam-paper', 'exam-paper', 'Soạn đề A4'],
+  ['/exam-paper', 'exam-paper', 'Soạn đề'],
   ['/whiteboard', 'whiteboard', 'Bảng vẽ Mực'],
   ['/exam', 'exam-room', 'Phòng thi'],
   ['/arena', 'arena', 'Đấu trường học tập'],
@@ -97,9 +97,9 @@ function drawEntryScreen() {
   } else if (!user) {
     const layout = element('div', 'entry-layout');
     const intro = element('div', 'entry-intro');
-    intro.append(element('span', 'entry-logo', 'H'), element('h1', 'entry-title', 'HTVVM Studio'), element('p', 'entry-copy', 'Soạn đề A4 chuẩn in, tổ chức thi trên phiếu OMR theo giờ máy chủ và ôn tập Hóa – Toán – Anh.'));
+    intro.append(element('span', 'entry-logo', 'H'), element('h1', 'entry-title', 'HTVVM Studio'), element('p', 'entry-copy', 'Soạn đề chuẩn in, tổ chức thi trên phiếu OMR theo giờ máy chủ và ôn tập Hóa – Toán – Anh.'));
     const featureList = element('div', 'entry-feature-list');
-    for (const [iconName, title, desc] of [['exam-room','Phòng thi OMR','Tách đôi đề PDF/Drive bên trái và phiếu tô bên phải'],['exam-paper','Soạn đề A4','Tự ngắt trang, chèn công thức KaTeX và xuất .docx / PDF'],['focus','Góc tập trung','Bấm giờ Pomodoro, Focus Mode và tài liệu học tập']]) {
+    for (const [iconName, title, desc] of [['exam-room','Phòng thi OMR','Tách đôi đề PDF/Drive bên trái và phiếu tô bên phải'],['exam-paper','Soạn đề','Gõ trực tiếp trên trang, định dạng từng đoạn, công thức KaTeX và xuất .docx / PDF'],['focus','Góc tập trung','Bấm giờ Pomodoro, Focus Mode và tài liệu học tập']]) {
       const item = element('div', 'entry-feature'); const ic = element('span',''); ic.append(icon(iconName, 18)); item.append(ic, element('div','', ''));
       item.lastChild.append(element('strong','',title), element('small','',desc)); featureList.append(item);
     }
