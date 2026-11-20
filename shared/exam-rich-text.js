@@ -255,6 +255,482 @@ export function sanitizeInlineRichHtml(raw) {
   return out.join('').replace(/(?:<br>)+$/i, '');
 }
 
+/**
+ * Clean clipboard HTML pasted from Microsoft Word / Google Docs / Web while preserving
+ * bold, italic, underline, superscript, subscript, line breaks, and `<=>` arrows.
+ */
+export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
+  const html = String(rawHtml ?? '').trim();
+  if (!html) {
+    return sanitizeInlineRichHtml(
+      String(fallbackPlain ?? '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\n/g, '<br>')
+    );
+  }
+
+  let cleaned = html
+    // Remove MSO conditional comments and normal comments
+    .replace(/<!--[\s\S]*?-->/g, '')
+    // Remove <xml>, <style>, <script>, <meta>, <link>, <head>, <title> blocks
+    .replace(/<\s*(xml|style|script|head|title|noscript)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    // Remove Word namespace empty tags like <o:p></o:p>, <w:...>, <v:...>
+    .replace(/<\/?\s*(?:o|w|v|m|st1):[a-zA-Z0-9_-]+(?:\s[^<>]*)?\/?>/gi, '')
+    // Convert Word superscript/subscript spans into <sup> / <sub>
+    .replace(
+      /<\s*span\b([^<>]*?\bvertical-align\s*:\s*(super|sub)\b[^<>]*)>([\s\S]*?)<\s*\/\s*span\s*>/gi,
+      (_m, _attrs, align, inner) => (String(align).toLowerCase() === 'super' ? `<sup>${inner}</sup>` : `<sub>${inner}</sub>`)
+    )
+    .replace(
+      /<\s*span\b([^<>]*?\bmso-text-raise\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:pt|%)[^<>]*)>([\s\S]*?)<\s*\/\s*span\s*>/gi,
+      (_m, _attrs, raiseVal, inner) => (Number(raiseVal) > 0 ? `<sup>${inner}</sup>` : Number(raiseVal) < 0 ? `<sub>${inner}</sub>` : inner)
+    )
+    // Convert table cells to tab separation and rows/list items to line breaks
+    .replace(/<\s*\/\s*(?:td|th)\s*>/gi, '\t')
+    .replace(/<\s*\/\s*(?:tr|li|p|div|h[1-6])\s*>/gi, '@@WORD_BR@@')
+    .replace(/<\s*br\s*\/?>/gi, '@@WORD_BR@@')
+    // Collapse soft line-wraps (\r\n) that Word inserts inside paragraphs into single spaces
+    .replace(/\r?\n+/g, ' ')
+    .replace(/[ \t]*@@WORD_BR@@[ \t]*/g, '<br>')
+    .replace(/(?:<br>\s*){3,}/gi, '<br><br>');
+
+  // Strip Mso* classes and mso-* inline style properties before passing to sanitizeInlineRichHtml
+  cleaned = cleaned
+    .replace(/\sclass\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/mso-[a-zA-Z0-9-]+\s*:[^;"]+;?/gi, '');
+
+  return sanitizeInlineRichHtml(cleaned)
+    .replace(/^(?:<br>\s*)+|(?:<br>\s*)+$/gi, '');
+}
+
+/**
+ * Automatically format lead prefix at the start of a line or after <br>
+ * e.g. "câu 1: Cho chất X" -> "<strong>Câu 1:</strong> Cho chất X"
+ *      "bài 2. Giải PT"    -> "<strong>Bài 2.</strong> Giải PT"
+ *      "lời giải: Ta có"   -> "<strong>Lời giải:</strong> Ta có"
+ * Ensures the prefix is capitalized & bolded while the content after it stays outside <strong>.
+ */
+const LEAD_PREFIX_MAP = [
+  { re: /^(câu|question)\s+(\d+(?:\s*\([^)\n]+\))?)\s*([.:])(\s+)([\s\S]*)$/i, format: (m) => ({ label: `${/^question/i.test(m[1]) ? 'Question' : 'Câu'} ${m[2].trim()}${m[3]}`, space: m[4], rest: m[5] }) },
+  { re: /^(bài)\s+(\d+(?:\s*\([^)\n]+\))?)\s*([.:])(\s+)([\s\S]*)$/i, format: (m) => ({ label: `Bài ${m[2].trim()}${m[3]}`, space: m[4], rest: m[5] }) },
+  { re: /^(ví\s+dụ)\s+(\d+(?:\s*\([^)\n]+\))?)\s*([.:])(\s+)([\s\S]*)$/i, format: (m) => ({ label: `Ví dụ ${m[2].trim()}${m[3]}`, space: m[4], rest: m[5] }) },
+  { re: /^(lời\s+giải|hướng\s+dẫn\s+giải|hướng\s+dẫn)\s*([.:])(\s+)([\s\S]*)$/i, format: (m) => ({ label: `${/^hướng\s+dẫn\s+giải/i.test(m[1]) ? 'Hướng dẫn giải' : /^hướng/i.test(m[1]) ? 'Hướng dẫn' : 'Lời giải'}${m[2]}`, space: m[3], rest: m[4] }) },
+  { re: /^(chú\s+ý|lưu\s+ý|ghi\s+chú|nhận\s+xét|cho\s+biết)\s*([.:])(\s+)([\s\S]*)$/i, format: (m) => {
+    const k = m[1].toLowerCase().replace(/\s+/g, ' ');
+    const cap = k === 'lưu ý' ? 'Lưu ý' : k === 'ghi chú' ? 'Ghi chú' : k === 'nhận xét' ? 'Nhận xét' : k === 'cho biết' ? 'Cho biết' : 'Chú ý';
+    return { label: `${cap}${m[2]}`, space: m[3], rest: m[4] };
+  } }
+];
+
+export function matchLeadPrefix(plainLine) {
+  const src = String(plainLine ?? '');
+  for (const rule of LEAD_PREFIX_MAP) {
+    const m = rule.re.exec(src);
+    if (m) return rule.format(m);
+  }
+  return null;
+}
+
+export function autoFormatLeadPrefixHtml(rawHtml, tag = 'strong') {
+  const openTag = tag === 'b' ? '<b>' : '<strong>';
+  const closeTag = tag === 'b' ? '</b>' : '</strong>';
+  const src = String(rawHtml ?? '');
+  if (!src) return '';
+
+  return src
+    .split(/(<\s*br\s*\/?>)/gi)
+    .map((part) => {
+      if (/^<\s*br\s*\/?>$/i.test(part)) return '<br>';
+      const trimmedLead = part.replace(/^\s+/, '');
+      const leadingWs = part.slice(0, part.length - trimmedLead.length);
+      // Case 1: already starts with <strong> or <b> that accidentally swallowed the rest of the line
+      const wrappedMatch = /^<\s*(?:strong|b)\s*>([\s\S]*?)<\s*\/\s*(?:strong|b)\s*>([\s\S]*)$/i.exec(trimmedLead);
+      if (wrappedMatch) {
+        const inner = wrappedMatch[1];
+        const after = wrappedMatch[2];
+        const splitInner = matchLeadPrefix(inner);
+        if (splitInner && splitInner.rest.trim()) {
+          return `${leadingWs}${openTag}${splitInner.label}${closeTag} ${splitInner.rest}${after}`;
+        }
+        return part;
+      }
+      // Case 2: unbolded lead prefix
+      const hit = matchLeadPrefix(trimmedLead);
+      if (hit) {
+        return `${leadingWs}${openTag}${hit.label}${closeTag} ${hit.rest}`;
+      }
+      return part;
+    })
+    .join('');
+}
+
+/**
+ * Parse MCQ options from a single line or tab-separated line:
+ * Supports "A. ... B. ... C. ... D. ..." or "A. ... B. ..." (2 options on one line).
+ */
+export function parseFlexibleOptionTokens(line) {
+  const clean = String(line ?? '').replace(/\t+/g, '   ').trim();
+  if (!clean) return [];
+  const tokenRe = /(?:^|\s{2,}|\t)([ABCD])\s*[.:)]\s*(.+?)(?=(?:\s{2,}|\t)[ABCD]\s*[.:)]|$)/g;
+  const results = [];
+  let m;
+  while ((m = tokenRe.exec(clean)) !== null) {
+    results.push({ letter: m[1].toUpperCase(), text: m[2].trim() });
+  }
+  if (results.length >= 2) return results;
+
+  // Fallback for single-space separated A. ... B. ... C. ... D. ... on one line
+  const allFour = /^\s*A\s*[.:)]\s*(.+?)\s+B\s*[.:)]\s*(.+?)\s+C\s*[.:)]\s*(.+?)\s+D\s*[.:)]\s*(.+)\s*$/i.exec(clean);
+  if (allFour) {
+    return [
+      { letter: 'A', text: allFour[1].trim() },
+      { letter: 'B', text: allFour[2].trim() },
+      { letter: 'C', text: allFour[3].trim() },
+      { letter: 'D', text: allFour[4].trim() }
+    ];
+  }
+  const pairAB = /^\s*A\s*[.:)]\s*(.+?)\s+B\s*[.:)]\s*(.+)\s*$/i.exec(clean);
+  if (pairAB) {
+    return [
+      { letter: 'A', text: pairAB[1].trim() },
+      { letter: 'B', text: pairAB[2].trim() }
+    ];
+  }
+  const pairCD = /^\s*C\s*[.:)]\s*(.+?)\s+D\s*[.:)]\s*(.+)\s*$/i.exec(clean);
+  if (pairCD) {
+    return [
+      { letter: 'C', text: pairCD[1].trim() },
+      { letter: 'D', text: pairCD[2].trim() }
+    ];
+  }
+  const singleOpt = /^\s*([ABCD])\s*[.:)]\s*(.+)\s*$/.exec(clean);
+  if (singleOpt) {
+    return [{ letter: singleOpt[1].toUpperCase(), text: singleOpt[2].trim() }];
+  }
+  return [];
+}
+
+/**
+ * Smart multi-question & Word paste parser.
+ * Recognizes:
+ * - Prologue lines before PHẦN I / Câu 1 (e.g., "Cho biết nguyên tử khối...", "Cho các hằng số...")
+ * - PHẦN I, PHẦN II, PHẦN III...
+ * - Câu 1., Câu 1:, Question 1:
+ * - A. B. C. D. on 1 line, 2 lines (2x2 or tab-separated), or 4 separate lines
+ * - True/False a) b) c) d) statements across lines
+ * - Đáp án: / Lời giải: / Hướng dẫn giải:
+ */
+export function parseSmartExamClipboardText(rawText) {
+  const lines = String(rawText ?? '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.replace(/\u00A0/g, ' ').trim())
+    .filter(Boolean);
+
+  const prologueLines = [];
+  const blocks = [];
+  let currentQ = null;
+  let seenSectionOrQuestion = false;
+  let inTfSection = false;
+  let optionMap = {};
+  let optionLineCount = 0;
+
+  const makeId = () =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `blk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const flushQuestion = () => {
+    if (!currentQ) return;
+    const keys = Object.keys(optionMap);
+    if (keys.length >= 2) {
+      currentQ.questionType = 'mcq';
+      currentQ.options = [
+        optionMap.A || 'Phương án A',
+        optionMap.B || 'Phương án B',
+        optionMap.C || 'Phương án C',
+        optionMap.D || 'Phương án D'
+      ];
+      currentQ.optionCols = optionLineCount === 1 ? 4 : optionLineCount === 2 ? 2 : 1;
+      currentQ.correctChoice = currentQ.correctChoice || 'A';
+    }
+    blocks.push(currentQ);
+    currentQ = null;
+    optionMap = {};
+    optionLineCount = 0;
+  };
+
+  for (const line of lines) {
+    if (/^PHẦN\s+[IVX0-9]+/i.test(line)) {
+      flushQuestion();
+      seenSectionOrQuestion = true;
+      inTfSection = /đúng\s*sai/i.test(line);
+      blocks.push({
+        id: makeId(),
+        type: 'section',
+        title: line
+      });
+      continue;
+    }
+
+    const qMatch = /^(?:Câu|Question)\s*(\d+)\s*(?:\(([^)]+)\))?\s*[.:]\s*(.*)$/i.exec(line);
+    if (qMatch) {
+      flushQuestion();
+      seenSectionOrQuestion = true;
+      const points = qMatch[2]?.trim();
+      const restPrompt = qMatch[3]?.trim() || '';
+      currentQ = {
+        id: makeId(),
+        type: 'question',
+        questionType: inTfSection ? 'tf' : points ? 'short' : 'mcq',
+        ...(points ? { points } : {}),
+        prompt: restPrompt,
+        ...(inTfSection
+          ? { statements: [] }
+          : points
+            ? { shortAnswer: '', solution: '' }
+            : { options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'], optionCols: 4, correctChoice: 'A' })
+      };
+      continue;
+    }
+
+    if (!seenSectionOrQuestion && /^(?:Cho\s+biết|Nguyên\s+tử\s+khối|Biết\s+nguyên\s+tử\s+khối|Hằng\s+số|Ghi\s+chú)/i.test(line)) {
+      prologueLines.push(autoFormatLeadPrefixHtml(line));
+      continue;
+    }
+
+    if (currentQ) {
+      const optTokens = parseFlexibleOptionTokens(line);
+      if (optTokens.length > 0 && (optTokens.length >= 2 || Object.keys(optionMap).length > 0 || optTokens[0].letter === 'A')) {
+        optionLineCount += 1;
+        for (const tk of optTokens) {
+          optionMap[tk.letter] = tk.text;
+        }
+        continue;
+      }
+
+      const tfMatch = /^([abcd])\s*[.)]\s*(.+)$/i.exec(line);
+      if (tfMatch) {
+        currentQ.questionType = 'tf';
+        const label = tfMatch[1].toLowerCase();
+        const rawSt = tfMatch[2].trim();
+        let correct = true;
+        let cleanSt = rawSt;
+        const tagMatch = /^(.*?)\s*\[(\s*Đ(?:ÚNG)?|\s*S(?:AI)?)\s*\]\s*$/i.exec(rawSt);
+        if (tagMatch) {
+          cleanSt = tagMatch[1].trim();
+          correct = /^đ/i.test(tagMatch[2].trim());
+        }
+        currentQ.statements = currentQ.statements || [];
+        currentQ.statements.push({
+          id: makeId(),
+          label,
+          text: cleanSt,
+          correct
+        });
+        continue;
+      }
+
+      const ansMatch = /^Đáp\s*án\s*[.:]\s*(.+)$/i.exec(line);
+      if (ansMatch) {
+        const val = ansMatch[1].trim();
+        if (/^[ABCD]$/i.test(val)) {
+          currentQ.correctChoice = val.toUpperCase();
+        } else {
+          if (Object.keys(optionMap).length === 0 && (!currentQ.statements || currentQ.statements.length === 0)) {
+            currentQ.questionType = 'short';
+          }
+          currentQ.shortAnswer = val;
+        }
+        continue;
+      }
+
+      const solMatch = /^(?:Lời\s*giải|Hướng\s*dẫn(?:\s*giải)?)\s*[.:]\s*(.+)$/i.exec(line);
+      if (solMatch) {
+        currentQ.solution = solMatch[1].trim();
+        continue;
+      }
+
+      // Continuation of question prompt or solution
+      if (currentQ.solution !== undefined && currentQ.solution.length > 0) {
+        currentQ.solution += '\n' + line;
+      } else {
+        currentQ.prompt = currentQ.prompt ? `${currentQ.prompt}\n${line}` : line;
+      }
+    } else if (!seenSectionOrQuestion) {
+      prologueLines.push(autoFormatLeadPrefixHtml(line));
+    } else {
+      blocks.push({
+        id: makeId(),
+        type: 'paragraph',
+        text: autoFormatLeadPrefixHtml(line)
+      });
+    }
+  }
+  flushQuestion();
+
+  return {
+    prologue: prologueLines.join('<br>'),
+    blocks,
+    questionCount: blocks.filter((b) => b.type === 'question').length
+  };
+}
+
+/**
+ * Ctrl + I Auto-Normalize Formula for Chemistry, Physics, and Math.
+ * Normalizes plain-typed formulas outside existing $...$ into clean KaTeX / \ce{...}.
+ */
+const CHEM_ELEMENTS = new Set([
+  'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+  'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+  'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+  'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Ag', 'Cd',
+  'Sn', 'Sb', 'I', 'Xe', 'Cs', 'Ba', 'Pt', 'Au', 'Hg', 'Pb', 'Bi'
+]);
+
+const NON_CHEM_ACRONYMS = new Set(['A4', 'A3', 'A2', 'A1', 'B1', 'B2', 'C1', 'C2', 'D1', 'D2', 'MP3', 'MP4', 'H1', 'H2', 'H3', '3D', '2D']);
+
+export function isLikelyChemicalToken(token) {
+  const raw = String(token ?? '').trim();
+  if (!raw || NON_CHEM_ACRONYMS.has(raw.toUpperCase())) return false;
+  // Strip leading stoichiometric coefficient like 2H2O, 3Fe3O4
+  const body = raw.replace(/^\d+/, '');
+  if (!body || body.length < 2) return false;
+  // Must contain at least one uppercase element and either a digit, parenthesis, hydrate dot, or ionic charge
+  if (!/[A-Z]/.test(body)) return false;
+  if (!/(?:\d|[()]|\^\d*[+-]|[+-]$)/.test(body)) return false;
+
+  // Validate that all letter sequences inside the token are valid chemical elements
+  const cleaned = body
+    .replace(/\.\d*H2O/g, '')
+    .replace(/\^\d*[+-]/g, '')
+    .replace(/[+-]$/g, '')
+    .replace(/[()[\]\d.]/g, '');
+  if (!cleaned) return false;
+
+  const symbols = cleaned.match(/[A-Z][a-z]?/g);
+  if (!symbols || symbols.join('') !== cleaned) return false;
+  return symbols.every((sym) => CHEM_ELEMENTS.has(sym));
+}
+
+function normalizePlainTextFormulas(textSegment) {
+  let s = String(textSegment ?? '');
+  if (!s.trim()) return s;
+
+  // 1. Chemical reaction equations containing -> or <=> between chemical species
+  // e.g. "CH3COOH + C2H5OH <=> CH3COOC2H5 + H2O" or "CaCO3 ->[t°] CaO + CO2"
+  const chemTerm = `(?:\\d*[A-Z][A-Za-z0-9().]*(?:\\^?\\d*[+-])?(?:\\s+[\\^v])?)`;
+  const chemSide = `${chemTerm}(?:\\s*\\+\\s*${chemTerm})*`;
+  const chemEqRe = new RegExp(
+    `(${chemSide}\\s*(?:<=>|<->|->)(?:\\[[^\\]\\n]*\\])?\\s*${chemSide})`,
+    'g'
+  );
+  s = s.replace(chemEqRe, (match) => {
+    const normalizedCond = match
+      .replace(/<->/g, '<=>')
+      .replace(/t°|t0/g, '$t^\\circ$');
+    return `$\\ce{${normalizedCond.trim()}}$`;
+  });
+
+  // Protect newly created $...$ inside this segment before token-level replacements
+  const subSegments = splitRichExamSegments(s);
+  return subSegments
+    .map((seg) => {
+      if (seg.type !== 'text') return seg.raw;
+      let t = seg.raw;
+
+      // 2. Standalone chemical formulas and ions (e.g., H2SO4, Fe2(SO4)3, Cu(OH)2, CuSO4.5H2O, Fe2+, OH-, SO4^2-)
+      t = t.replace(
+        /(^|[\s,;:([{"'])(\d*[A-Z][A-Za-z0-9().]*(?:\^\d*[+-]|[234][+-]|[+-])?)(?=$|[\s,;:.!?)\]}"'])/g,
+        (full, pre, cand) => {
+          if (isLikelyChemicalToken(cand)) {
+            // Convert trailing ion charge like Fe2+, Fe3+, SO4^2-, OH- into clean mhchem/LaTeX
+            const formattedIon = cand
+              .replace(/^([A-Za-z0-9()]+?)([234])([+-])$/, '$1^{$2$3}')
+              .replace(/^([A-Za-z0-9()]+?)\^(\d+[+-])$/, '$1^{$2}')
+              .replace(/^([A-Za-z0-9()]+?)([+-])$/, '$1^{$2}');
+            return `${pre}$\\ce{${formattedIon}}$`;
+          }
+          return full;
+        }
+      );
+
+      // 3. Math & Physics expressions outside $...$
+      // Convert sqrt(...) -> \sqrt{...}
+      t = t.replace(/\bsqrt\(\s*([^()\n]+)\s*\)/g, (_m, inner) => `$\\sqrt{${inner.trim()}}$`);
+
+      // Convert algebraic equations/inequalities with exponents like "x^2 - 4x + 3 >= 0" or "x^2 + 2x - 3 = 0"
+      t = t.replace(
+        /\b([a-zA-Z]\^\d+(?:\s*[+\-]\s*\d*[a-zA-Z]?(?:\^\d+)?)*\s*(?:>=|<=|!=|=|>|<)\s*-?\d+(?:[.,]\d+)?)/g,
+        (expr) => {
+          const tex = expr
+            .replace(/>=/g, '\\ge ')
+            .replace(/<=/g, '\\le ')
+            .replace(/!=/g, '\\ne ');
+          return `$${tex}$`;
+        }
+      );
+
+      // Convert standalone power tokens like 10^-19, x^2, m/s^2
+      t = t.replace(/\b(10\^\{?-?\d+\}?|m\/s\^\d+|[a-zA-Z]\^\d+)\b/g, (tok) => {
+        const cleaned = tok.replace(/\^(-?\d+)$/, '^{$1}');
+        return `$${cleaned}$`;
+      });
+
+      // Convert standalone comparison operators >=, <=, !=, +- when surrounded by spaces/numbers/variables
+      t = t
+        .replace(/(\b[a-zA-Z0-9]+\s*)(>=|<=|!=)(\s*-?[a-zA-Z0-9]+\b)/g, (_m, l, op, r) => {
+          const map = { '>=': '\\ge', '<=': '\\le', '!=': '\\ne' };
+          return `$${l.trim()} ${map[op]} ${r.trim()}$`;
+        });
+
+      return t;
+    })
+    .join('');
+}
+
+export function autoNormalizeFormulaText(input) {
+  const src = String(input ?? '');
+  if (!src) return '';
+  const withPrefix = autoFormatLeadPrefixHtml(src);
+  const segments = splitRichExamSegments(withPrefix);
+
+  // If the entire selected snippet is a single plain chemical or math expression without any $, normalize it directly
+  if (segments.length === 1 && segments[0].type === 'text') {
+    const normalized = normalizePlainTextFormulas(segments[0].raw);
+    return normalized;
+  }
+
+  return segments
+    .map((seg) => (seg.type === 'text' ? normalizePlainTextFormulas(seg.raw) : seg.raw))
+    .join('');
+}
+
+/**
+ * Transform a formula string between display modes:
+ * - 'inline': $...$
+ * - 'display': $$...$$
+ * - 'boxed': $$\boxed{...}$$
+ * - 'numbered': $$... \qquad (1)$$
+ */
+export function convertFormulaDisplayMode(rawText, mode = 'inline', eqNumber = 1) {
+  const trimmed = String(rawText ?? '').trim();
+  if (!trimmed) return '';
+  let inner = trimmed
+    .replace(/^\$\$([\s\S]*)\$\$$/, '$1')
+    .replace(/^\$([\s\S]*)\$$/, '$1')
+    .trim();
+  inner = inner
+    .replace(/^\\boxed\{([\s\S]*)\}$/, '$1')
+    .replace(/\s*\\qquad\s*\(\d+\)\s*$/, '')
+    .trim();
+  if (!inner) return trimmed;
+  if (mode === 'display') return `$$${inner}$$`;
+  if (mode === 'boxed') return `$$\\boxed{${inner}}$$`;
+  if (mode === 'numbered') return `$$${inner} \\qquad (${eqNumber})$$`;
+  return `$${inner}$`;
+}
+
 export function stripFormattedHtmlTags(raw) {
   return String(raw ?? '')
     .replace(/<\s*br\s*\/?>/gi, '\n')

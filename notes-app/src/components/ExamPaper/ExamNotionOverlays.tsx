@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowUp,
   Bold,
   Copy,
   CornerDownLeft,
@@ -8,7 +9,9 @@ import {
   Highlighter,
   Italic,
   Palette,
+  Plus,
   Sigma,
+  Sparkles,
   Strikethrough,
   Subscript,
   Superscript,
@@ -307,11 +310,28 @@ export function FloatingSelectionToolbar({
 
       <span className="exam-bubble-sep" />
 
-      <button type="button" className="exam-bubble-btn" title="Bọc công thức Toán ($...$)" onClick={() => onCommand('wrapMath')}>
+      <button
+        type="button"
+        className="exam-bubble-btn is-text"
+        title="Tự động chuẩn hóa công thức Toán / Hóa / Lý (Ctrl+I)"
+        onClick={() => onCommand('normalizeFormula')}
+      >
+        <Sparkles size={13} style={{ marginRight: 3 }} /> Chuẩn hóa CT (Ctrl+I)
+      </button>
+      <button type="button" className="exam-bubble-btn" title="Công thức cùng dòng ($...$)" onClick={() => onCommand('wrapMath')}>
         <Sigma size={14} />
       </button>
-      <button type="button" className="exam-bubble-btn" title="Bọc công thức Hóa ($\ce{...}$)" onClick={() => onCommand('wrapChem')}>
+      <button type="button" className="exam-bubble-btn" title="Phương trình / chất Hóa ($\ce{...}$)" onClick={() => onCommand('wrapChem')}>
         <FlaskConical size={14} />
+      </button>
+      <button type="button" className="exam-bubble-btn is-text" title="Đặt công thức ở dòng riêng căn giữa ($$...$$)" onClick={() => onCommand('formulaDisplay')}>
+        Dòng riêng
+      </button>
+      <button type="button" className="exam-bubble-btn is-text" title="Đóng khung công thức ($$\boxed{...}$$)" onClick={() => onCommand('formulaBoxed')}>
+        Đóng khung
+      </button>
+      <button type="button" className="exam-bubble-btn is-text" title="Đánh số phương trình (1)" onClick={() => onCommand('formulaNumbered', 1)}>
+        (1)
       </button>
       <button type="button" className="exam-bubble-btn" title="Xóa định dạng đoạn đang chọn" onClick={() => onCommand('clear')}>
         <Eraser size={14} />
@@ -325,6 +345,7 @@ export function BlockQuickMenu({
   rect,
   onUpdateStyle,
   onTurnVariant,
+  onInsertAbove,
   onDuplicate,
   onTogglePageBreak,
   onDelete,
@@ -334,6 +355,7 @@ export function BlockQuickMenu({
   rect: DOMRect;
   onUpdateStyle: (patch: Partial<ExamBlockStyle>) => void;
   onTurnVariant?: (variant: ExamParagraphVariant) => void;
+  onInsertAbove?: () => void;
   onDuplicate: () => void;
   onTogglePageBreak: () => void;
   onDelete: () => void;
@@ -456,6 +478,11 @@ export function BlockQuickMenu({
       </div>
 
       <div className="exam-block-menu-actions">
+        {onInsertAbove && (
+          <button type="button" onClick={() => { onInsertAbove(); onClose(); }}>
+            <ArrowUp size={13} /> Chèn đoạn văn phía trên (trước khối này)
+          </button>
+        )}
         <button type="button" onClick={() => { onDuplicate(); onClose(); }}>
           <Copy size={13} /> Nhân bản khối
         </button>

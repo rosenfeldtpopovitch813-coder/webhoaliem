@@ -7,7 +7,8 @@ import {
   sanitizeColor,
   sanitizeFontFamily,
   sanitizeFontSizePt,
-  splitRichExamSegments
+  splitRichExamSegments,
+  stripRichHtmlToPlainText
 } from '../../../../shared/exam-rich-text.js';
 
 function escapeXml(str: string): string {
@@ -391,42 +392,67 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
     const fileName = `image${imgCounter}.png`;
     mediaFiles.push({ name: `word/media/${fileName}`, data: bytes, rId });
     // 1 px ~ 9525 EMUs
-    const cx = Math.round(Math.min(540, Math.max(100, fig.width || 260)) * 9525);
+    const cx = Math.round(Math.min(540, Math.max(100, fig.width || 240)) * 9525);
     const cy = Math.round(cx * 0.72);
     const jc = fig.align === 'left' ? 'left' : fig.align === 'right' ? 'right' : 'center';
-    return `<w:p><w:pPr><w:jc w:val="${jc}"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${imgCounter}" name="Picture ${imgCounter}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${imgCounter}" name="${fileName}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    const captionXml = fig.caption?.trim()
+      ? `<w:p><w:pPr><w:jc w:val="${jc}"/></w:pPr>${textWithMathToWordXml(fig.caption.trim(), { italic: true, fontSizePt: 10.5 })}</w:p>`
+      : '';
+    return `<w:p><w:pPr><w:jc w:val="${jc}"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${imgCounter}" name="Picture ${imgCounter}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${imgCounter}" name="${fileName}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>${captionXml}`;
   };
+
+  const docFontName = extractPrimaryFontName(paper.fontFamily);
+  const styleToRunOpts = (st?: ExamBlockStyle, defaults?: Partial<WordRunOpts>): WordRunOpts => ({
+    bold: st?.bold ?? defaults?.bold ?? false,
+    italic: st?.italic ?? defaults?.italic ?? false,
+    underline: st?.underline ?? defaults?.underline ?? false,
+    strike: st?.strike ?? defaults?.strike ?? false,
+    colorHex: sanitizeColor(st?.textColor).replace(/^#/, '').toUpperCase() || defaults?.colorHex,
+    bgHex: sanitizeColor(st?.bgColor).replace(/^#/, '').toUpperCase() || defaults?.bgHex,
+    fontSizePt: st?.fontSizePt ?? defaults?.fontSizePt,
+    fontName: st?.fontFamily ? extractPrimaryFontName(st.fontFamily) : (defaults?.fontName || docFontName)
+  });
 
   const bodyXml: string[] = [];
 
   // Header table (2 columns: Department/School vs Exam Title/Subject/Time)
+  const hs = h.headerStyles || {};
   bodyXml.push(`
     <w:tbl>
       <w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>
       <w:tr>
         <w:tc><w:tcPr><w:tcW w:w="2200" w:type="pct"/></w:tcPr>
-          <w:p><w:pPr><w:jc w:val="center"/></w:pPr>${textWithMathToWordXml(h.department, false)}</w:p>
-          <w:p><w:pPr><w:jc w:val="center"/></w:pPr>${textWithMathToWordXml(h.school, true, undefined, true)}</w:p>
-          <w:p><w:pPr><w:jc w:val="center"/></w:pPr>${textWithMathToWordXml(`Mã đề: ${h.examCode}`, true)}</w:p>
+          <w:p><w:pPr><w:jc w:val="${wordAlign(hs.department?.align || 'center')}"/></w:pPr>${textWithMathToWordXml(h.department, styleToRunOpts(hs.department, { bold: false }))}</w:p>
+          <w:p><w:pPr><w:jc w:val="${wordAlign(hs.school?.align || 'center')}"/></w:pPr>${textWithMathToWordXml(h.school, styleToRunOpts(hs.school, { bold: true, underline: true }))}</w:p>
+          <w:p><w:pPr><w:jc w:val="${wordAlign(hs.examCode?.align || 'center')}"/></w:pPr>${textWithMathToWordXml(`Mã đề: ${h.examCode}`, styleToRunOpts(hs.examCode, { bold: true }))}</w:p>
         </w:tc>
         <w:tc><w:tcPr><w:tcW w:w="2800" w:type="pct"/></w:tcPr>
-          <w:p><w:pPr><w:jc w:val="center"/></w:pPr>${textWithMathToWordXml(h.examTitle, true)}</w:p>
-          <w:p><w:pPr><w:jc w:val="center"/></w:pPr>${textWithMathToWordXml(h.subject, true)}</w:p>
-          <w:p><w:pPr><w:jc w:val="center"/></w:pPr>${textWithMathToWordXml(h.duration, false)}</w:p>
+          <w:p><w:pPr><w:jc w:val="${wordAlign(hs.examTitle?.align || 'center')}"/></w:pPr>${textWithMathToWordXml(h.examTitle, styleToRunOpts(hs.examTitle, { bold: true }))}</w:p>
+          <w:p><w:pPr><w:jc w:val="${wordAlign(hs.subject?.align || 'center')}"/></w:pPr>${textWithMathToWordXml(h.subject, styleToRunOpts(hs.subject, { bold: true }))}</w:p>
+          <w:p><w:pPr><w:jc w:val="${wordAlign(hs.duration?.align || 'center')}"/></w:pPr>${textWithMathToWordXml(h.duration, styleToRunOpts(hs.duration, { italic: true }))}</w:p>
         </w:tc>
       </w:tr>
     </w:tbl>
   `);
 
   if (h.showStudentInfo) {
+    const studentLine = h.studentInfoText?.trim()
+      ? h.studentInfoText
+      : '<strong>Họ và tên thí sinh:</strong> ........................................................................... <strong>Số báo danh:</strong> ...........................';
     bodyXml.push(
-      `<w:p><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr>${textWithMathToWordXml('Họ và tên thí sinh: ........................................................................... Số báo danh: ...........................', false)}</w:p>`
+      `<w:p><w:pPr><w:jc w:val="${wordAlign(hs.studentInfo?.align)}"/><w:spacing w:before="120" w:after="100"/></w:pPr>${textWithMathToWordXml(studentLine, styleToRunOpts(hs.studentInfo))}</w:p>`
+    );
+  }
+
+  if (h.prologue?.trim()) {
+    const pOpts = styleToRunOpts(h.prologueStyle);
+    bodyXml.push(
+      `<w:p><w:pPr><w:jc w:val="${wordAlign(h.prologueStyle?.align)}"/><w:spacing w:before="60" w:after="120"/></w:pPr>${textWithMathToWordXml(h.prologue, pOpts)}</w:p>`
     );
   }
 
   let qIndex = 0;
   let listNumIndex = 0;
-  const docFontName = extractPrimaryFontName(paper.fontFamily);
   for (const block of paper.blocks) {
     if (block.type === 'page-break') {
       listNumIndex = 0;
@@ -495,25 +521,39 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
     };
     const qShd = qBg ? `<w:shd w:val="clear" w:color="auto" w:fill="${qBg}"/>` : '';
     const labelStr = `Câu ${qIndex}${block.points ? ` (${block.points})` : ''}. `;
-    bodyXml.push(
+    const allFigs = block.figures || [];
+    const floatRightFigs = allFigs.filter(f => f.layout === 'float-right');
+    const floatLeftFigs = allFigs.filter(f => f.layout === 'float-left');
+    const gridFigs = allFigs.filter(f => f.layout === 'grid-2');
+    const normalFigs = allFigs.filter(f => f.layout !== 'float-right' && f.layout !== 'float-left' && f.layout !== 'grid-2');
+    const hasSideFloat = floatRightFigs.length > 0 || floatLeftFigs.length > 0;
+
+    const qPartsXml: string[] = [];
+    qPartsXml.push(
       `<w:p><w:pPr><w:jc w:val="${wordAlign(block.align)}"/>${qShd}<w:spacing w:before="120" w:after="60"/></w:pPr>${textWithMathToWordXml(labelStr, { ...qRunOpts, bold: true })}${textWithMathToWordXml(block.prompt, qRunOpts)}</w:p>`
     );
 
-    for (const fig of block.figures || []) {
+    if (gridFigs.length > 0) {
+      const cells = gridFigs.map(f => `<w:tc>${registerImage(f) || '<w:p/>'}</w:tc>`).join('');
+      qPartsXml.push(`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr><w:tr>${cells}</w:tr></w:tbl>`);
+    }
+
+    for (const fig of normalFigs) {
       const figXml = registerImage(fig);
-      if (figXml) bodyXml.push(figXml);
+      if (figXml) qPartsXml.push(figXml);
     }
 
     if (block.questionType === 'mcq' && block.options) {
-      const cols = block.optionCols || 4;
+      const rawCols = block.optionCols || 4;
+      const cols = hasSideFloat && rawCols === 4 ? 2 : rawCols;
       const letters = ['A', 'B', 'C', 'D'] as const;
       if (cols === 4) {
-        bodyXml.push(`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr><w:tr>${block.options.map((opt, idx) => {
+        qPartsXml.push(`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr><w:tr>${block.options.map((opt, idx) => {
           const isAns = isTeacher && block.correctChoice === letters[idx];
           return `<w:tc><w:p>${textWithMathToWordXml(`${letters[idx]}. `, true, isAns ? 'DC2626' : undefined, isAns)}${textWithMathToWordXml(opt, false)}</w:p></w:tc>`;
         }).join('')}</w:tr></w:tbl>`);
       } else if (cols === 2) {
-        bodyXml.push(`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>
+        qPartsXml.push(`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>
           <w:tr>${[0, 1].map(idx => {
             const isAns = isTeacher && block.correctChoice === letters[idx];
             return `<w:tc><w:p>${textWithMathToWordXml(`${letters[idx]}. `, true, isAns ? 'DC2626' : undefined, isAns)}${textWithMathToWordXml(block.options![idx], false)}</w:p></w:tc>`;
@@ -526,17 +566,33 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
       } else {
         block.options.forEach((opt, idx) => {
           const isAns = isTeacher && block.correctChoice === letters[idx];
-          bodyXml.push(`<w:p>${textWithMathToWordXml(`${letters[idx]}. `, true, isAns ? 'DC2626' : undefined, isAns)}${textWithMathToWordXml(opt, false)}</w:p>`);
+          qPartsXml.push(`<w:p>${textWithMathToWordXml(`${letters[idx]}. `, true, isAns ? 'DC2626' : undefined, isAns)}${textWithMathToWordXml(opt, false)}</w:p>`);
         });
       }
     } else if (block.questionType === 'tf' && block.statements) {
       for (const st of block.statements) {
         const badge = isTeacher && st.correct !== null ? ` [${st.correct ? 'ĐÚNG' : 'SAI'}]` : '';
-        bodyXml.push(`<w:p>${textWithMathToWordXml(`${st.label}) `, true)}${textWithMathToWordXml(st.text, false)}${badge ? textWithMathToWordXml(badge, true, st.correct ? '059669' : 'DC2626') : ''}</w:p>`);
+        qPartsXml.push(`<w:p>${textWithMathToWordXml(`${st.label}) `, true)}${textWithMathToWordXml(st.text, false)}${badge ? textWithMathToWordXml(badge, true, st.correct ? '059669' : 'DC2626') : ''}</w:p>`);
       }
     } else if (block.questionType === 'short') {
       const ansText = isTeacher && block.shortAnswer ? block.shortAnswer : '........................';
-      bodyXml.push(`<w:p>${textWithMathToWordXml('Đáp án: ', true)}${textWithMathToWordXml(ansText, isTeacher)}</w:p>`);
+      qPartsXml.push(`<w:p>${textWithMathToWordXml('Đáp án: ', true)}${textWithMathToWordXml(ansText, isTeacher)}</w:p>`);
+    }
+
+    if (hasSideFloat) {
+      const sideFigs = floatLeftFigs.length > 0 && floatRightFigs.length === 0 ? floatLeftFigs : floatRightFigs;
+      const isLeftFig = floatLeftFigs.length > 0 && floatRightFigs.length === 0;
+      const figColXml = sideFigs.map(f => registerImage(f) || '').join('') || '<w:p/>';
+      const textColXml = qPartsXml.join('');
+      const leftTc = isLeftFig
+        ? `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="pct"/></w:tcPr>${figColXml}</w:tc>`
+        : `<w:tc><w:tcPr><w:tcW w:w="3200" w:type="pct"/></w:tcPr>${textColXml}</w:tc>`;
+      const rightTc = isLeftFig
+        ? `<w:tc><w:tcPr><w:tcW w:w="3200" w:type="pct"/></w:tcPr>${textColXml}</w:tc>`
+        : `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="pct"/></w:tcPr>${figColXml}</w:tc>`;
+      bodyXml.push(`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr><w:tr>${leftTc}${rightTc}</w:tr></w:tbl>`);
+    } else {
+      bodyXml.push(...qPartsXml);
     }
 
     if (isTeacher && block.solution?.trim()) {
@@ -682,13 +738,29 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
 
     pdfListNum = 0;
     qCounter++;
-    const figsHtml = (block.figures || [])
-      .map(f => `<div class="pdf-fig" style="text-align:${f.align || 'center'}"><img src="${escapeHtml(f.src)}" style="width:${f.width || 250}px;max-width:100%" alt="Hình câu ${qCounter}"/></div>`)
-      .join('');
+    const renderPdfFig = (f: ExamInlineFigure) =>
+      `<div class="pdf-fig layout-${f.layout || 'break-center'}" style="text-align:${f.align || 'center'}"><img src="${escapeHtml(f.src)}" style="width:${f.width || 240}px;max-width:100%" alt="Hình câu ${qCounter}"/>${
+        f.caption?.trim() ? `<div class="pdf-fig-caption">${renderRichExamText(f.caption)}</div>` : ''
+      }</div>`;
+
+    const allFigs = block.figures || [];
+    const floatRightFigs = allFigs.filter(f => f.layout === 'float-right');
+    const floatLeftFigs = allFigs.filter(f => f.layout === 'float-left');
+    const gridFigs = allFigs.filter(f => f.layout === 'grid-2');
+    const normalFigs = allFigs.filter(
+      f => f.layout !== 'float-right' && f.layout !== 'float-left' && f.layout !== 'grid-2'
+    );
+    const hasSideFloat = floatRightFigs.length > 0 || floatLeftFigs.length > 0;
+
+    const gridFigsHtml = gridFigs.length
+      ? `<div class="pdf-fig-grid-2">${gridFigs.map(renderPdfFig).join('')}</div>`
+      : '';
+    const figsHtml = gridFigsHtml + normalFigs.map(renderPdfFig).join('');
 
     let optionsHtml = '';
     if (block.questionType === 'mcq' && block.options) {
-      const cols = block.optionCols || 4;
+      const rawCols = block.optionCols || 4;
+      const cols = hasSideFloat && rawCols === 4 ? 2 : rawCols;
       const letters = ['A', 'B', 'C', 'D'] as const;
       optionsHtml = `<div class="pdf-options cols-${cols}">${block.options
         .map((opt, idx) => {
@@ -717,11 +789,24 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
         : '';
 
     const qStyle = blockStyleToCss(block);
-    bodyHtml.push(`
-      <article class="pdf-question"${qStyle ? ` style="${qStyle}"` : ''}>
+    const mainColHtml = `
+      <div class="pdf-q-main">
         <div class="pdf-q-prompt"><strong class="pdf-q-label">Câu ${qCounter}${block.points ? ` (${escapeHtml(block.points)})` : ''}.</strong> ${renderRichExamText(block.prompt)}</div>
         ${figsHtml}
         ${optionsHtml}
+      </div>
+    `;
+    const bodyInner = hasSideFloat
+      ? `<div class="pdf-q-side-layout">
+          ${floatLeftFigs.length ? `<div class="pdf-q-side">${floatLeftFigs.map(renderPdfFig).join('')}</div>` : ''}
+          ${mainColHtml}
+          ${floatRightFigs.length ? `<div class="pdf-q-side">${floatRightFigs.map(renderPdfFig).join('')}</div>` : ''}
+        </div>`
+      : mainColHtml;
+
+    bodyHtml.push(`
+      <article class="pdf-question"${qStyle ? ` style="${qStyle}"` : ''}>
+        ${bodyInner}
         ${solutionHtml}
       </article>
     `);
@@ -770,7 +855,13 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
     .pdf-callout { margin: 8px 0; padding: 9px 12px; background: #f8fafc; border-left: 3.5px solid #2563eb; border-radius: 6px; }
     .pdf-question { margin: 0 0 11px; break-inside: avoid; page-break-inside: avoid; }
     .pdf-q-label { font-weight: 700; }
-    .pdf-fig { margin: 8px 0; }
+    .pdf-q-side-layout { display: flex; align-items: flex-start; gap: 14px; }
+    .pdf-q-main { flex: 1; min-width: 0; }
+    .pdf-q-side { flex: none; max-width: 44%; }
+    .pdf-fig { margin: 6px 0; }
+    .pdf-fig-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: center; margin: 6px 0; }
+    .pdf-fig-caption { font-size: 10pt; font-style: italic; color: #334155; margin-top: 3px; }
+    .pdf-prologue { margin: 4px 0 12px; font-size: 11.5pt; line-height: 1.5; }
     .pdf-options { display: grid; gap: 4px 14px; margin-top: 5px; }
     .pdf-options.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .pdf-options.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -798,17 +889,30 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
     </div>
     <header class="pdf-header-grid">
       <div class="pdf-header-left">
-        <p>${escapeHtml(h.department)}</p>
-        <p class="pdf-school">${escapeHtml(h.school)}</p>
-        <div class="pdf-code-box">Mã đề: ${escapeHtml(h.examCode)}</div>
+        <p style="${blockStyleToCss(h.headerStyles?.department || {})}">${renderRichExamText(h.department)}</p>
+        <p class="pdf-school" style="${blockStyleToCss(h.headerStyles?.school || {})}">${renderRichExamText(h.school)}</p>
+        <div class="pdf-code-box" style="${blockStyleToCss(h.headerStyles?.examCode || {})}">Mã đề: ${renderRichExamText(h.examCode)}</div>
       </div>
       <div class="pdf-header-right">
-        <p class="pdf-exam-title">${escapeHtml(h.examTitle)}</p>
-        <p><strong>${escapeHtml(h.subject)}</strong></p>
-        <p><em>${escapeHtml(h.duration)}</em></p>
+        <p class="pdf-exam-title" style="${blockStyleToCss(h.headerStyles?.examTitle || {})}">${renderRichExamText(h.examTitle)}</p>
+        <p style="${blockStyleToCss(h.headerStyles?.subject || {})}"><strong>${renderRichExamText(h.subject)}</strong></p>
+        <p style="${blockStyleToCss(h.headerStyles?.duration || {})}"><em>${renderRichExamText(h.duration)}</em></p>
       </div>
     </header>
-    ${h.showStudentInfo !== false ? `<div class="pdf-student-info"><span>Họ và tên thí sinh: ........................................................................</span><span>Số báo danh: ..............................</span></div>` : ''}
+    ${
+      h.showStudentInfo !== false
+        ? `<div class="pdf-student-info" style="${blockStyleToCss(h.headerStyles?.studentInfo || {})}">${
+            h.studentInfoText?.trim()
+              ? renderRichExamText(h.studentInfoText)
+              : '<span><strong>Họ và tên thí sinh:</strong> ........................................................................</span><span><strong>Số báo danh:</strong> ..............................</span>'
+          }</div>`
+        : ''
+    }
+    ${
+      h.prologue?.trim()
+        ? `<div class="pdf-prologue" style="${blockStyleToCss(h.prologueStyle || {})}">${renderRichExamText(h.prologue)}</div>`
+        : ''
+    }
     ${bodyHtml.join('')}
     ${h.showFooter !== false ? `<div class="pdf-footer-end">${escapeHtml(h.footerCenterText ?? '—————— HẾT ——————')}</div>${(h.footerLeftText ?? '').trim() ? `<div style="margin-top:8px;font-size:10pt;color:#475569;text-align:left">${escapeHtml(h.footerLeftText!)}</div>` : ''}` : ''}
     <script>window.addEventListener('load', () => setTimeout(() => { window.focus(); window.print(); }, 450));</script>

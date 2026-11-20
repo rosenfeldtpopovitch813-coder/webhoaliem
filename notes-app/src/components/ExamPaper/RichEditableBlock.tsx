@@ -1,7 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { ExamParagraphVariant } from '../../types/board';
 import {
+  autoFormatLeadPrefixHtml,
+  autoNormalizeFormulaText,
+  cleanWordClipboardHtml,
+  convertFormulaDisplayMode,
   hasMathNotation,
+  matchLeadPrefix,
   sanitizeColor,
   sanitizeFontFamily,
   sanitizeFontSizePt,
@@ -23,6 +28,10 @@ export type InlineFormatCommand =
   | 'fontFamily'
   | 'wrapMath'
   | 'wrapChem'
+  | 'normalizeFormula'
+  | 'formulaDisplay'
+  | 'formulaBoxed'
+  | 'formulaNumbered'
   | 'clear';
 
 /**
@@ -120,6 +129,40 @@ export function applyInlineStyleToSelection(command: InlineFormatCommand, value?
         sel.removeAllRanges();
         sel.addRange(nr);
       }
+    } else if (command === 'normalizeFormula') {
+      const plain = range.toString();
+      let normalized = autoNormalizeFormulaText(plain);
+      if (normalized === plain && plain.trim()) {
+        // If user selected a single expression that didn't trigger heuristic, wrap appropriately
+        const trimmed = plain.trim();
+        normalized = /(?:<=>|->|[A-Z][a-z]?\d)/.test(trimmed) ? `$\\ce{${trimmed}}$` : `$${trimmed}$`;
+      }
+      range.deleteContents();
+      const textNode = document.createTextNode(normalized);
+      range.insertNode(textNode);
+      const sel = window.getSelection();
+      if (sel) {
+        const nr = document.createRange();
+        nr.setStartAfter(textNode);
+        nr.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(nr);
+      }
+    } else if (command === 'formulaDisplay' || command === 'formulaBoxed' || command === 'formulaNumbered') {
+      const plain = range.toString().trim();
+      const mode = command === 'formulaDisplay' ? 'display' : command === 'formulaBoxed' ? 'boxed' : 'numbered';
+      const transformed = convertFormulaDisplayMode(plain, mode, Number(value) || 1);
+      range.deleteContents();
+      const textNode = document.createTextNode(transformed);
+      range.insertNode(textNode);
+      const sel = window.getSelection();
+      if (sel) {
+        const nr = document.createRange();
+        nr.setStartAfter(textNode);
+        nr.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(nr);
+      }
     } else if (command === 'color') {
       const safe = sanitizeColor(String(value || ''));
       if (safe) wrapRangeWithElement(range, 'span', `color:${safe}`);
@@ -171,6 +214,7 @@ type Props = {
   style?: React.CSSProperties;
   isFocused: boolean;
   allowBlockSplit?: boolean;
+  disableAutoPrefixBold?: boolean;
   variant?: ExamParagraphVariant;
   slashMenuOpen?: boolean;
   onFocusBlock: () => void;
@@ -180,6 +224,8 @@ type Props = {
   onTurnIntoVariant?: (variant: ExamParagraphVariant, cleanHtml: string) => void;
   onNavigateVertical?: (dir: -1 | 1) => void;
   onSlashTrigger?: (info: { blockId: string; query: string; rect: DOMRect } | null) => void;
+  onMultiQuestionPaste?: (rawText: string) => boolean;
+  onNormalizeBlockFormula?: () => void;
   onSelectionChange?: () => void;
   onBlurBlock?: () => void;
 };
@@ -230,6 +276,7 @@ export default function RichEditableBlock({
   style,
   isFocused,
   allowBlockSplit = true,
+  disableAutoPrefixBold = false,
   slashMenuOpen = false,
   onFocusBlock,
   onChange,
@@ -238,6 +285,8 @@ export default function RichEditableBlock({
   onTurnIntoVariant,
   onNavigateVertical,
   onSlashTrigger,
+  onMultiQuestionPaste,
+  onNormalizeBlockFormula,
   onSelectionChange,
   onBlurBlock
 }: Props) {
@@ -258,10 +307,58 @@ export default function RichEditableBlock({
     }
   }, [value, showRenderedMathView]);
 
+  const tryAutoBoldLeadPrefixInDom = (el: HTMLElement): boolean => {
+    if (disableAutoPrefixBold) return false;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return false;
+    const node = sel.anchorNode;
+    if (!node || node.nodeType !== Node.TEXT_NODE) return false;
+    // Only auto-bold when the text node is at the start of the block or right after a <br>
+    const prev = node.previousSibling;
+    const isLineStart = !prev || (prev.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).tagName === 'BR');
+    if (!isLineStart) return false;
+    // Also skip if already inside a <strong> or <b>
+    if (node.parentElement && node.parentElement !== el && /^(STRONG|B)$/i.test(node.parentElement.tagName)) {
+      return false;
+    }
+    const text = (node.nodeValue || '').replace(/\u00A0/g, ' ');
+    const hit = matchLeadPrefix(text);
+    if (!hit) return false;
+
+    const strong = document.createElement('strong');
+    strong.textContent = hit.label;
+    const normalAfter = document.createTextNode(' ' + (hit.rest || ''));
+    const parent = node.parentNode;
+    if (!parent) return false;
+    parent.insertBefore(strong, node);
+    parent.insertBefore(normalAfter, node);
+    parent.removeChild(node);
+
+    // Ensure browser typing state does not keep bold active and place caret right after the space in normalAfter
+    try {
+      if (document.queryCommandState?.('bold')) {
+        document.execCommand('bold', false);
+      }
+    } catch {
+      /* ignore */
+    }
+    const nextRange = document.createRange();
+    const caretPos = Math.min(normalAfter.length, 1 + (hit.rest ? hit.rest.length : 0));
+    nextRange.setStart(normalAfter, caretPos);
+    nextRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(nextRange);
+    return true;
+  };
+
   const emitChangeFromDom = () => {
     const el = ref.current;
     if (!el) return;
-    const cleaned = sanitizeInlineRichHtml(el.innerHTML);
+    tryAutoBoldLeadPrefixInDom(el);
+    let cleaned = sanitizeInlineRichHtml(el.innerHTML);
+    if (!disableAutoPrefixBold) {
+      cleaned = autoFormatLeadPrefixHtml(cleaned);
+    }
     lastEmittedRef.current = cleaned;
     onChange(cleaned);
 
@@ -347,7 +444,17 @@ export default function RichEditableBlock({
           e.preventDefault();
           const html = e.clipboardData.getData('text/html');
           const plain = e.clipboardData.getData('text/plain');
-          const safe = html ? sanitizeInlineRichHtml(html) : sanitizeInlineRichHtml(plain.replace(/\r?\n/g, '<br>'));
+          // Check if pasted content contains multiple exam questions (e.g. from Word)
+          if (onMultiQuestionPaste && plain) {
+            const qMatches = plain.match(/(?:^|\n)\s*(?:Câu|Question)\s*\d+\s*(?:\([^)]+\))?\s*[.:]/gi);
+            const hasSection = /(?:^|\n)\s*PHẦN\s+[IVX0-9]+/i.test(plain);
+            if ((qMatches && qMatches.length >= 2) || (hasSection && qMatches && qMatches.length >= 1)) {
+              if (onMultiQuestionPaste(plain)) {
+                return;
+              }
+            }
+          }
+          const safe = cleanWordClipboardHtml(html, plain);
           document.execCommand('insertHTML', false, safe);
           emitChangeFromDom();
         }}
@@ -355,14 +462,33 @@ export default function RichEditableBlock({
           if (slashMenuOpen && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
             return; // Handled by parent Slash Menu listener
           }
+          const el = ref.current;
           if ((e.ctrlKey || e.metaKey) && !e.altKey) {
             const k = e.key.toLowerCase();
             if (k === 'b') { e.preventDefault(); applyInlineStyleToSelection('bold'); return; }
-            if (k === 'i') { e.preventDefault(); applyInlineStyleToSelection('italic'); return; }
+            if (k === 'i' && e.shiftKey) { e.preventDefault(); applyInlineStyleToSelection('italic'); return; }
+            if (k === 'i' && !e.shiftKey) {
+              e.preventDefault();
+              // Ctrl + I: Auto-normalize formulas in selection or across the entire focused field
+              if (applyInlineStyleToSelection('normalizeFormula')) {
+                return;
+              }
+              if (onNormalizeBlockFormula) {
+                onNormalizeBlockFormula();
+                return;
+              }
+              if (el) {
+                const normalized = autoNormalizeFormulaText(sanitizeInlineRichHtml(el.innerHTML));
+                el.innerHTML = normalized;
+                lastEmittedRef.current = normalized;
+                onChange(normalized);
+                focusRichBlock(blockId, 'end');
+              }
+              return;
+            }
             if (k === 'u') { e.preventDefault(); applyInlineStyleToSelection('underline'); return; }
             if (e.shiftKey && k === 's') { e.preventDefault(); applyInlineStyleToSelection('strike'); return; }
           }
-          const el = ref.current;
           if (!el) return;
 
           if (e.key === 'Enter' && !e.shiftKey && allowBlockSplit && onEnterSplit) {

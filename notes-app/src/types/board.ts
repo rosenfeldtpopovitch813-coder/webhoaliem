@@ -22,6 +22,10 @@ export type ExamHeaderConfig={
   examCode:string;
   academicYear:string;
   showStudentInfo:boolean;
+  studentInfoText?:string;
+  prologue?:string;
+  prologueStyle?:ExamBlockStyle;
+  headerStyles?:Record<string,ExamBlockStyle>;
   runningHeaderText?:string;
   showRunningHeader?:boolean;
   footerLeftText?:string;
@@ -62,12 +66,22 @@ export type ExamFigureSource={
   boardStrokes?:Array<{id:string;points:Array<{x:number;y:number}>;color:string;width:number;label?:string;lx?:number;ly?:number}>;
 };
 
+export type ExamFigureLayout =
+  | 'break-center'
+  | 'break-left'
+  | 'break-right'
+  | 'float-right'
+  | 'float-left'
+  | 'inline'
+  | 'grid-2';
+
 export type ExamInlineFigure={
   id:string;
   sourceId:string;
   src:string;
   width:number; // px on A4 page (e.g. 120..620)
   align:'left'|'center'|'right';
+  layout?:ExamFigureLayout;
   caption?:string;
 };
 

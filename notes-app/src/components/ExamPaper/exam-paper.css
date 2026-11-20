@@ -1760,3 +1760,169 @@
   flex: 1;
   font-size: 10pt;
 }
+
+/* =========================================================================
+   TEACHER AUTHORING UPGRADES: RICH HEADER, PROLOGUE (ATOMIC WEIGHTS / CONSTANTS),
+   AND SIDE-BY-SIDE FIGURE / FORMULA LAYOUTS
+   ========================================================================= */
+.exam-header-rich-field {
+  width: 100%;
+  text-align: center;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+}
+
+.exam-header-rich-field:hover,
+.exam-header-rich-field:focus-within {
+  border-color: #cbd5e1;
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.exam-header-code-rich {
+  display: inline-block;
+  min-width: 38px;
+  font-weight: 700;
+}
+
+.exam-code-badge .exam-rich-wrap {
+  width: auto;
+  display: inline-block;
+}
+
+/* Prologue / Pre-Section I Constants Zone */
+.exam-prologue-zone {
+  margin: 4px 0 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px dashed transparent;
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.exam-prologue-zone:hover,
+.exam-prologue-zone.is-focused {
+  border-color: #cbd5e1;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.exam-prologue-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 5px;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  opacity: 0.72;
+  transition: opacity 0.14s;
+}
+
+.exam-prologue-zone:hover .exam-prologue-presets,
+.exam-prologue-zone.is-focused .exam-prologue-presets {
+  opacity: 1;
+}
+
+.exam-prologue-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #475569;
+  margin-right: 2px;
+}
+
+.exam-prologue-chip {
+  height: 23px;
+  padding: 0 8px;
+  border-radius: 99px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.exam-prologue-chip:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+/* Side-by-Side Question Body & Figure Layout (Float Right / Float Left / Grid-2 / Inline) */
+.exam-q-body-layout {
+  display: block;
+}
+
+.exam-q-body-layout.has-float-right,
+.exam-q-body-layout.has-float-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.exam-q-main-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-q-side-figures {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 46%;
+}
+
+.exam-figure-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+  justify-items: center;
+  margin: 8px 0;
+}
+
+.exam-figure-inline-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+
+.exam-figure-caption-input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  font-size: 0.88em;
+  font-style: italic;
+  text-align: center;
+  color: #334155;
+}
+
+.exam-figure-caption-input:focus {
+  outline: none;
+  border-color: #7c3aed;
+  background: #ffffff;
+}
+
+@media print {
+  .exam-prologue-presets {
+    display: none !important;
+  }
+  .exam-prologue-zone.is-empty {
+    display: none !important;
+  }
+  .exam-prologue-zone {
+    border: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+}

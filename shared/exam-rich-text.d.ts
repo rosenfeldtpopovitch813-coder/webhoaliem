@@ -35,6 +35,22 @@ export declare function sanitizeColor(raw?: string): string;
 export declare function sanitizeFontSizePt(raw?: string | number | null): number | null;
 export declare function escapeHtmlText(raw?: string): string;
 export declare function sanitizeInlineRichHtml(raw?: string): string;
+export declare function cleanWordClipboardHtml(rawHtml?: string, fallbackPlain?: string): string;
+export declare function matchLeadPrefix(plainLine?: string): { label: string; space: string; rest: string } | null;
+export declare function autoFormatLeadPrefixHtml(rawHtml?: string, tag?: 'strong' | 'b'): string;
+export declare function parseFlexibleOptionTokens(line?: string): Array<{ letter: string; text: string }>;
+export declare function parseSmartExamClipboardText(rawText?: string): {
+  prologue: string;
+  blocks: Array<any>;
+  questionCount: number;
+};
+export declare function isLikelyChemicalToken(token?: string): boolean;
+export declare function autoNormalizeFormulaText(input?: string): string;
+export declare function convertFormulaDisplayMode(
+  rawText?: string,
+  mode?: 'inline' | 'display' | 'boxed' | 'numbered',
+  eqNumber?: number
+): string;
 export declare function stripFormattedHtmlTags(raw?: string): string;
 export declare function stripRichHtmlToPlainText(raw?: string): string;
 export declare function hasRichInlineTags(raw?: string): boolean;

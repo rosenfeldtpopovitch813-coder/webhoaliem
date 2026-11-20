@@ -31,6 +31,7 @@ import {
   Send,
   Shapes,
   Sigma,
+  Sparkles,
   Strikethrough,
   Subscript,
   Superscript,
@@ -47,12 +48,18 @@ import {
 import {
   ExamBlock,
   ExamBlockStyle,
+  ExamFigureLayout,
   ExamFigureSource,
   ExamInlineFigure,
   ExamPaperDocument,
   ExamParagraphVariant,
   ExamStatementTF
 } from '../../types/board';
+import {
+  autoNormalizeFormulaText,
+  convertFormulaDisplayMode,
+  parseSmartExamClipboardText
+} from '../../../../shared/exam-rich-text.js';
 import {
   CHEMISTRY_TEMPLATES,
   createDefaultExamPaper,
@@ -120,6 +127,7 @@ export default function ExamPaperStudio({
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [formulaModal, setFormulaModal] = useState<'math' | 'chem' | null>(null);
   const [customLatex, setCustomLatex] = useState('\\int_{0}^{1} (3x^2 + 2x)\\,dx');
+  const [formulaDisplayMode, setFormulaDisplayMode] = useState<'inline' | 'display' | 'boxed' | 'numbered'>('inline');
   const [smartText, setSmartText] = useState('');
   const [smartComposerOpen, setSmartComposerOpen] = useState(false);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
@@ -518,7 +526,48 @@ export default function ExamPaperStudio({
     return map;
   }, [paper.blocks]);
 
+  const focusedHeaderField = useMemo(() => {
+    if (!focusedBlockId || !focusedBlockId.startsWith('hdr:')) return null;
+    return focusedBlockId.slice(4);
+  }, [focusedBlockId]);
+
+  const focusedHeaderStyle = useMemo<ExamBlockStyle | null>(() => {
+    if (!focusedHeaderField) return null;
+    if (focusedHeaderField === 'prologue') return paper.header.prologueStyle || {};
+    return paper.header.headerStyles?.[focusedHeaderField] || {};
+  }, [focusedHeaderField, paper.header.prologueStyle, paper.header.headerStyles]);
+
+  const updateHeaderStyle = (fieldKey: string, patch: Partial<ExamBlockStyle>) => {
+    setPaper(prev => {
+      if (fieldKey === 'prologue') {
+        return {
+          ...prev,
+          header: {
+            ...prev.header,
+            prologueStyle: { ...(prev.header.prologueStyle || {}), ...patch }
+          },
+          updatedAt: Date.now()
+        };
+      }
+      return {
+        ...prev,
+        header: {
+          ...prev.header,
+          headerStyles: {
+            ...(prev.header.headerStyles || {}),
+            [fieldKey]: { ...(prev.header.headerStyles?.[fieldKey] || {}), ...patch }
+          }
+        },
+        updatedAt: Date.now()
+      };
+    });
+  };
+
   const updateBlockStyle = (blockId: string, patch: Partial<ExamBlockStyle>) => {
+    if (blockId.startsWith('hdr:')) {
+      updateHeaderStyle(blockId.slice(4), patch);
+      return;
+    }
     setPaper(prev => ({
       ...prev,
       blocks: prev.blocks.map(b =>
@@ -528,13 +577,103 @@ export default function ExamPaperStudio({
     }));
   };
 
+  const normalizeBlockFormulasById = (targetBlockId?: string | null) => {
+    const id = targetBlockId || focusedBlockId;
+    if (!id) return;
+    if (id.startsWith('hdr:')) {
+      const f = id.slice(4);
+      setPaper(prev => {
+        if (f === 'prologue') {
+          return {
+            ...prev,
+            header: { ...prev.header, prologue: autoNormalizeFormulaText(prev.header.prologue || '') },
+            updatedAt: Date.now()
+          };
+        }
+        const curVal = String((prev.header as Record<string, unknown>)[f] || '');
+        return {
+          ...prev,
+          header: { ...prev.header, [f]: autoNormalizeFormulaText(curVal) },
+          updatedAt: Date.now()
+        };
+      });
+      setSaveBadge('⚡ Đã chuẩn hóa công thức (Ctrl+I)');
+      return;
+    }
+    setPaper(prev => ({
+      ...prev,
+      blocks: prev.blocks.map(b => {
+        if (b.id !== id) return b;
+        if (b.type === 'paragraph') {
+          return { ...b, text: autoNormalizeFormulaText(b.text) };
+        }
+        if (b.type === 'section') {
+          return {
+            ...b,
+            title: autoNormalizeFormulaText(b.title),
+            ...(b.subtitle ? { subtitle: autoNormalizeFormulaText(b.subtitle) } : {})
+          };
+        }
+        if (b.type === 'question') {
+          return {
+            ...b,
+            prompt: autoNormalizeFormulaText(b.prompt),
+            ...(b.options
+              ? {
+                  options: b.options.map(o => autoNormalizeFormulaText(o)) as [string, string, string, string]
+                }
+              : {}),
+            ...(b.statements
+              ? {
+                  statements: b.statements.map(st => ({ ...st, text: autoNormalizeFormulaText(st.text) }))
+                }
+              : {}),
+            ...(b.solution ? { solution: autoNormalizeFormulaText(b.solution) } : {})
+          };
+        }
+        return b;
+      }),
+      updatedAt: Date.now()
+    }));
+    setSaveBadge('⚡ Đã chuẩn hóa công thức trong câu (Ctrl+I)');
+  };
+
   const applyFormatCommand = (cmd: InlineFormatCommand, val?: string | number) => {
     const formattedSelection = applyInlineStyleToSelection(cmd, val);
     if (formattedSelection) {
       window.setTimeout(refreshSelectionToolbar, 20);
       return;
     }
+    if (cmd === 'normalizeFormula') {
+      normalizeBlockFormulasById(focusedBlockId);
+      return;
+    }
     if (!focusedBlockId) return;
+    if (focusedBlockId.startsWith('hdr:')) {
+      const f = focusedBlockId.slice(4);
+      const cur = (f === 'prologue' ? paper.header.prologueStyle : paper.header.headerStyles?.[f]) || {};
+      if (cmd === 'bold') updateHeaderStyle(f, { bold: !cur.bold });
+      else if (cmd === 'italic') updateHeaderStyle(f, { italic: !cur.italic });
+      else if (cmd === 'underline') updateHeaderStyle(f, { underline: !cur.underline });
+      else if (cmd === 'strike') updateHeaderStyle(f, { strike: !cur.strike });
+      else if (cmd === 'color') updateHeaderStyle(f, { textColor: val ? String(val) : undefined });
+      else if (cmd === 'bgColor') updateHeaderStyle(f, { bgColor: val ? String(val) : undefined });
+      else if (cmd === 'fontSize') updateHeaderStyle(f, { fontSizePt: val ? Number(val) : undefined });
+      else if (cmd === 'fontFamily') updateHeaderStyle(f, { fontFamily: val ? String(val) : undefined });
+      else if (cmd === 'clear') {
+        updateHeaderStyle(f, {
+          bold: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          textColor: undefined,
+          bgColor: undefined,
+          fontSizePt: undefined,
+          fontFamily: undefined
+        });
+      }
+      return;
+    }
     setPaper(prev => ({
       ...prev,
       blocks: prev.blocks.map(b => {
@@ -569,7 +708,8 @@ export default function ExamPaperStudio({
   const insertParagraphBlock = (
     afterBlockId?: string | null,
     variant: ExamParagraphVariant = 'text',
-    initialText = ''
+    initialText = '',
+    position: 'after' | 'before' | 'start' = 'after'
   ) => {
     const created: ExamBlock = {
       id: crypto.randomUUID(),
@@ -579,9 +719,13 @@ export default function ExamPaperStudio({
     };
     setPaper(prev => {
       const next = [...prev.blocks];
-      const idx = afterBlockId ? next.findIndex(b => b.id === afterBlockId) : -1;
-      if (idx >= 0) next.splice(idx + 1, 0, created);
-      else next.push(created);
+      if (position === 'start') {
+        next.unshift(created);
+      } else {
+        const idx = afterBlockId ? next.findIndex(b => b.id === afterBlockId) : -1;
+        if (idx >= 0) next.splice(position === 'before' ? idx : idx + 1, 0, created);
+        else next.push(created);
+      }
       return { ...prev, blocks: next, updatedAt: Date.now() };
     });
     setFocusedBlockId(created.id);
@@ -821,6 +965,175 @@ export default function ExamPaperStudio({
             : undefined
   });
 
+  const updateFigureInBlock = (
+    blockId: string,
+    figId: string,
+    updater: (fig: ExamInlineFigure) => ExamInlineFigure
+  ) => {
+    setPaper(p => ({
+      ...p,
+      blocks: p.blocks.map(x =>
+        x.id === blockId && 'figures' in x && x.figures
+          ? {
+              ...x,
+              figures: x.figures.map(f => (f.id === figId ? updater(f) : f))
+            }
+          : x
+      ),
+      updatedAt: Date.now()
+    }));
+  };
+
+  const renderFigureBox = (blockId: string, fig: ExamInlineFigure) => {
+    const isFigSelected =
+      selectedFigure?.blockId === blockId && selectedFigure?.figId === fig.id;
+    const curLayout: ExamFigureLayout =
+      fig.layout ||
+      (fig.align === 'left'
+        ? 'break-left'
+        : fig.align === 'right'
+          ? 'break-right'
+          : 'break-center');
+
+    const setFigLayout = (nextLayout: ExamFigureLayout) => {
+      const nextAlign: ExamInlineFigure['align'] =
+        nextLayout === 'break-left' || nextLayout === 'float-left'
+          ? 'left'
+          : nextLayout === 'break-right' || nextLayout === 'float-right'
+            ? 'right'
+            : 'center';
+      updateFigureInBlock(blockId, fig.id, f => ({
+        ...f,
+        layout: nextLayout,
+        align: nextAlign
+      }));
+    };
+
+    return (
+      <div
+        key={fig.id}
+        className={`exam-figure-box layout-${curLayout} ${isFigSelected ? 'is-selected' : ''}`}
+        onClick={e => {
+          e.stopPropagation();
+          setSelectedFigure({ blockId, figId: fig.id });
+        }}
+      >
+        {isFigSelected && (
+          <div className="exam-figure-toolbar" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              className={curLayout === 'float-right' ? 'active' : ''}
+              title="Đặt hình bên phải, chữ và đáp án nằm bên trái (tiết kiệm diện tích giấy thi)"
+              onClick={() => setFigLayout('float-right')}
+            >
+              ◨ Hình phải · Chữ trái
+            </button>
+            <button
+              type="button"
+              className={curLayout === 'float-left' ? 'active' : ''}
+              title="Đặt hình bên trái, chữ và đáp án nằm bên phải"
+              onClick={() => setFigLayout('float-left')}
+            >
+              ◧ Hình trái · Chữ phải
+            </button>
+            <button
+              type="button"
+              className={curLayout === 'break-left' ? 'active' : ''}
+              title="Dòng riêng căn trái"
+              onClick={() => setFigLayout('break-left')}
+            >
+              ⇤ Trái
+            </button>
+            <button
+              type="button"
+              className={curLayout === 'break-center' ? 'active' : ''}
+              title="Dòng riêng căn giữa"
+              onClick={() => setFigLayout('break-center')}
+            >
+              ↔ Giữa
+            </button>
+            <button
+              type="button"
+              className={curLayout === 'break-right' ? 'active' : ''}
+              title="Dòng riêng căn phải"
+              onClick={() => setFigLayout('break-right')}
+            >
+              Phải ⇥
+            </button>
+            <button
+              type="button"
+              className={curLayout === 'grid-2' ? 'active' : ''}
+              title="Xếp 2 hình nằm song song cạnh nhau trên cùng 1 hàng"
+              onClick={() => setFigLayout('grid-2')}
+            >
+              ▦ 2 hình ngang
+            </button>
+            <button
+              type="button"
+              className={curLayout === 'inline' ? 'active' : ''}
+              title="Thu gọn cùng dòng chữ"
+              onClick={() => setFigLayout('inline')}
+            >
+              ― Cùng dòng
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSourceId(fig.sourceId);
+                setSplitBoardOpen(true);
+              }}
+            >
+              <Pencil size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} /> Sửa hình
+            </button>
+            <button
+              type="button"
+              className="danger"
+              title="Xóa hình này"
+              onClick={() => {
+                setPaper(p => ({
+                  ...p,
+                  blocks: p.blocks.map(x =>
+                    x.id === blockId && 'figures' in x && x.figures
+                      ? { ...x, figures: x.figures.filter(f => f.id !== fig.id) }
+                      : x
+                  )
+                }));
+                setSelectedFigure(null);
+              }}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        )}
+        <img
+          src={fig.src}
+          style={{ width: `${fig.width || 240}px` }}
+          alt={fig.caption || 'Hình minh họa câu hỏi'}
+          draggable={false}
+        />
+        {(isFigSelected || Boolean(fig.caption?.trim())) && (
+          <input
+            className="exam-figure-caption-input"
+            value={fig.caption || ''}
+            placeholder="Nhập chú thích hình (ví dụ: Hình 1. Đồ thị hàm số)…"
+            onClick={e => e.stopPropagation()}
+            onChange={e => {
+              const val = e.target.value;
+              updateFigureInBlock(blockId, fig.id, f => ({ ...f, caption: val }));
+            }}
+          />
+        )}
+        <span
+          className="exam-figure-resize-handle"
+          title="Kéo góc để phóng to / thu nhỏ hình"
+          onPointerDown={e =>
+            startFigureResize(e, blockId, fig.id, fig.width || 240)
+          }
+        />
+      </div>
+    );
+  };
+
   const renderGutter = (block: Exclude<ExamBlock, { type: 'page-break' }>) => (
     <div className="exam-notion-gutter" onClick={(e) => e.stopPropagation()}>
       <button
@@ -863,138 +1176,61 @@ export default function ExamPaperStudio({
   );
 
   /**
-   * Parse freeform Word-like text pasted/typed into the Smart Composer
+   * Parse freeform Word-like text pasted/typed into the Smart Composer or directly onto the A4 sheet.
    * Supports:
+   * - Prologue before PHẦN I / Câu 1 (Cho biết nguyên tử khối..., hằng số...)
    * - PHẦN I..., PHẦN II...
    * - Câu 1. / Câu 1: / Câu 3 (1 điểm).
-   * - A. ... B. ... C. ... D. ... on 1 line
+   * - A. ... B. ... C. ... D. ... on 1 line, 2 lines (2x2 or tabs), or 4 separate lines
    * - a) ... b) ... c) ... d) ...
-   * - Đáp án: ...
-   * - Lời giải: ...
+   * - Đáp án: ... / Lời giải: ...
    */
-  const parseSmartTextToBlocks = () => {
-    const lines = smartText
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(Boolean);
-    if (!lines.length) return;
+  const applySmartParsedText = (rawInput: string, anchorBlockId?: string | null): boolean => {
+    const parsed = parseSmartExamClipboardText(rawInput);
+    if (!parsed.blocks.length && !parsed.prologue) return false;
 
-    const parsedBlocks: ExamBlock[] = [];
-    let currentQ: Extract<ExamBlock, { type: 'question' }> | null = null;
-    let inTfSection = false;
-
-    const flushQuestion = () => {
-      if (currentQ) {
-        parsedBlocks.push(currentQ);
-        currentQ = null;
+    setPaper(prev => {
+      let nextPrologue = prev.header.prologue || '';
+      if (parsed.prologue) {
+        nextPrologue = nextPrologue ? `${nextPrologue}<br>${parsed.prologue}` : parsed.prologue;
       }
-    };
-
-    for (const line of lines) {
-      if (/^PHẦN\s+[IVX0-9]+/i.test(line)) {
-        flushQuestion();
-        inTfSection = /đúng\s*sai/i.test(line);
-        parsedBlocks.push({
-          id: crypto.randomUUID(),
-          type: 'section',
-          title: line
-        });
-        continue;
-      }
-
-      const qMatch = line.match(/^Câu\s*\d+\s*(?:\(([^)]+)\))?\s*[.:]\s*(.*)$/i);
-      if (qMatch) {
-        flushQuestion();
-        const points = qMatch[1]?.trim();
-        const restPrompt = qMatch[2]?.trim() || 'Nội dung câu hỏi';
-        currentQ = {
-          id: crypto.randomUUID(),
-          type: 'question',
-          questionType: inTfSection ? 'tf' : points ? 'short' : 'mcq',
-          ...(points ? { points } : {}),
-          prompt: restPrompt,
-          ...(inTfSection
-            ? { statements: [] }
-            : points
-            ? { shortAnswer: '', solution: '' }
-            : { options: ['A', 'B', 'C', 'D'], optionCols: 4, correctChoice: 'A' })
-        };
-        continue;
-      }
-
-      const inlineOpts = parseInlineOptionsLine(line);
-      if (inlineOpts) {
-        if (!currentQ) {
-          currentQ = {
-            id: crypto.randomUUID(),
-            type: 'question',
-            questionType: 'mcq',
-            prompt: 'Câu hỏi trắc nghiệm:',
-            options: inlineOpts,
-            optionCols: 4,
-            correctChoice: 'A'
-          };
-        } else {
-          currentQ.questionType = 'mcq';
-          currentQ.options = inlineOpts;
-          currentQ.optionCols = currentQ.optionCols || 4;
-        }
-        continue;
-      }
-
-      const tfMatch = line.match(/^([abcd])[.)]\s*(.+)$/i);
-      if (tfMatch && currentQ) {
-        currentQ.questionType = 'tf';
-        const label = tfMatch[1].toLowerCase() as 'a' | 'b' | 'c' | 'd';
-        const statements = currentQ.statements || [];
-        statements.push({
-          id: crypto.randomUUID(),
-          label,
-          text: tfMatch[2].trim(),
-          correct: true
-        });
-        currentQ.statements = statements;
-        continue;
-      }
-
-      const ansMatch = line.match(/^Đáp\s*án\s*[.:]\s*(.+)$/i);
-      if (ansMatch && currentQ) {
-        const val = ansMatch[1].trim();
-        if (/^[ABCD]$/i.test(val) && currentQ.questionType === 'mcq') {
-          currentQ.correctChoice = val.toUpperCase() as 'A' | 'B' | 'C' | 'D';
-        } else {
-          if (currentQ.questionType !== 'mcq' && currentQ.questionType !== 'tf') {
-            currentQ.questionType = 'short';
+      const nextBlocks = [...prev.blocks];
+      if (anchorBlockId) {
+        const idx = nextBlocks.findIndex(b => b.id === anchorBlockId);
+        if (idx >= 0) {
+          const anchor = nextBlocks[idx];
+          const isEmptyAnchor =
+            (anchor.type === 'paragraph' && !stripRichHtmlToPlainText(anchor.text)) ||
+            (anchor.type === 'question' && !stripRichHtmlToPlainText(anchor.prompt));
+          if (isEmptyAnchor) {
+            nextBlocks.splice(idx, 1, ...(parsed.blocks as ExamBlock[]));
+          } else {
+            nextBlocks.splice(idx + 1, 0, ...(parsed.blocks as ExamBlock[]));
           }
-          currentQ.shortAnswer = val;
+        } else {
+          nextBlocks.push(...(parsed.blocks as ExamBlock[]));
         }
-        continue;
-      }
-
-      const solMatch = line.match(/^Lời\s*giải\s*[.:]\s*(.+)$/i);
-      if (solMatch && currentQ) {
-        currentQ.solution = solMatch[1].trim();
-        continue;
-      }
-
-      if (currentQ) {
-        currentQ.prompt += '\n' + line;
       } else {
-        parsedBlocks.push({
-          id: crypto.randomUUID(),
-          type: 'paragraph',
-          text: line
-        });
+        nextBlocks.push(...(parsed.blocks as ExamBlock[]));
       }
-    }
-    flushQuestion();
 
-    if (parsedBlocks.length) {
-      setPaper(prev => ({
+      return {
         ...prev,
-        blocks: [...prev.blocks, ...parsedBlocks],
+        header: {
+          ...prev.header,
+          ...(nextPrologue ? { prologue: nextPrologue } : {})
+        },
+        blocks: nextBlocks,
         updatedAt: Date.now()
-      }));
+      };
+    });
+    setSaveBadge(`✓ Đã tách tự động ${parsed.questionCount || parsed.blocks.length} mục từ Word`);
+    return true;
+  };
+
+  const parseSmartTextToBlocks = () => {
+    if (!smartText.trim()) return;
+    if (applySmartParsedText(smartText, focusedBlockId && !focusedBlockId.startsWith('hdr:') ? focusedBlockId : null)) {
       setSmartText('');
       setSmartComposerOpen(false);
     }
@@ -1003,9 +1239,19 @@ export default function ExamPaperStudio({
   /**
    * Insert LaTeX formula into the currently focused question or open prompt
    */
-  const insertFormulaIntoFocused = (latex: string) => {
-    const wrapped = `$${latex}$`;
+  const insertFormulaIntoFocused = (latex: string, mode: 'inline' | 'display' | 'boxed' | 'numbered' = formulaDisplayMode) => {
+    const wrapped = convertFormulaDisplayMode(latex, mode, 1);
     setPaper(prev => {
+      if (focusedBlockId && focusedBlockId.startsWith('hdr:')) {
+        const f = focusedBlockId.slice(4);
+        if (f === 'prologue') {
+          return {
+            ...prev,
+            header: { ...prev.header, prologue: `${prev.header.prologue || ''} ${wrapped}`.trim() },
+            updatedAt: Date.now()
+          };
+        }
+      }
       const targetId =
         editingPromptId ||
         focusedBlockId ||
@@ -1337,15 +1583,19 @@ export default function ExamPaperStudio({
           <select
             className="exam-select exam-font-select"
             value={
-              focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.fontFamily
-                ? focusedBlock.fontFamily
-                : paper.fontFamily
+              (focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.fontFamily) ||
+              focusedHeaderStyle?.fontFamily ||
+              paper.fontFamily
             }
             aria-label="Phông chữ"
-            title="Chọn phông chữ (áp dụng cho vùng bôi đen, hoặc toàn đề nếu không bôi đen)"
+            title="Chọn phông chữ (áp dụng cho vùng bôi đen, tiêu đề đang chọn, hoặc toàn đề)"
             onChange={e => {
               const val = e.target.value;
               if (applyInlineStyleToSelection('fontFamily', val)) return;
+              if (focusedHeaderField) {
+                updateHeaderStyle(focusedHeaderField, { fontFamily: val });
+                return;
+              }
               setPaper(p => ({ ...p, fontFamily: val, updatedAt: Date.now() }));
             }}
           >
@@ -1379,10 +1629,12 @@ export default function ExamPaperStudio({
             value={
               focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.fontSizePt
                 ? String(focusedBlock.fontSizePt)
-                : ''
+                : focusedHeaderStyle?.fontSizePt
+                  ? String(focusedHeaderStyle.fontSizePt)
+                  : ''
             }
             aria-label="Cỡ chữ đoạn đang chọn"
-            title="Chỉnh cỡ chữ riêng cho cụm chữ bôi đen hoặc đoạn đang chọn"
+            title="Chỉnh cỡ chữ riêng cho cụm chữ bôi đen, tiêu đề hoặc đoạn đang chọn"
             onChange={e => {
               const raw = e.target.value;
               applyFormatCommand('fontSize', raw ? Number(raw) : undefined);
@@ -1397,7 +1649,7 @@ export default function ExamPaperStudio({
           </select>
           <span className="exam-ribbon-sep" />
           <button
-            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.bold ? 'is-active' : ''}`}
+            className={`exam-icon-btn ${(focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.bold) || focusedHeaderStyle?.bold ? 'is-active' : ''}`}
             onMouseDown={e => e.preventDefault()}
             title="In đậm (Ctrl+B)"
             onClick={() => applyFormatCommand('bold')}
@@ -1405,15 +1657,15 @@ export default function ExamPaperStudio({
             <Bold size={15} />
           </button>
           <button
-            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.italic ? 'is-active' : ''}`}
+            className={`exam-icon-btn ${(focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.italic) || focusedHeaderStyle?.italic ? 'is-active' : ''}`}
             onMouseDown={e => e.preventDefault()}
-            title="In nghiêng (Ctrl+I)"
+            title="In nghiêng (Ctrl+Shift+I)"
             onClick={() => applyFormatCommand('italic')}
           >
             <Italic size={15} />
           </button>
           <button
-            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.underline ? 'is-active' : ''}`}
+            className={`exam-icon-btn ${(focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.underline) || focusedHeaderStyle?.underline ? 'is-active' : ''}`}
             onMouseDown={e => e.preventDefault()}
             title="Gạch chân (Ctrl+U)"
             onClick={() => applyFormatCommand('underline')}
@@ -1421,7 +1673,7 @@ export default function ExamPaperStudio({
             <Underline size={15} />
           </button>
           <button
-            className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.strike ? 'is-active' : ''}`}
+            className={`exam-icon-btn ${(focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.strike) || focusedHeaderStyle?.strike ? 'is-active' : ''}`}
             onMouseDown={e => e.preventDefault()}
             title="Gạch ngang (Ctrl+Shift+S)"
             onClick={() => applyFormatCommand('strike')}
@@ -1510,7 +1762,7 @@ export default function ExamPaperStudio({
           {(['left', 'center', 'right', 'justify'] as const).map(al => (
             <button
               key={al}
-              className={`exam-icon-btn ${focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.align === al ? 'is-active' : ''}`}
+              className={`exam-icon-btn ${((focusedBlock && focusedBlock.type !== 'page-break' && focusedBlock.align === al) || focusedHeaderStyle?.align === al) ? 'is-active' : ''}`}
               onMouseDown={e => e.preventDefault()}
               title={`Căn lề: ${al}`}
               onClick={() => {
@@ -1530,6 +1782,14 @@ export default function ExamPaperStudio({
             </button>
           ))}
           <span className="exam-ribbon-sep" />
+          <button
+            className="exam-btn"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => applyFormatCommand('normalizeFormula')}
+            title="Tự động chuẩn hóa các công thức Hóa học, Toán học, Vật lý trong vùng bôi đen hoặc câu đang gõ (Phím tắt: Ctrl + I)"
+          >
+            <Sparkles size={15} /> Chuẩn hóa CT (Ctrl+I)
+          </button>
           <button
             className="exam-btn"
             onMouseDown={e => e.preventDefault()}
@@ -1877,93 +2137,276 @@ export default function ExamPaperStudio({
 
             {pageIdx === 0 && (
               <>
-                {/* A4 EXAM HEADER (PAGE 1) */}
+                {/* A4 EXAM HEADER (PAGE 1 - Full Rich Text & Custom Styling) */}
                 <header className="exam-a4-header">
                   <div className="exam-a4-header-col">
-                    <input
-                      className="exam-inline-input"
-                      placeholder="TÊN SỞ GD&ĐT"
+                    <RichEditableBlock
+                      blockId="hdr:department"
+                      field="department"
                       value={paper.header.department}
-                      onChange={e =>
+                      isFocused={focusedBlockId === 'hdr:department'}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="TÊN SỞ GD&ĐT"
+                      className="exam-header-rich-field"
+                      style={blockInlineCss(paper.header.headerStyles?.department || {})}
+                      onFocusBlock={() => { setFocusedBlockId('hdr:department'); setBlockMenu(null); }}
+                      onChange={val =>
                         setPaper(p => ({
                           ...p,
-                          header: { ...p.header, department: e.target.value }
+                          header: { ...p.header, department: val }
                         }))
                       }
+                      onSelectionChange={refreshSelectionToolbar}
                     />
-                    <input
-                      className="exam-inline-input"
-                      style={{ fontWeight: 700, textDecoration: 'underline' }}
-                      placeholder="TÊN TRƯỜNG"
+                    <RichEditableBlock
+                      blockId="hdr:school"
+                      field="school"
                       value={paper.header.school}
-                      onChange={e =>
+                      isFocused={focusedBlockId === 'hdr:school'}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="TÊN TRƯỜNG"
+                      className="exam-header-rich-field is-school"
+                      style={{
+                        fontWeight: 700,
+                        textDecoration: 'underline',
+                        ...blockInlineCss(paper.header.headerStyles?.school || {})
+                      }}
+                      onFocusBlock={() => { setFocusedBlockId('hdr:school'); setBlockMenu(null); }}
+                      onChange={val =>
                         setPaper(p => ({
                           ...p,
-                          header: { ...p.header, school: e.target.value }
+                          header: { ...p.header, school: val }
                         }))
                       }
+                      onSelectionChange={refreshSelectionToolbar}
                     />
-                    <div className="exam-code-badge">
+                    <div className="exam-code-badge" style={blockInlineCss(paper.header.headerStyles?.examCode || {})}>
                       <span>Mã đề:</span>
-                      <input
-                        className="exam-inline-input"
-                        style={{ width: 52, fontWeight: 700 }}
+                      <RichEditableBlock
+                        blockId="hdr:examCode"
+                        field="examCode"
                         value={paper.header.examCode}
-                        onChange={e =>
+                        isFocused={focusedBlockId === 'hdr:examCode'}
+                        allowBlockSplit={false}
+                        disableAutoPrefixBold
+                        placeholder="101"
+                        className="exam-header-code-rich"
+                        onFocusBlock={() => { setFocusedBlockId('hdr:examCode'); setBlockMenu(null); }}
+                        onChange={val =>
                           setPaper(p => ({
                             ...p,
-                            header: { ...p.header, examCode: e.target.value }
+                            header: { ...p.header, examCode: val }
                           }))
                         }
+                        onSelectionChange={refreshSelectionToolbar}
                       />
                     </div>
                   </div>
                   <div className="exam-a4-header-col">
-                    <input
-                      className="exam-inline-input"
-                      style={{ fontWeight: 700, fontSize: '1.08em' }}
+                    <RichEditableBlock
+                      blockId="hdr:examTitle"
+                      field="examTitle"
                       value={paper.header.examTitle}
-                      onChange={e =>
+                      isFocused={focusedBlockId === 'hdr:examTitle'}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="TIÊU ĐỀ KỲ THI / KIỂM TRA"
+                      className="exam-header-rich-field is-title"
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '1.08em',
+                        ...blockInlineCss(paper.header.headerStyles?.examTitle || {})
+                      }}
+                      onFocusBlock={() => { setFocusedBlockId('hdr:examTitle'); setBlockMenu(null); }}
+                      onChange={val =>
                         setPaper(p => ({
                           ...p,
-                          header: { ...p.header, examTitle: e.target.value }
+                          header: { ...p.header, examTitle: val }
                         }))
                       }
+                      onSelectionChange={refreshSelectionToolbar}
                     />
-                    <input
-                      className="exam-inline-input"
-                      style={{ fontWeight: 700 }}
+                    <RichEditableBlock
+                      blockId="hdr:subject"
+                      field="subject"
                       value={paper.header.subject}
-                      onChange={e =>
+                      isFocused={focusedBlockId === 'hdr:subject'}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="Môn thi: TOÁN / HÓA HỌC / VẬT LÝ"
+                      className="exam-header-rich-field is-subject"
+                      style={{
+                        fontWeight: 700,
+                        ...blockInlineCss(paper.header.headerStyles?.subject || {})
+                      }}
+                      onFocusBlock={() => { setFocusedBlockId('hdr:subject'); setBlockMenu(null); }}
+                      onChange={val =>
                         setPaper(p => ({
                           ...p,
-                          header: { ...p.header, subject: e.target.value }
+                          header: { ...p.header, subject: val }
                         }))
                       }
+                      onSelectionChange={refreshSelectionToolbar}
                     />
-                    <input
-                      className="exam-inline-input"
-                      style={{ fontStyle: 'italic', fontSize: '0.95em' }}
+                    <RichEditableBlock
+                      blockId="hdr:duration"
+                      field="duration"
                       value={paper.header.duration}
-                      onChange={e =>
+                      isFocused={focusedBlockId === 'hdr:duration'}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="Thời gian làm bài: 50 phút"
+                      className="exam-header-rich-field is-duration"
+                      style={{
+                        fontStyle: 'italic',
+                        fontSize: '0.95em',
+                        ...blockInlineCss(paper.header.headerStyles?.duration || {})
+                      }}
+                      onFocusBlock={() => { setFocusedBlockId('hdr:duration'); setBlockMenu(null); }}
+                      onChange={val =>
                         setPaper(p => ({
                           ...p,
-                          header: { ...p.header, duration: e.target.value }
+                          header: { ...p.header, duration: val }
                         }))
                       }
+                      onSelectionChange={refreshSelectionToolbar}
                     />
                   </div>
                 </header>
 
                 {paper.header.showStudentInfo && (
-                  <div className="exam-student-line">
-                    <span>
-                      Họ và tên thí sinh:
-                      ........................................................................
-                    </span>
-                    <span>Số báo danh: ..........................</span>
+                  <div className="exam-student-line" style={blockInlineCss(paper.header.headerStyles?.studentInfo || {})}>
+                    <RichEditableBlock
+                      blockId="hdr:studentInfo"
+                      field="studentInfoText"
+                      value={
+                        paper.header.studentInfoText ??
+                        '<strong>Họ và tên thí sinh:</strong> ........................................................................ &nbsp;&nbsp; <strong>Số báo danh:</strong> ..........................'
+                      }
+                      isFocused={focusedBlockId === 'hdr:studentInfo'}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="Họ và tên thí sinh: .................................... Số báo danh: ...................."
+                      onFocusBlock={() => { setFocusedBlockId('hdr:studentInfo'); setBlockMenu(null); }}
+                      onChange={val =>
+                        setPaper(p => ({
+                          ...p,
+                          header: { ...p.header, studentInfoText: val }
+                        }))
+                      }
+                      onSelectionChange={refreshSelectionToolbar}
+                    />
                   </div>
                 )}
+
+                {/* PROLOGUE / ATOMIC WEIGHTS / CONSTANTS / PRE-SECTION I ZONE */}
+                <div
+                  className={`exam-prologue-zone ${paper.header.prologue?.trim() ? 'has-content' : 'is-empty'} ${
+                    focusedBlockId === 'hdr:prologue' ? 'is-focused' : ''
+                  }`}
+                  style={blockInlineCss(paper.header.prologueStyle || {})}
+                >
+                  <div className="exam-prologue-presets">
+                    <span className="exam-prologue-label">Đầu đề (trước Phần I):</span>
+                    <button
+                      type="button"
+                      className="exam-prologue-chip"
+                      title="Chèn nhanh bảng Nguyên tử khối Hóa học chuẩn THPT"
+                      onClick={() => {
+                        const preset =
+                          '<strong>Cho biết nguyên tử khối của các nguyên tố:</strong> $\\text{H}=1;\\ \\text{C}=12;\\ \\text{N}=14;\\ \\text{O}=16;\\ \\text{Na}=23;\\ \\text{Mg}=24;\\ \\text{Al}=27;\\ \\text{P}=31;\\ \\text{S}=32;\\ \\text{Cl}=35{,}5;\\ \\text{K}=39;\\ \\text{Ca}=40;\\ \\text{Cr}=52;\\ \\text{Fe}=56;\\ \\text{Cu}=64;\\ \\text{Zn}=65;\\ \\text{Br}=80;\\ \\text{Ag}=108;\\ \\text{Ba}=137.$';
+                        setPaper(p => ({
+                          ...p,
+                          header: {
+                            ...p.header,
+                            prologue: p.header.prologue?.trim()
+                              ? `${p.header.prologue}<br>${preset}`
+                              : preset
+                          },
+                          updatedAt: Date.now()
+                        }));
+                        setFocusedBlockId('hdr:prologue');
+                      }}
+                    >
+                      🧪 + Nguyên tử khối Hóa
+                    </button>
+                    <button
+                      type="button"
+                      className="exam-prologue-chip"
+                      title="Chèn nhanh các hằng số Vật lý cơ bản"
+                      onClick={() => {
+                        const preset =
+                          '<strong>Cho biết các hằng số:</strong> $g = 9{,}8\\text{ m/s}^2;\\ c = 3\\cdot 10^8\\text{ m/s};\\ h = 6{,}625\\cdot 10^{-34}\\text{ J}\\cdot\\text{s};\\ e = 1{,}6\\cdot 10^{-19}\\text{ C};\\ N_A = 6{,}02\\cdot 10^{23}\\text{ mol}^{-1}.$';
+                        setPaper(p => ({
+                          ...p,
+                          header: {
+                            ...p.header,
+                            prologue: p.header.prologue?.trim()
+                              ? `${p.header.prologue}<br>${preset}`
+                              : preset
+                          },
+                          updatedAt: Date.now()
+                        }));
+                        setFocusedBlockId('hdr:prologue');
+                      }}
+                    >
+                      ⚡ + Hằng số Vật lý
+                    </button>
+                    <button
+                      type="button"
+                      className="exam-prologue-chip"
+                      title="Chèn ghi chú quy định phòng thi"
+                      onClick={() => {
+                        const preset =
+                          '<em>(Thí sinh không được sử dụng tài liệu. Cán bộ coi thi không giải thích gì thêm)</em>';
+                        setPaper(p => ({
+                          ...p,
+                          header: {
+                            ...p.header,
+                            prologue: p.header.prologue?.trim()
+                              ? `${p.header.prologue}<br>${preset}`
+                              : preset
+                          },
+                          updatedAt: Date.now()
+                        }));
+                        setFocusedBlockId('hdr:prologue');
+                      }}
+                    >
+                      + Ghi chú đầu đề
+                    </button>
+                    <button
+                      type="button"
+                      className="exam-prologue-chip"
+                      title="Chèn một khối văn bản tự do mới vào ngay trước PHẦN I"
+                      onClick={() => insertParagraphBlock(null, 'text', '', 'start')}
+                    >
+                      ➕ Chèn đoạn trước Phần I
+                    </button>
+                  </div>
+                  <RichEditableBlock
+                    blockId="hdr:prologue"
+                    field="prologue"
+                    value={paper.header.prologue || ''}
+                    isFocused={focusedBlockId === 'hdr:prologue'}
+                    allowBlockSplit={false}
+                    placeholder="Nhấp để nhập thông tin đầu đề trước Phần I (ví dụ: Cho biết nguyên tử khối: H = 1; C = 12; O = 16... hoặc bấm nút chèn nhanh ở trên, ấn Ctrl+I để chuẩn hóa công thức)"
+                    onFocusBlock={() => {
+                      setFocusedBlockId('hdr:prologue');
+                      setBlockMenu(null);
+                    }}
+                    onChange={val =>
+                      setPaper(p => ({
+                        ...p,
+                        header: { ...p.header, prologue: val }
+                      }))
+                    }
+                    onNormalizeBlockFormula={() => normalizeBlockFormulasById('hdr:prologue')}
+                    onMultiQuestionPaste={raw => applySmartParsedText(raw, null)}
+                    onSelectionChange={refreshSelectionToolbar}
+                  />
+                </div>
 
                 {/* OPTIONAL SMART COMPOSER BOX */}
                 {smartComposerOpen && (
@@ -2089,69 +2532,62 @@ export default function ExamPaperStudio({
                         <Trash2 size={11} /> Xóa phần
                       </button>
                     </div>
-                    {editingFieldKey === `sec-title:${block.id}` ? (
-                      <textarea
-                        autoFocus
-                        rows={1}
-                        className="exam-q-textarea"
-                        style={{ fontWeight: 700, textTransform: 'uppercase' }}
-                        value={block.title}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setPaper(p => ({
-                            ...p,
-                            blocks: p.blocks.map(x =>
-                              x.id === block.id && x.type === 'section'
-                                ? { ...x, title: val }
-                                : x
-                            )
-                          }));
-                        }}
-                        onBlur={() => setEditingFieldKey(null)}
-                      />
-                    ) : (
-                      <div
-                        className="exam-inline-rendered"
-                        style={{ fontWeight: 700, textTransform: 'uppercase' }}
-                        onClick={() => setEditingFieldKey(`sec-title:${block.id}`)}
-                        dangerouslySetInnerHTML={{
-                          __html: renderRichExamText(block.title || 'PHẦN MỚI')
-                        }}
-                      />
-                    )}
-                    {editingFieldKey === `sec-sub:${block.id}` ? (
-                      <textarea
-                        autoFocus
-                        rows={1}
-                        className="exam-q-textarea"
-                        style={{ fontStyle: 'italic', fontSize: '0.94em' }}
-                        value={block.subtitle || ''}
-                        placeholder="Ghi chú hướng dẫn phần (tùy chọn)…"
-                        onChange={e => {
-                          const val = e.target.value;
-                          setPaper(p => ({
-                            ...p,
-                            blocks: p.blocks.map(x =>
-                              x.id === block.id && x.type === 'section'
-                                ? { ...x, subtitle: val }
-                                : x
-                            )
-                          }));
-                        }}
-                        onBlur={() => setEditingFieldKey(null)}
-                      />
-                    ) : (
-                      <div
-                        className="exam-inline-rendered"
-                        style={{ fontStyle: 'italic', fontSize: '0.94em', color: '#334155' }}
-                        onClick={() => setEditingFieldKey(`sec-sub:${block.id}`)}
-                        dangerouslySetInnerHTML={{
-                          __html: renderRichExamText(
-                            block.subtitle || 'Nhấp để thêm hướng dẫn phần…'
+                    <RichEditableBlock
+                      blockId={block.id}
+                      field="title"
+                      value={block.title}
+                      isFocused={isFocused && editingFieldKey === `sec-title:${block.id}`}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn"
+                      className="exam-section-title-rich"
+                      style={{ fontWeight: 700, textTransform: 'uppercase' }}
+                      onFocusBlock={() => {
+                        setFocusedBlockId(block.id);
+                        setEditingFieldKey(`sec-title:${block.id}`);
+                        setBlockMenu(null);
+                      }}
+                      onChange={val =>
+                        setPaper(p => ({
+                          ...p,
+                          blocks: p.blocks.map(x =>
+                            x.id === block.id && x.type === 'section'
+                              ? { ...x, title: val }
+                              : x
                           )
-                        }}
-                      />
-                    )}
+                        }))
+                      }
+                      onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
+                      onSelectionChange={refreshSelectionToolbar}
+                    />
+                    <RichEditableBlock
+                      blockId={block.id}
+                      field="subtitle"
+                      value={block.subtitle || ''}
+                      isFocused={isFocused && editingFieldKey === `sec-sub:${block.id}`}
+                      allowBlockSplit={false}
+                      disableAutoPrefixBold
+                      placeholder="Nhấp để thêm ghi chú hướng dẫn phần (tùy chọn)…"
+                      className="exam-section-sub-rich"
+                      style={{ fontStyle: 'italic', fontSize: '0.94em', color: '#334155' }}
+                      onFocusBlock={() => {
+                        setFocusedBlockId(block.id);
+                        setEditingFieldKey(`sec-sub:${block.id}`);
+                        setBlockMenu(null);
+                      }}
+                      onChange={val =>
+                        setPaper(p => ({
+                          ...p,
+                          blocks: p.blocks.map(x =>
+                            x.id === block.id && x.type === 'section'
+                              ? { ...x, subtitle: val }
+                              : x
+                          )
+                        }))
+                      }
+                      onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
+                      onSelectionChange={refreshSelectionToolbar}
+                    />
                   </section>
                 );
               }
@@ -2194,7 +2630,7 @@ export default function ExamPaperStudio({
                                 ? 'Tiêu đề nhỏ…'
                                 : variant === 'callout'
                                   ? 'Ghi chú / lưu ý cho học sinh…'
-                                  : 'Nhập nội dung hoặc gõ "/" để chèn câu hỏi, công thức, tiêu đề…'
+                                  : 'Nhập nội dung (gõ câu 1: để tự động in đậm, Ctrl+I chuẩn hóa công thức, hoặc gõ / để chèn nhanh)…'
                         }
                         onFocusBlock={() => {
                           setFocusedBlockId(block.id);
@@ -2226,9 +2662,29 @@ export default function ExamPaperStudio({
                         }}
                         onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
                         onSlashTrigger={(info) => setSlashMenu(info)}
+                        onMultiQuestionPaste={(raw) => applySmartParsedText(raw, block.id)}
+                        onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
                         onSelectionChange={refreshSelectionToolbar}
                       />
                     </div>
+                    {(block.figures || []).length > 0 && (
+                      <div className="exam-figures-container">
+                        {(block.figures || []).map(fig => {
+                          const curLayout =
+                            fig.layout ||
+                            (fig.align === 'left'
+                              ? 'break-left'
+                              : fig.align === 'right'
+                                ? 'break-right'
+                                : 'break-center');
+                          return (
+                            <div key={fig.id} className={`exam-figure-row layout-${curLayout} align-${fig.align || 'center'}`}>
+                              {renderFigureBox(block.id, fig)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -2236,6 +2692,15 @@ export default function ExamPaperStudio({
               // QUESTION BLOCK
               const qNum = questionNumbers.get(block.id) || bIdx + 1;
               const isEditingPrompt = editingPromptId === block.id;
+              const allFigs = block.figures || [];
+              const floatRightFigs = allFigs.filter(f => f.layout === 'float-right');
+              const floatLeftFigs = allFigs.filter(f => f.layout === 'float-left');
+              const gridFigs = allFigs.filter(f => f.layout === 'grid-2');
+              const inlineFigs = allFigs.filter(f => f.layout === 'inline');
+              const breakFigs = allFigs.filter(
+                f => !f.layout || f.layout === 'break-center' || f.layout === 'break-left' || f.layout === 'break-right'
+              );
+              const hasSideFloat = floatRightFigs.length > 0 || floatLeftFigs.length > 0;
 
               return (
                 <article
@@ -2264,6 +2729,14 @@ export default function ExamPaperStudio({
                       }}
                     >
                       {isEditingPrompt ? <><Check size={11} /> Xong</> : <><Pencil size={11} /> Sửa đề</>}
+                    </button>
+                    <button
+                      className="exam-mini-action"
+                      onMouseDown={e => e.preventDefault()}
+                      title="Tự động chuẩn hóa công thức trong câu hỏi này (Ctrl+I)"
+                      onClick={() => normalizeBlockFormulasById(block.id)}
+                    >
+                      <Sparkles size={11} /> Chuẩn hóa CT
                     </button>
                     <button
                       className="exam-mini-action"
@@ -2336,369 +2809,389 @@ export default function ExamPaperStudio({
                     </button>
                   </div>
 
-                  {/* Question Prompt Row */}
-                  <div className="exam-q-row">
-                    <span className="exam-q-label">Câu {qNum}</span>
-                    {(block.questionType === 'short' ||
-                      block.questionType === 'essay' ||
-                      block.points) && (
-                      <input
-                        className="exam-q-points"
-                        value={block.points ? `(${block.points})` : ''}
-                        placeholder="(1 điểm)"
-                        title="Điểm câu hỏi (ví dụ: 1 điểm)"
-                        onChange={e => {
-                          const raw = e.target.value.replace(/[()]/g, '');
-                          setPaper(p => ({
-                            ...p,
-                            blocks: p.blocks.map(x =>
-                              x.id === block.id && x.type === 'question'
-                                ? { ...x, points: raw }
-                                : x
-                            )
-                          }));
-                        }}
-                      />
+                  {/* Question Content Area (supports side-by-side float-left / float-right figures!) */}
+                  <div
+                    className={`exam-q-body-layout ${
+                      hasSideFloat
+                        ? floatLeftFigs.length > 0 && floatRightFigs.length === 0
+                          ? 'has-float-left'
+                          : 'has-float-right'
+                        : ''
+                    }`}
+                  >
+                    {floatLeftFigs.length > 0 && (
+                      <div className="exam-q-side-figures is-left">
+                        {floatLeftFigs.map(fig => renderFigureBox(block.id, fig))}
+                      </div>
                     )}
-                    <span className="exam-q-label">.</span>
 
-                    <div className="exam-q-prompt-area">
-                      <RichEditableBlock
-                        blockId={block.id}
-                        field="prompt"
-                        value={block.prompt}
-                        isFocused={isFocused || isEditingPrompt}
-                        allowBlockSplit={false}
-                        slashMenuOpen={Boolean(slashMenu && slashMenu.blockId === block.id)}
-                        placeholder="Gõ nội dung câu hỏi trực tiếp… (bôi đen chữ để đổi màu/cỡ chữ, hoặc gõ / để chèn nhanh)"
-                        onFocusBlock={() => {
-                          setFocusedBlockId(block.id);
-                          setEditingPromptId(block.id);
-                          setBlockMenu(null);
-                        }}
-                        onBlurBlock={() => {
-                          if (editingPromptId === block.id) setEditingPromptId(null);
-                        }}
-                        onChange={(sanitizedHtml) => {
-                          const plain = stripRichHtmlToPlainText(sanitizedHtml);
-                          const cleaned = sanitizedHtml.replace(/^\s*Câu\s*\d+\s*[.:]\s*/i, '');
-                          const lines = plain.split(/\r?\n/);
-                          const lastLine = lines[lines.length - 1] || '';
-                          const autoOpts = parseInlineOptionsLine(lastLine);
-                          if (autoOpts && lines.length > 1) {
-                            const promptWithoutOpts = lines.slice(0, -1).join('<br>');
-                            setPaper(p => ({
-                              ...p,
-                              blocks: p.blocks.map(x =>
-                                x.id === block.id && x.type === 'question'
-                                  ? {
-                                      ...x,
-                                      questionType: 'mcq',
-                                      prompt: promptWithoutOpts,
-                                      options: autoOpts
-                                    }
-                                  : x
-                              )
-                            }));
-                            return;
-                          }
-                          setPaper(p => ({
-                            ...p,
-                            blocks: p.blocks.map(x =>
-                              x.id === block.id && x.type === 'question'
-                                ? { ...x, prompt: cleaned }
-                                : x
-                            )
-                          }));
-                        }}
-                        onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
-                        onSlashTrigger={(info) => setSlashMenu(info)}
-                        onSelectionChange={refreshSelectionToolbar}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Inline Figures (Resizable, Alignable, Live-Linked to Drawing Board) */}
-                  {(block.figures || []).map(fig => {
-                    const isFigSelected =
-                      selectedFigure?.blockId === block.id &&
-                      selectedFigure?.figId === fig.id;
-                    return (
-                      <div
-                        key={fig.id}
-                        className={`exam-figure-row align-${fig.align || 'center'}`}
-                      >
-                        <div
-                          className={`exam-figure-box ${
-                            isFigSelected ? 'is-selected' : ''
-                          }`}
-                          onClick={e => {
-                            e.stopPropagation();
-                            setSelectedFigure({
-                              blockId: block.id,
-                              figId: fig.id
-                            });
-                          }}
-                        >
-                          {isFigSelected && (
-                            <div
-                              className="exam-figure-toolbar"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <button
-                                className={fig.align === 'left' ? 'active' : ''}
-                                onClick={() =>
-                                  setPaper(p => ({
-                                    ...p,
-                                    blocks: p.blocks.map(x =>
-                                      x.id === block.id &&
-                                      'figures' in x &&
-                                      x.figures
-                                        ? {
-                                            ...x,
-                                            figures: x.figures.map(f =>
-                                              f.id === fig.id
-                                                ? { ...f, align: 'left' }
-                                                : f
-                                            )
-                                          }
-                                        : x
-                                    )
-                                  }))
-                                }
-                              >
-                                ⇤ Trái
-                              </button>
-                              <button
-                                className={
-                                  fig.align === 'center' ? 'active' : ''
-                                }
-                                onClick={() =>
-                                  setPaper(p => ({
-                                    ...p,
-                                    blocks: p.blocks.map(x =>
-                                      x.id === block.id &&
-                                      'figures' in x &&
-                                      x.figures
-                                        ? {
-                                            ...x,
-                                            figures: x.figures.map(f =>
-                                              f.id === fig.id
-                                                ? { ...f, align: 'center' }
-                                                : f
-                                            )
-                                          }
-                                        : x
-                                    )
-                                  }))
-                                }
-                              >
-                                ↔ Giữa
-                              </button>
-                              <button
-                                className={
-                                  fig.align === 'right' ? 'active' : ''
-                                }
-                                onClick={() =>
-                                  setPaper(p => ({
-                                    ...p,
-                                    blocks: p.blocks.map(x =>
-                                      x.id === block.id &&
-                                      'figures' in x &&
-                                      x.figures
-                                        ? {
-                                            ...x,
-                                            figures: x.figures.map(f =>
-                                              f.id === fig.id
-                                                ? { ...f, align: 'right' }
-                                                : f
-                                            )
-                                          }
-                                        : x
-                                    )
-                                  }))
-                                }
-                              >
-                                Phải ⇥
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveSourceId(fig.sourceId);
-                                  setSplitBoardOpen(true);
-                                }}
-                              >
-                                <Pencil size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} /> Sửa hình
-                              </button>
-                              <button
-                                className="danger"
-                                title="Xóa hình này"
-                                onClick={() => {
-                                  setPaper(p => ({
-                                    ...p,
-                                    blocks: p.blocks.map(x =>
-                                      x.id === block.id &&
-                                      'figures' in x &&
-                                      x.figures
-                                        ? {
-                                            ...x,
-                                            figures: x.figures.filter(
-                                              f => f.id !== fig.id
-                                            )
-                                          }
-                                        : x
-                                    )
-                                  }));
-                                  setSelectedFigure(null);
-                                }}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          )}
-                          <img
-                            src={fig.src}
-                            style={{ width: `${fig.width || 250}px` }}
-                            alt="Hình minh họa câu hỏi"
-                            draggable={false}
+                    <div className="exam-q-main-col">
+                      {/* Question Prompt Row */}
+                      <div className="exam-q-row">
+                        <span className="exam-q-label">Câu {qNum}</span>
+                        {(block.questionType === 'short' ||
+                          block.questionType === 'essay' ||
+                          block.points) && (
+                          <input
+                            className="exam-q-points"
+                            value={block.points ? `(${block.points})` : ''}
+                            placeholder="(1 điểm)"
+                            title="Điểm câu hỏi (ví dụ: 1 điểm)"
+                            onChange={e => {
+                              const raw = e.target.value.replace(/[()]/g, '');
+                              setPaper(p => ({
+                                ...p,
+                                blocks: p.blocks.map(x =>
+                                  x.id === block.id && x.type === 'question'
+                                    ? { ...x, points: raw }
+                                    : x
+                                )
+                              }));
+                            }}
                           />
-                          <span
-                            className="exam-figure-resize-handle"
-                            title="Kéo góc để phóng to / thu nhỏ hình"
-                            onPointerDown={e =>
-                              startFigureResize(
-                                e,
-                                block.id,
-                                fig.id,
-                                fig.width || 250
-                              )
-                            }
+                        )}
+                        <span className="exam-q-label">.</span>
+
+                        <div className="exam-q-prompt-area">
+                          <RichEditableBlock
+                            blockId={block.id}
+                            field="prompt"
+                            value={block.prompt}
+                            isFocused={isFocused || isEditingPrompt}
+                            allowBlockSplit={false}
+                            slashMenuOpen={Boolean(slashMenu && slashMenu.blockId === block.id)}
+                            placeholder="Gõ nội dung câu hỏi trực tiếp… (Ctrl+I để chuẩn hóa công thức, bôi đen chữ để đổi màu/cỡ chữ, hoặc gõ / để chèn nhanh)"
+                            onFocusBlock={() => {
+                              setFocusedBlockId(block.id);
+                              setEditingPromptId(block.id);
+                              setBlockMenu(null);
+                            }}
+                            onBlurBlock={() => {
+                              if (editingPromptId === block.id) setEditingPromptId(null);
+                            }}
+                            onChange={(sanitizedHtml) => {
+                              const plain = stripRichHtmlToPlainText(sanitizedHtml);
+                              const cleaned = sanitizedHtml.replace(
+                                /^\s*(?:<\s*(?:strong|b)\s*>\s*)?Câu\s*\d+\s*[.:]\s*(?:<\s*\/\s*(?:strong|b)\s*>\s*)?/i,
+                                ''
+                              );
+                              const lines = plain.split(/\r?\n/);
+                              const lastLine = lines[lines.length - 1] || '';
+                              const autoOpts = parseInlineOptionsLine(lastLine);
+                              if (autoOpts && lines.length > 1) {
+                                const promptWithoutOpts = lines.slice(0, -1).join('<br>');
+                                setPaper(p => ({
+                                  ...p,
+                                  blocks: p.blocks.map(x =>
+                                    x.id === block.id && x.type === 'question'
+                                      ? {
+                                          ...x,
+                                          questionType: 'mcq',
+                                          prompt: promptWithoutOpts,
+                                          options: autoOpts
+                                        }
+                                      : x
+                                  )
+                                }));
+                                return;
+                              }
+                              setPaper(p => ({
+                                ...p,
+                                blocks: p.blocks.map(x =>
+                                  x.id === block.id && x.type === 'question'
+                                    ? { ...x, prompt: cleaned }
+                                    : x
+                                )
+                              }));
+                            }}
+                            onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
+                            onSlashTrigger={(info) => setSlashMenu(info)}
+                            onMultiQuestionPaste={(raw) => applySmartParsedText(raw, block.id)}
+                            onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
+                            onSelectionChange={refreshSelectionToolbar}
                           />
                         </div>
                       </div>
-                    );
-                  })}
 
-                  {/* MCQ Options: A. B. C. D. + Floating 1 dòng · 2 dòng · 4 dòng switcher */}
-                  {block.questionType === 'mcq' && block.options && (
-                    <div className="exam-options-wrap">
-                      <div className="exam-options-layout-bar">
-                        <button
-                          className={
-                            (block.optionCols || 4) === 4 ? 'active' : ''
-                          }
-                          onClick={() =>
-                            setPaper(p => ({
-                              ...p,
-                              blocks: p.blocks.map(x =>
-                                x.id === block.id && x.type === 'question'
-                                  ? { ...x, optionCols: 4 }
-                                  : x
-                              )
-                            }))
-                          }
-                        >
-                          1 dòng
-                        </button>
-                        <span>·</span>
-                        <button
-                          className={block.optionCols === 2 ? 'active' : ''}
-                          onClick={() =>
-                            setPaper(p => ({
-                              ...p,
-                              blocks: p.blocks.map(x =>
-                                x.id === block.id && x.type === 'question'
-                                  ? { ...x, optionCols: 2 }
-                                  : x
-                              )
-                            }))
-                          }
-                        >
-                          2 dòng
-                        </button>
-                        <span>·</span>
-                        <button
-                          className={block.optionCols === 1 ? 'active' : ''}
-                          onClick={() =>
-                            setPaper(p => ({
-                              ...p,
-                              blocks: p.blocks.map(x =>
-                                x.id === block.id && x.type === 'question'
-                                  ? { ...x, optionCols: 1 }
-                                  : x
-                              )
-                            }))
-                          }
-                        >
-                          4 dòng
-                        </button>
-                      </div>
+                      {inlineFigs.length > 0 && (
+                        <div className="exam-figure-inline-strip">
+                          {inlineFigs.map(fig => renderFigureBox(block.id, fig))}
+                        </div>
+                      )}
 
-                      <div
-                        className={`exam-options-grid cols-${
-                          block.optionCols || 4
-                        }`}
-                      >
-                        {(['A', 'B', 'C', 'D'] as const).map((letter, idx) => {
-                          const isCorrect = block.correctChoice === letter;
-                          return (
-                            <div key={letter} className="exam-option-cell">
-                              <button
-                                type="button"
-                                className={`exam-option-letter ${
-                                  isCorrect ? 'is-correct' : ''
-                                }`}
-                                title={`Bấm vào chữ ${letter} để đánh dấu đáp án đúng`}
-                                onClick={() =>
-                                  setPaper(p => ({
-                                    ...p,
-                                    blocks: p.blocks.map(x =>
-                                      x.id === block.id && x.type === 'question'
-                                        ? { ...x, correctChoice: letter }
-                                        : x
-                                    )
-                                  }))
-                                }
-                              >
-                                {letter}.
-                              </button>
-                              {editingFieldKey === `opt:${block.id}:${idx}` ? (
-                                <input
-                                  autoFocus
-                                  className="exam-option-input"
-                                  value={block.options![idx] || ''}
-                                  placeholder={`Phương án ${letter} (hoặc gõ A. ... B. ... C. ... D. ...)`}
-                                  onChange={e => {
-                                    const raw = e.target.value;
-                                    const inlineAll = parseInlineOptionsLine(raw);
-                                    if (inlineAll) {
+                      {gridFigs.length > 0 && (
+                        <div className="exam-figure-grid-2">
+                          {gridFigs.map(fig => renderFigureBox(block.id, fig))}
+                        </div>
+                      )}
+
+                      {breakFigs.map(fig => (
+                        <div
+                          key={fig.id}
+                          className={`exam-figure-row align-${fig.align || 'center'}`}
+                        >
+                          {renderFigureBox(block.id, fig)}
+                        </div>
+                      ))}
+
+                      {/* MCQ Options: A. B. C. D. + Floating 1 dòng · 2 dòng · 4 dòng switcher */}
+                      {block.questionType === 'mcq' && block.options && (
+                        <div className="exam-options-wrap">
+                          <div className="exam-options-layout-bar">
+                            <button
+                              className={
+                                (block.optionCols || 4) === 4 ? 'active' : ''
+                              }
+                              onClick={() =>
+                                setPaper(p => ({
+                                  ...p,
+                                  blocks: p.blocks.map(x =>
+                                    x.id === block.id && x.type === 'question'
+                                      ? { ...x, optionCols: 4 }
+                                      : x
+                                  )
+                                }))
+                              }
+                            >
+                              1 dòng
+                            </button>
+                            <span>·</span>
+                            <button
+                              className={block.optionCols === 2 ? 'active' : ''}
+                              onClick={() =>
+                                setPaper(p => ({
+                                  ...p,
+                                  blocks: p.blocks.map(x =>
+                                    x.id === block.id && x.type === 'question'
+                                      ? { ...x, optionCols: 2 }
+                                      : x
+                                  )
+                                }))
+                              }
+                            >
+                              2 dòng
+                            </button>
+                            <span>·</span>
+                            <button
+                              className={block.optionCols === 1 ? 'active' : ''}
+                              onClick={() =>
+                                setPaper(p => ({
+                                  ...p,
+                                  blocks: p.blocks.map(x =>
+                                    x.id === block.id && x.type === 'question'
+                                      ? { ...x, optionCols: 1 }
+                                      : x
+                                  )
+                                }))
+                              }
+                            >
+                              4 dòng
+                            </button>
+                          </div>
+
+                          <div
+                            className={`exam-options-grid cols-${
+                              hasSideFloat && (block.optionCols || 4) === 4 ? 2 : block.optionCols || 4
+                            }`}
+                          >
+                            {(['A', 'B', 'C', 'D'] as const).map((letter, idx) => {
+                              const isCorrect = block.correctChoice === letter;
+                              return (
+                                <div key={letter} className="exam-option-cell">
+                                  <button
+                                    type="button"
+                                    className={`exam-option-letter ${
+                                      isCorrect ? 'is-correct' : ''
+                                    }`}
+                                    title={`Bấm vào chữ ${letter} để đánh dấu đáp án đúng`}
+                                    onClick={() =>
                                       setPaper(p => ({
                                         ...p,
                                         blocks: p.blocks.map(x =>
-                                          x.id === block.id &&
-                                          x.type === 'question'
-                                            ? { ...x, options: inlineAll }
+                                          x.id === block.id && x.type === 'question'
+                                            ? { ...x, correctChoice: letter }
                                             : x
                                         )
-                                      }));
-                                      return;
+                                      }))
                                     }
+                                  >
+                                    {letter}.
+                                  </button>
+                                  {editingFieldKey === `opt:${block.id}:${idx}` ? (
+                                    <input
+                                      autoFocus
+                                      className="exam-option-input"
+                                      value={block.options![idx] || ''}
+                                      placeholder={`Phương án ${letter} (hoặc gõ A. ... B. ... C. ... D. ...)`}
+                                      onKeyDown={e => {
+                                        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'i') {
+                                          e.preventDefault();
+                                          const norm = autoNormalizeFormulaText(block.options![idx] || '');
+                                          setPaper(p => ({
+                                            ...p,
+                                            blocks: p.blocks.map(x => {
+                                              if (x.id !== block.id || x.type !== 'question' || !x.options) return x;
+                                              const nextOpts = [...x.options] as [string, string, string, string];
+                                              nextOpts[idx] = norm;
+                                              return { ...x, options: nextOpts };
+                                            })
+                                          }));
+                                        }
+                                      }}
+                                      onChange={e => {
+                                        const raw = e.target.value;
+                                        const inlineAll = parseInlineOptionsLine(raw);
+                                        if (inlineAll) {
+                                          setPaper(p => ({
+                                            ...p,
+                                            blocks: p.blocks.map(x =>
+                                              x.id === block.id &&
+                                              x.type === 'question'
+                                                ? { ...x, options: inlineAll }
+                                                : x
+                                            )
+                                          }));
+                                          return;
+                                        }
+                                        setPaper(p => ({
+                                          ...p,
+                                          blocks: p.blocks.map(x => {
+                                            if (
+                                              x.id !== block.id ||
+                                              x.type !== 'question' ||
+                                              !x.options
+                                            )
+                                              return x;
+                                            const nextOpts = [...x.options] as [
+                                              string,
+                                              string,
+                                              string,
+                                              string
+                                            ];
+                                            nextOpts[idx] = raw;
+                                            return { ...x, options: nextOpts };
+                                          })
+                                        }));
+                                      }}
+                                      onBlur={() => setEditingFieldKey(null)}
+                                    />
+                                  ) : (
+                                    <div
+                                      className="exam-inline-rendered"
+                                      title="Nhấp để sửa phương án"
+                                      onClick={() => setEditingFieldKey(`opt:${block.id}:${idx}`)}
+                                      dangerouslySetInnerHTML={{
+                                        __html: renderRichExamText(
+                                          block.options![idx] || `Phương án ${letter}`
+                                        )
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* True / False Statements: a), b), c), d) with Đ | S buttons */}
+                      {block.questionType === 'tf' && block.statements && (
+                        <div className="exam-tf-list">
+                          {block.statements.map((st, sIdx) => (
+                            <div key={st.id} className="exam-tf-item">
+                              <span className="exam-tf-label">{st.label})</span>
+                              <div
+                                className="exam-tf-toggle"
+                                title="Chọn Đúng (Đ) hoặc Sai (S)"
+                              >
+                                <button
+                                  type="button"
+                                  className={st.correct === true ? 'is-true' : ''}
+                                  onClick={() =>
                                     setPaper(p => ({
                                       ...p,
                                       blocks: p.blocks.map(x => {
                                         if (
                                           x.id !== block.id ||
                                           x.type !== 'question' ||
-                                          !x.options
+                                          !x.statements
                                         )
                                           return x;
-                                        const nextOpts = [...x.options] as [
-                                          string,
-                                          string,
-                                          string,
-                                          string
-                                        ];
-                                        nextOpts[idx] = raw;
-                                        return { ...x, options: nextOpts };
+                                        const nextSt = x.statements.map((item, i) =>
+                                          i === sIdx
+                                            ? { ...item, correct: true }
+                                            : item
+                                        );
+                                        return { ...x, statements: nextSt };
+                                      })
+                                    }))
+                                  }
+                                >
+                                  Đ
+                                </button>
+                                <button
+                                  type="button"
+                                  className={st.correct === false ? 'is-false' : ''}
+                                  onClick={() =>
+                                    setPaper(p => ({
+                                      ...p,
+                                      blocks: p.blocks.map(x => {
+                                        if (
+                                          x.id !== block.id ||
+                                          x.type !== 'question' ||
+                                          !x.statements
+                                        )
+                                          return x;
+                                        const nextSt = x.statements.map((item, i) =>
+                                          i === sIdx
+                                            ? { ...item, correct: false }
+                                            : item
+                                        );
+                                        return { ...x, statements: nextSt };
+                                      })
+                                    }))
+                                  }
+                                >
+                                  S
+                                </button>
+                              </div>
+                              {editingFieldKey === `tf:${block.id}:${sIdx}` ? (
+                                <textarea
+                                  autoFocus
+                                  rows={1}
+                                  className="exam-q-textarea"
+                                  value={st.text}
+                                  onKeyDown={e => {
+                                    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'i') {
+                                      e.preventDefault();
+                                      const norm = autoNormalizeFormulaText(st.text);
+                                      setPaper(p => ({
+                                        ...p,
+                                        blocks: p.blocks.map(x => {
+                                          if (x.id !== block.id || x.type !== 'question' || !x.statements) return x;
+                                          return {
+                                            ...x,
+                                            statements: x.statements.map((item, i) => (i === sIdx ? { ...item, text: norm } : item))
+                                          };
+                                        })
+                                      }));
+                                    }
+                                  }}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setPaper(p => ({
+                                      ...p,
+                                      blocks: p.blocks.map(x => {
+                                        if (
+                                          x.id !== block.id ||
+                                          x.type !== 'question' ||
+                                          !x.statements
+                                        )
+                                          return x;
+                                        const nextSt = x.statements.map((item, i) =>
+                                          i === sIdx ? { ...item, text: val } : item
+                                        );
+                                        return { ...x, statements: nextSt };
                                       })
                                     }));
                                   }}
@@ -2707,148 +3200,50 @@ export default function ExamPaperStudio({
                               ) : (
                                 <div
                                   className="exam-inline-rendered"
-                                  title="Nhấp để sửa phương án"
-                                  onClick={() => setEditingFieldKey(`opt:${block.id}:${idx}`)}
+                                  title="Nhấp để sửa mệnh đề"
+                                  onClick={() => setEditingFieldKey(`tf:${block.id}:${sIdx}`)}
                                   dangerouslySetInnerHTML={{
-                                    __html: renderRichExamText(
-                                      block.options![idx] || `Phương án ${letter}`
-                                    )
+                                    __html: renderRichExamText(st.text || `Khẳng định ${st.label}`)
                                   }}
                                 />
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* True / False Statements: a), b), c), d) with Đ | S buttons */}
-                  {block.questionType === 'tf' && block.statements && (
-                    <div className="exam-tf-list">
-                      {block.statements.map((st, sIdx) => (
-                        <div key={st.id} className="exam-tf-item">
-                          <span className="exam-tf-label">{st.label})</span>
-                          <div
-                            className="exam-tf-toggle"
-                            title="Chọn Đúng (Đ) hoặc Sai (S)"
-                          >
-                            <button
-                              type="button"
-                              className={st.correct === true ? 'is-true' : ''}
-                              onClick={() =>
-                                setPaper(p => ({
-                                  ...p,
-                                  blocks: p.blocks.map(x => {
-                                    if (
-                                      x.id !== block.id ||
-                                      x.type !== 'question' ||
-                                      !x.statements
-                                    )
-                                      return x;
-                                    const nextSt = x.statements.map((item, i) =>
-                                      i === sIdx
-                                        ? { ...item, correct: true }
-                                        : item
-                                    );
-                                    return { ...x, statements: nextSt };
-                                  })
-                                }))
-                              }
-                            >
-                              Đ
-                            </button>
-                            <button
-                              type="button"
-                              className={st.correct === false ? 'is-false' : ''}
-                              onClick={() =>
-                                setPaper(p => ({
-                                  ...p,
-                                  blocks: p.blocks.map(x => {
-                                    if (
-                                      x.id !== block.id ||
-                                      x.type !== 'question' ||
-                                      !x.statements
-                                    )
-                                      return x;
-                                    const nextSt = x.statements.map((item, i) =>
-                                      i === sIdx
-                                        ? { ...item, correct: false }
-                                        : item
-                                    );
-                                    return { ...x, statements: nextSt };
-                                  })
-                                }))
-                              }
-                            >
-                              S
-                            </button>
-                          </div>
-                          {editingFieldKey === `tf:${block.id}:${sIdx}` ? (
-                            <textarea
-                              autoFocus
-                              rows={1}
-                              className="exam-q-textarea"
-                              value={st.text}
-                              onChange={e => {
-                                const val = e.target.value;
-                                setPaper(p => ({
-                                  ...p,
-                                  blocks: p.blocks.map(x => {
-                                    if (
-                                      x.id !== block.id ||
-                                      x.type !== 'question' ||
-                                      !x.statements
-                                    )
-                                      return x;
-                                    const nextSt = x.statements.map((item, i) =>
-                                      i === sIdx ? { ...item, text: val } : item
-                                    );
-                                    return { ...x, statements: nextSt };
-                                  })
-                                }));
-                              }}
-                              onBlur={() => setEditingFieldKey(null)}
-                            />
-                          ) : (
-                            <div
-                              className="exam-inline-rendered"
-                              title="Nhấp để sửa mệnh đề"
-                              onClick={() => setEditingFieldKey(`tf:${block.id}:${sIdx}`)}
-                              dangerouslySetInnerHTML={{
-                                __html: renderRichExamText(st.text || `Khẳng định ${st.label}`)
-                              }}
-                            />
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )}
 
-                  {/* Short Answer Row (Đáp án: ...) */}
-                  {(block.questionType === 'short' ||
-                    block.shortAnswer !== undefined) && (
-                    <div className="exam-short-row">
-                      <strong>Đáp án:</strong>
-                      <input
-                        className="exam-option-input"
-                        style={{ maxWidth: 220, fontWeight: 700 }}
-                        value={block.shortAnswer || ''}
-                        placeholder="Nhập đáp án (bản phát học sinh sẽ tự để trống ô này)…"
-                        onChange={e => {
-                          const val = e.target.value;
-                          setPaper(p => ({
-                            ...p,
-                            blocks: p.blocks.map(x =>
-                              x.id === block.id && x.type === 'question'
-                                ? { ...x, shortAnswer: val }
-                                : x
-                            )
-                          }));
-                        }}
-                      />
+                      {/* Short Answer Row (Đáp án: ...) */}
+                      {(block.questionType === 'short' ||
+                        block.shortAnswer !== undefined) && (
+                        <div className="exam-short-row">
+                          <strong>Đáp án:</strong>
+                          <input
+                            className="exam-option-input"
+                            style={{ maxWidth: 220, fontWeight: 700 }}
+                            value={block.shortAnswer || ''}
+                            placeholder="Nhập đáp án (bản phát học sinh sẽ tự để trống ô này)…"
+                            onChange={e => {
+                              const val = e.target.value;
+                              setPaper(p => ({
+                                ...p,
+                                blocks: p.blocks.map(x =>
+                                  x.id === block.id && x.type === 'question'
+                                    ? { ...x, shortAnswer: val }
+                                    : x
+                                )
+                              }));
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    {floatRightFigs.length > 0 && (
+                      <div className="exam-q-side-figures is-right">
+                        {floatRightFigs.map(fig => renderFigureBox(block.id, fig))}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Solution Row (Lời giải: ... with rich KaTeX / mhchem formula rendering!) */}
                   {block.solution !== undefined && (
@@ -3526,13 +3921,36 @@ export default function ExamPaperStudio({
                   fontSize: 16
                 }}
                 dangerouslySetInnerHTML={{
-                  __html: renderRichExamText(`$$${customLatex}$$`)
+                  __html: renderRichExamText(convertFormulaDisplayMode(customLatex, formulaDisplayMode, 1))
                 }}
               />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  <small style={{ fontWeight: 700, color: '#475569' }}>Chế độ bố trí với chữ:</small>
+                  {([
+                    ['inline', 'Cùng dòng ($...$)'],
+                    ['display', 'Dòng riêng ($$...$$)'],
+                    ['boxed', 'Đóng khung'],
+                    ['numbered', 'Đánh số (1)']
+                  ] as const).map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`exam-chip-btn ${formulaDisplayMode === m ? 'is-active' : ''}`}
+                      style={
+                        formulaDisplayMode === m
+                          ? { background: '#2563eb', color: '#fff', borderColor: '#2563eb' }
+                          : undefined
+                      }
+                      onClick={() => setFormulaDisplayMode(m)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <button
                   className="exam-btn primary"
-                  onClick={() => insertFormulaIntoFocused(customLatex)}
+                  onClick={() => insertFormulaIntoFocused(customLatex, formulaDisplayMode)}
                 >
                   <Check size={14} /> Chèn công thức vào câu đang chọn
                 </button>
@@ -3577,6 +3995,7 @@ export default function ExamPaperStudio({
                     }))
                 : undefined
             }
+            onInsertAbove={() => insertParagraphBlock(blk.id, 'text', '', 'before')}
             onDuplicate={() => duplicateBlock(blk.id)}
             onTogglePageBreak={() => togglePageBreakBefore(blk.id)}
             onDelete={() =>
