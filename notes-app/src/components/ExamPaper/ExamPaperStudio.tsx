@@ -122,6 +122,7 @@ export default function ExamPaperStudio({
   const [customLatex, setCustomLatex] = useState('\\int_{0}^{1} (3x^2 + 2x)\\,dx');
   const [smartText, setSmartText] = useState('');
   const [smartComposerOpen, setSmartComposerOpen] = useState(false);
+  const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const [saveBadge, setSaveBadge] = useState('✓ Tự động lưu khi gõ');
   const [slashMenu, setSlashMenu] = useState<{ blockId: string; query: string; rect: DOMRect } | null>(null);
   const [selectionToolbar, setSelectionToolbar] = useState<{ rect: DOMRect; blockId: string } | null>(null);
@@ -1696,6 +1697,18 @@ export default function ExamPaperStudio({
           >
             <Keyboard size={13} /> Gõ / Dán nhanh nhiều câu như Word
           </button>
+          <button
+            className="exam-chip-btn"
+            style={{
+              borderColor: headerFooterOpen ? '#2563eb' : undefined,
+              color: headerFooterOpen ? '#1d4ed8' : undefined,
+              background: headerFooterOpen ? '#eff6ff' : undefined
+            }}
+            onClick={() => setHeaderFooterOpen(v => !v)}
+            title="Chỉnh sửa nội dung Header (đầu trang) và Footer (chân trang)"
+          >
+            <FileText size={13} /> Header &amp; Footer
+          </button>
         </div>
         <div className="exam-subbar-right">
           <span className="exam-selection-badge" title="Mọi nút chèn công thức, ảnh hoặc thêm câu sẽ đặt tại khối này">
@@ -1722,6 +1735,94 @@ export default function ExamPaperStudio({
         </div>
       </div>
 
+      {/* INLINE HEADER & FOOTER SETTINGS BAR */}
+      {headerFooterOpen && (
+        <div className="exam-hf-bar">
+          <label className="exam-hf-field">
+            <span>Header trang sau</span>
+            <input
+              className="exam-select"
+              placeholder={paper.header.examTitle || 'Tiêu đề đầu trang…'}
+              value={paper.header.runningHeaderText ?? ''}
+              onChange={e =>
+                setPaper(p => ({ ...p, header: { ...p.header, runningHeaderText: e.target.value }, updatedAt: Date.now() }))
+              }
+            />
+          </label>
+          <label className="exam-hf-field">
+            <span>Footer trái</span>
+            <input
+              className="exam-select"
+              placeholder={`Mã đề ${paper.header.examCode}`}
+              value={paper.header.footerLeftText ?? ''}
+              onChange={e =>
+                setPaper(p => ({ ...p, header: { ...p.header, footerLeftText: e.target.value }, updatedAt: Date.now() }))
+              }
+            />
+          </label>
+          <label className="exam-hf-field">
+            <span>Footer giữa (trang cuối)</span>
+            <input
+              className="exam-select"
+              placeholder="—————— HẾT ——————"
+              value={paper.header.footerCenterText ?? ''}
+              onChange={e =>
+                setPaper(p => ({ ...p, header: { ...p.header, footerCenterText: e.target.value }, updatedAt: Date.now() }))
+              }
+            />
+          </label>
+          <label className="exam-hf-field">
+            <span>Chữ chuyển trang</span>
+            <input
+              className="exam-select"
+              placeholder="(Xem tiếp trang sau)"
+              value={paper.header.footerContinueText ?? ''}
+              onChange={e =>
+                setPaper(p => ({ ...p, header: { ...p.header, footerContinueText: e.target.value }, updatedAt: Date.now() }))
+              }
+            />
+          </label>
+          <div className="exam-hf-toggles">
+            <label>
+              <input
+                type="checkbox"
+                checked={paper.header.showRunningHeader !== false}
+                onChange={e =>
+                  setPaper(p => ({ ...p, header: { ...p.header, showRunningHeader: e.target.checked }, updatedAt: Date.now() }))
+                }
+              /> Hiện Header trang sau
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={paper.header.showStudentInfo !== false}
+                onChange={e =>
+                  setPaper(p => ({ ...p, header: { ...p.header, showStudentInfo: e.target.checked }, updatedAt: Date.now() }))
+                }
+              /> Dòng Họ tên &amp; SBD
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={paper.header.showFooter !== false}
+                onChange={e =>
+                  setPaper(p => ({ ...p, header: { ...p.header, showFooter: e.target.checked }, updatedAt: Date.now() }))
+                }
+              /> Hiện Footer
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={paper.header.showPageNumbers !== false}
+                onChange={e =>
+                  setPaper(p => ({ ...p, header: { ...p.header, showPageNumbers: e.target.checked }, updatedAt: Date.now() }))
+                }
+              /> Hiện số trang
+            </label>
+          </div>
+        </div>
+      )}
+
       {/* MAIN WORKSPACE: SINGLE OR SPLIT SCREEN */}
       <div className={`exam-workspace ${splitBoardOpen ? 'is-split' : ''}`}>
         {/* LEFT PANE: MULTI-PAGE A4 EXAM SHEETS */}
@@ -1745,11 +1846,22 @@ export default function ExamPaperStudio({
               fontSize: `${paper.fontSizePt}pt`
             }}
           >
-            {pageIdx > 0 && (
+            {pageIdx > 0 && paper.header.showRunningHeader !== false && (
               <div className="exam-a4-page-top">
-                <span>
-                  {paper.header.examTitle} · <strong>Trang {pg.pageNumber}/{pages.length}</strong>
-                </span>
+                <div className="exam-hf-inline-row">
+                  <input
+                    className="exam-inline-input exam-hf-inline-input"
+                    value={paper.header.runningHeaderText ?? paper.header.examTitle}
+                    placeholder="Nhập Header đầu trang…"
+                    title="Nhấp để sửa Header đầu trang"
+                    onChange={e =>
+                      setPaper(p => ({ ...p, header: { ...p.header, runningHeaderText: e.target.value }, updatedAt: Date.now() }))
+                    }
+                  />
+                  {paper.header.showPageNumbers !== false && (
+                    <strong style={{ whiteSpace: 'nowrap' }}>· Trang {pg.pageNumber}/{pages.length}</strong>
+                  )}
+                </div>
                 {(pg.manualBreakId || pg.breakBeforeBlockId) && (
                   <button
                     type="button"
@@ -2799,17 +2911,45 @@ export default function ExamPaperStudio({
               </div>
             )}
 
-            <footer className="exam-a4-footer">
-              <span>Mã đề {paper.header.examCode}</span>
-              {pageIdx === pages.length - 1 ? (
-                <span className="exam-a4-end-mark">—————— HẾT ——————</span>
-              ) : (
-                <span>(Xem tiếp Trang {pg.pageNumber + 1})</span>
-              )}
-              <strong>
-                Trang {pg.pageNumber} / {pages.length}
-              </strong>
-            </footer>
+            {paper.header.showFooter !== false && (
+              <footer className="exam-a4-footer">
+                <input
+                  className="exam-inline-input exam-hf-footer-input"
+                  value={paper.header.footerLeftText ?? `Mã đề ${paper.header.examCode}`}
+                  placeholder={`Mã đề ${paper.header.examCode}`}
+                  title="Nhấp để sửa Footer bên trái"
+                  onChange={e =>
+                    setPaper(p => ({ ...p, header: { ...p.header, footerLeftText: e.target.value }, updatedAt: Date.now() }))
+                  }
+                />
+                {pageIdx === pages.length - 1 ? (
+                  <input
+                    className="exam-inline-input exam-hf-footer-center exam-a4-end-mark"
+                    value={paper.header.footerCenterText ?? '—————— HẾT ——————'}
+                    placeholder="—————— HẾT ——————"
+                    title="Nhấp để sửa chữ chân trang cuối"
+                    onChange={e =>
+                      setPaper(p => ({ ...p, header: { ...p.header, footerCenterText: e.target.value }, updatedAt: Date.now() }))
+                    }
+                  />
+                ) : (
+                  <input
+                    className="exam-inline-input exam-hf-footer-center"
+                    value={paper.header.footerContinueText ?? `(Xem tiếp Trang ${pg.pageNumber + 1})`}
+                    placeholder={`(Xem tiếp Trang ${pg.pageNumber + 1})`}
+                    title="Nhấp để sửa chữ chuyển trang"
+                    onChange={e =>
+                      setPaper(p => ({ ...p, header: { ...p.header, footerContinueText: e.target.value }, updatedAt: Date.now() }))
+                    }
+                  />
+                )}
+                {paper.header.showPageNumbers !== false && (
+                  <strong style={{ whiteSpace: 'nowrap' }}>
+                    Trang {pg.pageNumber} / {pages.length}
+                  </strong>
+                )}
+              </footer>
+            )}
           </article>
           ))}
 

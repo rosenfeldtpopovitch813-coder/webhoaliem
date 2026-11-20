@@ -22,6 +22,13 @@ export type ExamHeaderConfig={
   examCode:string;
   academicYear:string;
   showStudentInfo:boolean;
+  runningHeaderText?:string;
+  showRunningHeader?:boolean;
+  footerLeftText?:string;
+  footerCenterText?:string;
+  footerContinueText?:string;
+  showPageNumbers?:boolean;
+  showFooter?:boolean;
 };
 
 export type ExamFigureSource={

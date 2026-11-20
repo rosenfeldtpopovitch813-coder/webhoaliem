@@ -183,7 +183,7 @@ export function FloatingSelectionToolbar({
 }) {
   const [openPicker, setOpenPicker] = useState<'color' | 'bg' | 'size' | null>(null);
 
-  const top = Math.max(54, rect.top - 48);
+  const top = rect.top > 110 ? rect.top - 58 : Math.min(window.innerHeight - 54, rect.bottom + 10);
   const left = Math.min(window.innerWidth - 430, Math.max(12, rect.left + rect.width / 2 - 205));
 
   return (

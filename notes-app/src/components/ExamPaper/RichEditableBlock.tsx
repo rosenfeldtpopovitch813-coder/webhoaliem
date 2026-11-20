@@ -407,12 +407,6 @@ export default function RichEditableBlock({
           }
         }}
       />
-      {containsMath && isFocused && (
-        <div
-          className="exam-live-math-preview"
-          dangerouslySetInnerHTML={{ __html: renderRichExamText(value) }}
-        />
-      )}
     </div>
   );
 }

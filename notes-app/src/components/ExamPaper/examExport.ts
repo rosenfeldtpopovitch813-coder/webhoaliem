@@ -552,7 +552,33 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
     }
   }
 
-  bodyXml.push(`<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="950"/></w:sectPr>`);
+  if (h.showFooter !== false) {
+    const endMark = (h.footerCenterText ?? '—————— HẾT ——————').trim();
+    if (endMark) {
+      bodyXml.push(`<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="200"/></w:pPr>${textWithMathToWordXml(endMark, { bold: true, fontName: docFontName })}</w:p>`);
+    }
+  }
+
+  const runningHdrText = (h.runningHeaderText ?? h.examTitle ?? '').trim();
+  const footerLeftTxt = (h.footerLeftText ?? `Mã đề ${h.examCode}`).trim();
+  const hasWordHeader = h.showRunningHeader !== false && Boolean(runningHdrText);
+  const hasWordFooter = h.showFooter !== false && (Boolean(footerLeftTxt) || h.showPageNumbers !== false);
+
+  const header1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${escapeXml(docFontName)}" w:hAnsi="${escapeXml(docFontName)}"/><w:sz w:val="19"/><w:color w:val="64748B"/></w:rPr><w:t xml:space="preserve">${escapeXml(runningHdrText)}</w:t></w:r></w:p>
+</w:hdr>`;
+
+  const footer1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr><w:jc w:val="both"/></w:pPr>${footerLeftTxt ? `<w:r><w:rPr><w:rFonts w:ascii="${escapeXml(docFontName)}" w:hAnsi="${escapeXml(docFontName)}"/><w:sz w:val="20"/><w:color w:val="475569"/></w:rPr><w:t xml:space="preserve">${escapeXml(footerLeftTxt)}${h.showPageNumbers !== false ? '    ·    Trang ' : ''}</w:t></w:r>` : (h.showPageNumbers !== false ? `<w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">Trang </w:t></w:r>` : '')}${h.showPageNumbers !== false ? `<w:fldSimple w:instr="PAGE"/><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve"> / </w:t></w:r><w:fldSimple w:instr="NUMPAGES"/>` : ''}</w:p>
+</w:ftr>`;
+
+  const sectRefs = [
+    hasWordHeader ? '<w:headerReference w:type="default" r:id="rIdHdr1"/>' : '',
+    hasWordFooter ? '<w:footerReference w:type="default" r:id="rIdFtr1"/>' : ''
+  ].join('');
+  bodyXml.push(`<w:sectPr>${sectRefs}<w:titlePg/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="950"/></w:sectPr>`);
 
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -565,6 +591,8 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
   const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${hasWordHeader ? '<Relationship Id="rIdHdr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>' : ''}
+  ${hasWordFooter ? '<Relationship Id="rIdFtr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' : ''}
   ${mediaFiles.map(mf => `<Relationship Id="${mf.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mf.name.split('/').pop()}"/>`).join('\n  ')}
 </Relationships>`;
 
@@ -583,6 +611,8 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
   <Default Extension="png" ContentType="image/png"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  ${hasWordHeader ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : ''}
+  ${hasWordFooter ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ''}
 </Types>`;
 
   const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -595,6 +625,8 @@ export function exportExamPaperToDocx(paper: ExamPaperDocument, mode: 'student' 
     { name: '_rels/.rels', data: encoder.encode(rootRelsXml) },
     { name: 'word/document.xml', data: encoder.encode(documentXml) },
     { name: 'word/styles.xml', data: encoder.encode(stylesXml) },
+    ...(hasWordHeader ? [{ name: 'word/header1.xml', data: encoder.encode(header1Xml) }] : []),
+    ...(hasWordFooter ? [{ name: 'word/footer1.xml', data: encoder.encode(footer1Xml) }] : []),
     { name: 'word/_rels/document.xml.rels', data: encoder.encode(relsXml) },
     ...mediaFiles.map(mf => ({ name: mf.name, data: mf.data }))
   ]);
@@ -784,9 +816,9 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
         <p><em>${escapeHtml(h.duration)}</em></p>
       </div>
     </header>
-    ${h.showStudentInfo ? `<div class="pdf-student-info"><span>Họ và tên thí sinh: ........................................................................</span><span>Số báo danh: ..............................</span></div>` : ''}
+    ${h.showStudentInfo !== false ? `<div class="pdf-student-info"><span>Họ và tên thí sinh: ........................................................................</span><span>Số báo danh: ..............................</span></div>` : ''}
     ${bodyHtml.join('')}
-    <div class="pdf-footer-end">—————— HẾT ——————</div>
+    ${h.showFooter !== false ? `<div class="pdf-footer-end">${escapeHtml(h.footerCenterText ?? '—————— HẾT ——————')}</div>${(h.footerLeftText ?? '').trim() ? `<div style="margin-top:8px;font-size:10pt;color:#475569;text-align:left">${escapeHtml(h.footerLeftText!)}</div>` : ''}` : ''}
     <script>window.addEventListener('load', () => setTimeout(() => { window.focus(); window.print(); }, 450));</script>
   </body></html>`);
   win.document.close();
