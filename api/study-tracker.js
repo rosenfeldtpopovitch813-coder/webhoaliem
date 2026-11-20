@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { identity, fail, assert } from '../lib/exam-server.js';
-import { rtdbGet, rtdbTransaction, abortTx } from '../lib/rtdb-rest.js';
+import { rtdbGet, rtdbPut, rtdbTransaction, abortTx } from '../lib/rtdb-rest.js';
 import {
   SESSION_TTL_MS,
   applyHeartbeat,
@@ -9,6 +9,28 @@ import {
   applyLoginStreak,
   summarizeStudyStats
 } from '../shared/study-core.js';
+
+async function syncLeaderboardProjection(uid, state, fallbackName) {
+  if (!uid || !state || typeof state !== 'object') return;
+  const path = `leaderboard_public/${uid}`;
+  try {
+    if (state.sharing === true) {
+      await rtdbPut(path, {
+        displayName: String(state.displayName || fallbackName || 'Người học').slice(0, 80),
+        sharing: true,
+        totalMs: Math.max(0, Math.floor(Number(state.totalMs) || 0)),
+        todayKey: String(state.todayKey || ''),
+        todayMs: Math.max(0, Math.floor(Number(state.todayMs) || 0)),
+        streak: Math.max(0, Math.floor(Number(state.streak) || 0)),
+        bestStreak: Math.max(0, Math.floor(Number(state.bestStreak) || 0)),
+        lastStudyDay: Number.isInteger(state.lastStudyDay) ? state.lastStudyDay : null,
+        updatedAt: Date.now()
+      });
+    } else {
+      await rtdbPut(path, null);
+    }
+  } catch { /* non-blocking projection sync */ }
+}
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -33,6 +55,7 @@ export default async function handler(req, res) {
         incremented = applied.incremented;
         return applied.state;
       });
+      await syncLeaderboardProjection(user.uid, txRes.val, user.name);
       return res.json({ stats: summarizeStudyStats(txRes.val, Date.now()), incremented });
     }
 
@@ -48,6 +71,7 @@ export default async function handler(req, res) {
           user.name
         ).state;
       });
+      await syncLeaderboardProjection(user.uid, txRes.val, user.name);
       return res.json({ sessionId, stats: summarizeStudyStats(txRes.val, Date.now()) });
     }
 
@@ -61,6 +85,7 @@ export default async function handler(req, res) {
         if (resumed.accepted) return resumed.state;
         return applyHeartbeat({ ...cur, session: { id, lastPing: txNow } }, txNow, id, user.name).state;
       });
+      await syncLeaderboardProjection(user.uid, txRes.val, user.name);
       return res.json({ sessionId: id, stats: summarizeStudyStats(txRes.val, Date.now()), resumed: true });
     }
 
@@ -89,6 +114,7 @@ export default async function handler(req, res) {
         return nextState;
       });
       const finalState = txRes.val && typeof txRes.val === 'object' ? txRes.val : {};
+      await syncLeaderboardProjection(user.uid, finalState, user.name);
       return res.json({
         stats: summarizeStudyStats(finalState, Date.now()),
         awayAddedSeconds: Math.floor(addedMs / 1000)
@@ -101,6 +127,7 @@ export default async function handler(req, res) {
         const cur = raw && typeof raw === 'object' ? raw : {};
         return { ...cur, sharing: body.enabled, displayName: user.name };
       });
+      await syncLeaderboardProjection(user.uid, txRes.val, user.name);
       return res.json({ stats: summarizeStudyStats(txRes.val, Date.now()) });
     }
 

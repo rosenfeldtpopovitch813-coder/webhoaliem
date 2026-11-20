@@ -1384,6 +1384,45 @@ body.is-exam-lockdown .bg-music-mini{display:none!important}
 .exam-review-opt-text p{margin:0}
 .exam-review-opt-tag{font-size:10.5px;font-weight:800;flex:none;color:var(--muted)}
 .exam-review-short{margin:0;padding:8px 11px;border-radius:9px;background:var(--panel);font-size:12.5px;font-weight:600}
+.exam-review-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 6px}
+.exam-review-split{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:16px;align-items:start;margin:12px 0}
+.exam-review-split.is-doc-collapsed{grid-template-columns:minmax(0,1fr)}
+.exam-review-paper-col{display:grid;gap:10px;padding:12px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel-2);position:sticky;top:12px;max-height:82vh;overflow:auto}
+.exam-review-split.is-doc-collapsed .exam-review-paper-col{position:static;max-height:none}
+.exam-review-paper-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;letter-spacing:.04em}
+.exam-review-answers-col{min-width:0}
+.exam-mod-banner{display:grid;gap:6px;padding:12px 14px;border-radius:12px;border:1px solid var(--stroke);margin:10px 0;font-size:13px;line-height:1.45}
+.exam-mod-banner.is-pending{border-color:color-mix(in srgb,#f59e0b 60%,var(--stroke));background:color-mix(in srgb,#f59e0b 12%,var(--panel));color:var(--ink)}
+.exam-mod-banner.is-approved{border-color:color-mix(in srgb,#10b981 55%,var(--stroke));background:color-mix(in srgb,#10b981 12%,var(--panel));color:var(--ink)}
+.exam-mod-banner.is-rejected{border-color:color-mix(in srgb,#f43f5e 55%,var(--stroke));background:color-mix(in srgb,#f43f5e 12%,var(--panel));color:var(--ink)}
+.exam-mod-timeline{font-size:12px;color:var(--muted)}
+.exam-mod-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
+.exam-mod-note-input{flex:1 1 220px;min-width:180px;padding:7px 10px;font-size:12.5px}
+.exam-mod-btn{border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--stroke);background:var(--panel);color:var(--ink);transition:.15s}
+.exam-mod-btn.is-approve{border-color:color-mix(in srgb,#10b981 60%,var(--stroke));background:color-mix(in srgb,#10b981 16%,var(--panel));color:#10b981}
+.exam-mod-btn.is-reject{border-color:color-mix(in srgb,#f43f5e 60%,var(--stroke));background:color-mix(in srgb,#f43f5e 14%,var(--panel));color:#fb7185}
+.exam-mod-btn:disabled{opacity:.55;cursor:default}
+.exam-submissions-list{display:grid;gap:12px;margin:12px 0}
+.exam-submission-card{display:grid;gap:8px;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--panel-2)}
+.exam-submission-card.is-pending{border-color:color-mix(in srgb,#f59e0b 55%,var(--stroke))}
+.exam-submission-card.is-rejected{border-color:color-mix(in srgb,#f43f5e 45%,var(--stroke))}
+.exam-submission-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.exam-submission-info{display:grid;gap:3px}
+.exam-submission-info small{font-size:12px;color:var(--muted)}
+.exam-submission-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.exam-mod-pill{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800}
+.exam-mod-pill.is-clean,.exam-mod-pill.is-approved{background:color-mix(in srgb,#10b981 16%,var(--panel));color:#10b981}
+.exam-mod-pill.is-pending{background:color-mix(in srgb,#f59e0b 18%,var(--panel));color:#f59e0b}
+.exam-mod-pill.is-rejected{background:color-mix(in srgb,#f43f5e 16%,var(--panel));color:#fb7185}
+.exam-card-pill.is-pending-mod{background:color-mix(in srgb,#f59e0b 20%,var(--panel));color:#f59e0b;border-color:color-mix(in srgb,#f59e0b 50%,var(--stroke))}
+.exam-card-tool-btn.is-alert{border-color:color-mix(in srgb,#f59e0b 65%,var(--stroke));color:#f59e0b}
+.exam-lb-right{display:flex;align-items:center;gap:8px}
+.exam-lb-review-btn{border-radius:9px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer;border:1px solid var(--stroke);background:var(--panel);color:var(--ink)}
+.exam-lb-review-btn:hover{border-color:var(--accent);color:var(--accent)}
+@media (max-width:960px){
+  .exam-review-split{grid-template-columns:minmax(0,1fr)}
+  .exam-review-paper-col{position:static;max-height:none}
+}
 
 /* Arena Learning Hub, Battle, Millionaire, Hundred, English Studio */
 .arena-body{display:grid;gap:18px}

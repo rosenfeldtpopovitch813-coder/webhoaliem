@@ -2,6 +2,76 @@ import { gradeExam } from './exam-grading.js';
 
 export const SUBMISSION_GRACE_MS = 30_000;
 export const MAX_EXAM_ATTEMPTS_LIMIT = 50;
+export const MAX_VIOLATION_EVENTS = 30;
+const VALID_VIOLATION_REASONS = new Set(['tab-hidden', 'fullscreen-exit']);
+
+export function normalizeLeaveScreenCount(raw) {
+  const n = Math.floor(Number(raw) || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(200, n);
+}
+
+export function normalizeViolationEvents(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const at = Math.floor(Number(item.at) || 0);
+    if (!Number.isFinite(at) || at <= 0) continue;
+    const reason = VALID_VIOLATION_REASONS.has(item.reason) ? item.reason : 'tab-hidden';
+    out.push({ at, reason });
+    if (out.length >= MAX_VIOLATION_EVENTS) break;
+  }
+  return out;
+}
+
+export function resolveAttemptReviewStatus(attempt) {
+  const leaveCount = normalizeLeaveScreenCount(attempt?.leaveScreenCount);
+  if (leaveCount === 0) return 'clean';
+  const raw = String(attempt?.reviewStatus || '').trim().toLowerCase();
+  if (raw === 'approved' || raw === 'rejected' || raw === 'pending') return raw;
+  return 'pending';
+}
+
+export function isAttemptLeaderboardEligible(attempt) {
+  if (!attempt || attempt.status !== 'submitted' || !attempt.result) return false;
+  const status = resolveAttemptReviewStatus(attempt);
+  return status === 'clean' || status === 'approved';
+}
+
+export function summarizeUserModerationStatus(attempts = []) {
+  const list = Array.isArray(attempts) ? attempts : [];
+  let pendingCount = 0;
+  let rejectedCount = 0;
+  let approvedFlaggedCount = 0;
+  let eligibleCount = 0;
+  let latestFlagged = null;
+
+  for (const item of list) {
+    const status = resolveAttemptReviewStatus(item);
+    const leaveCount = normalizeLeaveScreenCount(item?.leaveScreenCount);
+    if (status === 'clean' || status === 'approved') eligibleCount += 1;
+    if (status === 'approved' && leaveCount > 0) approvedFlaggedCount += 1;
+    if (status === 'pending') {
+      pendingCount += 1;
+      if (!latestFlagged) latestFlagged = item;
+    } else if (status === 'rejected') {
+      rejectedCount += 1;
+      if (!latestFlagged) latestFlagged = item;
+    }
+  }
+
+  return {
+    eligibleCount,
+    pendingCount,
+    rejectedCount,
+    approvedFlaggedCount,
+    hasPending: pendingCount > 0,
+    hasRejected: rejectedCount > 0,
+    latestFlaggedLeaveCount: latestFlagged ? normalizeLeaveScreenCount(latestFlagged.leaveScreenCount) : 0,
+    reviewStatus: pendingCount > 0 ? 'pending' : (rejectedCount > 0 && eligibleCount === 0 ? 'rejected' : 'clean')
+  };
+}
 
 export function parseMaxAttempts(raw) {
   if (raw === null || raw === undefined || raw === '') return 0;
@@ -51,10 +121,21 @@ export function collectUserAttempts(attemptsMap, legacySession) {
     }
   }
   list.sort((a, b) => (Number(b.submittedAt) || 0) - (Number(a.submittedAt) || 0));
-  return list.map((item, idx) => ({
-    ...item,
-    attemptNumber: Number(item.attemptNumber) || (list.length - idx)
-  }));
+  return list.map((item, idx) => {
+    const leaveScreenCount = normalizeLeaveScreenCount(item.leaveScreenCount);
+    const violationEvents = normalizeViolationEvents(item.violationEvents);
+    const reviewStatus = resolveAttemptReviewStatus({ ...item, leaveScreenCount });
+    return {
+      ...item,
+      attemptNumber: Number(item.attemptNumber) || (list.length - idx),
+      leaveScreenCount,
+      violationEvents,
+      flaggedForCheating: leaveScreenCount > 0,
+      reviewStatus,
+      reviewedAt: Number(item.reviewedAt) || 0,
+      reviewNote: typeof item.reviewNote === 'string' ? item.reviewNote : ''
+    };
+  });
 }
 
 export function buildAutoSubmitRecord({ active, questions, existingCount = 0, now = Date.now() }) {
@@ -62,6 +143,9 @@ export function buildAutoSubmitRecord({ active, questions, existingCount = 0, no
   const startedAt = Number(active?.startedAt) || now;
   const endsAt = Number(active?.endsAt) || now;
   const submittedAt = Math.max(startedAt, Math.min(now, endsAt));
+  const leaveScreenCount = normalizeLeaveScreenCount(active?.leaveScreenCount);
+  const violationEvents = normalizeViolationEvents(active?.violationEvents);
+  const reviewStatus = leaveScreenCount > 0 ? 'pending' : 'clean';
   const result = { ...grading, submittedAt, autoSubmitted: true };
   return {
     attemptId: active.attemptId || 'legacy',
@@ -73,6 +157,10 @@ export function buildAutoSubmitRecord({ active, questions, existingCount = 0, no
     status: 'submitted',
     autoSubmitted: true,
     name: active.name || 'Người học',
+    leaveScreenCount,
+    violationEvents,
+    flaggedForCheating: leaveScreenCount > 0,
+    reviewStatus,
     result
   };
 }
@@ -81,7 +169,8 @@ export function aggregateExamLeaderboard({ attemptsByUid = {}, legacyByUid = {},
   const uids = new Set([...Object.keys(attemptsByUid || {}), ...Object.keys(legacyByUid || {})]);
   const ranking = [];
   for (const uid of uids) {
-    const attempts = collectUserAttempts(attemptsByUid?.[uid], legacyByUid?.[uid]);
+    const allAttempts = collectUserAttempts(attemptsByUid?.[uid], legacyByUid?.[uid]);
+    const attempts = allAttempts.filter(isAttemptLeaderboardEligible);
     if (!attempts.length) continue;
     const elapsedOf = (item) => {
       const raw = Math.max(0, (Number(item.submittedAt) || 0) - (Number(item.startedAt) || 0));
@@ -108,7 +197,9 @@ export function aggregateExamLeaderboard({ attemptsByUid = {}, legacyByUid = {},
       submittedAt: Number(best.submittedAt) || 0,
       elapsedMs: elapsedOf(best),
       attemptCount: attempts.length,
-      bestAttemptNumber: best.attemptNumber
+      bestAttemptNumber: best.attemptNumber,
+      bestAttemptId: best.attemptId,
+      flaggedApproved: normalizeLeaveScreenCount(best.leaveScreenCount) > 0 && resolveAttemptReviewStatus(best) === 'approved'
     });
   }
   ranking.sort(

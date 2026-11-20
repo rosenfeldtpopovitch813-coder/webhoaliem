@@ -4,7 +4,7 @@ import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
 import { startRouter, ROUTES, resolveRoute, loadRouteView, navigate } from './core/router.js';
 import { initializeTheme, THEMES, changeTheme } from './core/theme.js';
-import { firebaseReady, databaseReady, signInGoogle, signOutUser, detectInAppBrowser, describeAuthError } from './core/firebase.js';
+import { auth, firebaseReady, databaseReady, signInGoogle, signOutUser, detectInAppBrowser, describeAuthError } from './core/firebase.js';
 import { startAuth } from './core/auth.js';
 import { element, button } from './core/dom.js';
 import { icon } from './core/icons.js';
@@ -196,8 +196,31 @@ async function runFirebaseDiagnostics() {
   dialog.addEventListener('keydown', event => { if (event.key === 'Escape') overlay.remove(); });
   root.append(overlay); dialog.focus();
   try {
-    const response = await fetch('/api/diagnostics/firebase', { cache: 'no-store' });
-    const data = await response.json();
+    const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
+    if (!token) {
+      summary.textContent = 'Cần đăng nhập Google để chạy chẩn đoán Firebase.';
+      summary.classList.remove('is-ok');
+      results.append(element('p', 'firebase-diagnostic-hint', 'API chẩn đoán chỉ cho phép tài khoản đã đăng nhập (và quản trị viên khi đã cấu hình ADMIN_EMAILS).'));
+      return;
+    }
+    const response = await fetch('/api/diagnostics/firebase', {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      summary.textContent = data.error || 'Phiên đăng nhập không hợp lệ. Hãy đăng nhập lại.';
+      return;
+    }
+    if (response.status === 403) {
+      summary.textContent = data.error || 'Chỉ quản trị viên mới có quyền chạy chẩn đoán hệ thống.';
+      results.append(element('p', 'firebase-diagnostic-hint', 'Quản trị viên có thể thêm email của mình vào biến môi trường ADMIN_EMAILS trên Vercel.'));
+      return;
+    }
+    if (response.status === 429) {
+      summary.textContent = data.error || 'Bạn gọi chẩn đoán quá nhiều lần. Vui lòng thử lại sau.';
+      return;
+    }
     summary.textContent = data.ok ? 'Kết nối Realtime Database đã được xác minh.' : `Chẩn đoán chưa đạt. HTTP ${response.status}.`;
     summary.classList.toggle('is-ok', Boolean(data.ok));
     if (data.checks) {

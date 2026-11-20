@@ -14,7 +14,7 @@
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === true)",
         "profile": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "newData.hasChildren(['displayName', 'updatedAt']) && newData.childrenCount() <= 4",
+          ".validate": "newData.hasChildren(['displayName', 'updatedAt'])",
           "displayName": {
             ".validate": "newData.isString() && newData.val().length <= 80"
           },
@@ -60,8 +60,16 @@
       ".read": false,
       ".write": false
     },
+    "arena_decks": {
+      ".read": false,
+      ".write": false
+    },
     "leaderboards": {
-      ".read": true,
+      ".read": false,
+      ".write": false
+    },
+    "leaderboard_public": {
+      ".read": false,
       ".write": false
     },
     "roles": {
@@ -77,6 +85,26 @@
       ".write": false
     },
     "exam_sessions": {
+      ".read": false,
+      ".write": false
+    },
+    "exam_attempts": {
+      ".read": false,
+      ".write": false
+    },
+    "exam_active_attempts": {
+      ".read": false,
+      ".write": false
+    },
+    "exam_user_slots": {
+      ".read": false,
+      ".write": false
+    },
+    "user_exam_ids": {
+      ".read": false,
+      ".write": false
+    },
+    "active_exam_locks": {
       ".read": false,
       ".write": false
     },

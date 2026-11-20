@@ -1,27 +1,81 @@
 import { adminDatabase, firebaseAdminConfiguration } from '../../lib/firebase-admin.js';
+import { identity, isAdminUser, hasConfiguredAdminAllowlist, fail } from '../../lib/exam-server.js';
 
-const requests = new Map();
+const ipRequests = new Map();
+const DIAG_WINDOW_MS = 10 * 60_000;
+const DIAG_MAX_PER_WINDOW = 6;
+
 function send(res, status, payload) { return res.status(status).json(payload); }
-function allow(ip) {
-  const now = Date.now(); const prev = requests.get(ip);
+function allowIp(ip) {
+  const now = Date.now(); const prev = ipRequests.get(ip);
   const next = !prev || now - prev.start >= 60000 ? { start: now, count: 1 } : { ...prev, count: prev.count + 1 };
-  requests.set(ip, next);
-  if (requests.size > 1000) for (const [key, item] of requests) if (now - item.start > 120000) requests.delete(key);
+  ipRequests.set(ip, next);
+  if (ipRequests.size > 1000) for (const [key, item] of ipRequests) if (now - item.start > 120000) ipRequests.delete(key);
   return next.count <= 15;
 }
+
+async function consumeDiagnosticQuota(uid) {
+  const ref = adminDatabase().ref(`server_rate_limits/${uid}/diagnostics`);
+  const now = Date.now();
+  let blocked = false;
+  const tx = await ref.transaction((current) => {
+    const cur = current && typeof current === 'object' ? current : {};
+    const start = Number(cur.windowStart) || 0;
+    const count = Number(cur.windowCount) || 0;
+    if (now - start >= DIAG_WINDOW_MS) {
+      return { windowStart: now, windowCount: 1 };
+    }
+    if (count >= DIAG_MAX_PER_WINDOW) {
+      blocked = true;
+      return;
+    }
+    return { windowStart: start, windowCount: count + 1 };
+  }, undefined, false);
+  if (!tx.committed && blocked) {
+    throw Object.assign(Error('Bạn đã gọi chẩn đoán quá nhiều lần. Vui lòng thử lại sau 10 phút.'), { status: 429, code: 'DIAGNOSTICS_RATE_LIMITED' });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return send(res, 405, { error: 'METHOD_NOT_ALLOWED' }); }
   const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim().slice(0, 80);
-  if (!allow(ip)) return send(res, 429, { error: 'Chẩn đoán được gọi quá nhiều lần. Hãy thử lại sau.' });
+  if (!allowIp(ip)) return send(res, 429, { error: 'Chẩn đoán được gọi quá nhiều lần. Hãy thử lại sau.' });
+
+  let user;
+  try {
+    user = await identity(req);
+  } catch (error) {
+    return fail(res, error);
+  }
+
+  const isProd = process.env.VERCEL_ENV === 'production';
+  const adminAllowed = isAdminUser(user);
+  const allowlistConfigured = hasConfiguredAdminAllowlist();
+  if (allowlistConfigured && !adminAllowed) {
+    return send(res, 403, { error: 'Chỉ quản trị viên mới có quyền chạy chẩn đoán hệ thống.', code: 'ADMIN_REQUIRED' });
+  }
 
   const configuration = firebaseAdminConfiguration();
+  const redactSensitive = isProd && !adminAllowed;
   const checks = {
-    databaseUrl: { ok: configuration.databaseURLPresent && configuration.databaseURLValid, host: configuration.databaseHost },
-    adminCredentials: { ok: configuration.serviceAccountJsonPresent ? configuration.serviceAccountJsonValid === true : configuration.individualCredentialParts.every(Boolean), source: configuration.backendCredentialSource },
-    projectIds: { ok: configuration.projectIdsMatch !== false && configuration.explicitProjectMatchesServiceAccount !== false, webConfigured: configuration.webProjectConfigured, backendConfigured: configuration.backendProjectConfigured, match: configuration.projectIdsMatch, explicitMatchesServiceAccount: configuration.explicitProjectMatchesServiceAccount }
+    databaseUrl: {
+      ok: configuration.databaseURLPresent && configuration.databaseURLValid,
+      ...(redactSensitive ? { host: configuration.databaseURLValid ? 'configured' : null } : { host: configuration.databaseHost })
+    },
+    adminCredentials: {
+      ok: configuration.serviceAccountJsonPresent ? configuration.serviceAccountJsonValid === true : configuration.individualCredentialParts.every(Boolean),
+      ...(redactSensitive ? {} : { source: configuration.backendCredentialSource })
+    },
+    projectIds: {
+      ok: configuration.projectIdsMatch !== false && configuration.explicitProjectMatchesServiceAccount !== false,
+      webConfigured: configuration.webProjectConfigured,
+      backendConfigured: configuration.backendProjectConfigured,
+      match: configuration.projectIdsMatch,
+      explicitMatchesServiceAccount: configuration.explicitProjectMatchesServiceAccount
+    }
   };
   let overall = true;
   if (!checks.databaseUrl.ok) { overall = false; checks.databaseConnection = { ok: false, code: configuration.databaseURLPresent ? 'FIREBASE_DATABASE_URL_INVALID' : 'FIREBASE_DATABASE_URL_MISSING', message: configuration.databaseURLPresent ? 'FIREBASE_DATABASE_URL không phải URL HTTP(S) hợp lệ.' : 'Thiếu FIREBASE_DATABASE_URL trong Environment Variables của Vercel.' }; }
@@ -32,19 +86,21 @@ export default async function handler(req, res) {
 
   if (checks.databaseUrl.ok && checks.adminCredentials.ok && checks.projectIds.ok) {
     try {
-      // Probe a harmless, ordinary RTDB path. The .info namespace belongs to client SDK
-      // server-info listeners and is rejected as a normal path by the Admin SDK.
-      // This path is read-only; we never create or return student data.
+      await consumeDiagnosticQuota(user.uid);
+    } catch (error) {
+      if (error?.status === 429) return fail(res, error);
+    }
+    try {
       const database = adminDatabase();
       let timeoutId;
-      const result = await Promise.race([
+      await Promise.race([
         database.ref('__htvvm_diagnostics_probe__').get(),
         new Promise((_, reject) => { timeoutId = setTimeout(() => reject(Object.assign(Error('Database probe timeout'), { code: 'FIREBASE_DATABASE_TIMEOUT' })), 8000); })
       ]).finally(() => clearTimeout(timeoutId));
       checks.databaseConnection = { ok: true, code: 'OK', message: 'Truy vấn kiểm tra tới Realtime Database hoàn tất thành công.' };
     } catch (error) {
       overall = false;
-      checks.databaseConnection = { ok: false, code: error?.code || 'FIREBASE_DATABASE_CONNECT_FAILED', message: error?.message || 'Không thể kết nối Realtime Database.' };
+      checks.databaseConnection = { ok: false, code: error?.code || 'FIREBASE_DATABASE_CONNECT_FAILED', message: redactSensitive ? 'Không thể kết nối Realtime Database.' : (error?.message || 'Không thể kết nối Realtime Database.') };
     }
   }
   checks.frontend = {

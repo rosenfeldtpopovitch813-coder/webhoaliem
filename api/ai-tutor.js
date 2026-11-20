@@ -39,9 +39,14 @@ export default async function handler(req, res) {
       const lock = lockSnap.val();
       const now = Date.now();
       if (lock?.examId && Number(lock.endsAt) > now) {
-        const sessionSnap = await db().ref(`exam_sessions/${lock.examId}/${user.uid}`).get();
-        const session = sessionSnap.val();
-        if (session?.status === 'active' && Number(session.endsAt) > now) {
+        const [activeSnap, legacySnap] = await Promise.all([
+          db().ref(`exam_active_attempts/${lock.examId}/${user.uid}`).get(),
+          db().ref(`exam_sessions/${lock.examId}/${user.uid}`).get()
+        ]);
+        const activeSession = activeSnap.val();
+        const legacySession = legacySnap.val();
+        const isActive = (s) => s?.status === 'active' && Number(s.endsAt) > now;
+        if (isActive(activeSession) || isActive(legacySession)) {
           return res.status(403).json({ error: 'Trợ lý AI bị khóa hoàn toàn trong thời gian bạn đang làm bài thi!' });
         }
       }

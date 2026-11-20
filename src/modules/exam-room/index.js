@@ -345,7 +345,12 @@ async function showList(host) {
       badgeRow.append(
         E('span', `exam-card-pill ${x.hasSourceDocument ? 'is-doc' : ''}`, x.hasSourceDocument ? 'Đề Drive / PDF' : 'Đề trực tiếp')
       );
-      if (x.isOwner) badgeRow.append(E('span', 'exam-card-pill is-owner', 'Của bạn'));
+      if (x.isOwner) {
+        badgeRow.append(E('span', 'exam-card-pill is-owner', 'Của bạn'));
+        if (x.pendingModerationCount > 0) {
+          badgeRow.append(E('span', 'exam-card-pill is-pending-mod', `${x.pendingModerationCount} bài chờ duyệt`));
+        }
+      }
       if (x.isLocked) {
         badgeRow.append(E('span', 'exam-card-pill is-locked', x.manualLocked ? 'Đang khóa' : 'Đã hết hạn nộp'));
       } else if (x.deadlineAt) {
@@ -392,6 +397,13 @@ async function showList(host) {
 
       let lockDrawer = null;
       if (x.isOwner) {
+        const subCountLabel = x.pendingModerationCount > 0
+          ? ` Bài làm (${x.submissionsCount || 0}) · ${x.pendingModerationCount} duyệt`
+          : ` Bài làm (${x.submissionsCount || 0})`;
+        const submissionsBtn = button('', `exam-card-tool-btn${x.pendingModerationCount > 0 ? ' is-alert' : ''}`, () => showSubmissions(host, x.id, x.title));
+        submissionsBtn.title = 'Xem bài làm học sinh và duyệt vi phạm thoát màn hình';
+        submissionsBtn.append(icon('exam-paper', 14), document.createTextNode(subCountLabel));
+
         const lockToggleBtn = button('', 'exam-card-tool-btn', () => {
           if (lockDrawer) lockDrawer.hidden = !lockDrawer.hidden;
         });
@@ -404,7 +416,7 @@ async function showList(host) {
         });
         delBtn.title = 'Xóa đề thi này khỏi cơ sở dữ liệu';
         delBtn.append(icon('trash', 14), document.createTextNode(' Xóa'));
-        cardActions.append(lockToggleBtn, delBtn);
+        cardActions.append(submissionsBtn, lockToggleBtn, delBtn);
 
         lockDrawer = E('div', 'exam-owner-lock-drawer');
         lockDrawer.hidden = true;
@@ -505,7 +517,10 @@ async function begin(host, id, options = {}) {
         maxAttempts: data.maxAttempts || data.exam?.maxAttempts || 0,
         examTitle: data.exam?.title || '',
         sourceUrl: data.exam?.sourceUrl || null,
-        questions: data.questions || []
+        questions: data.questions || [],
+        leaveScreenCount: Number(data.leaveScreenCount) || 0,
+        violationEvents: Array.isArray(data.violationEvents) ? data.violationEvents : [],
+        reviewStatus: data.reviewStatus || 'clean'
       });
     }
     let cachedIdToken = await auth.currentUser?.getIdToken?.().catch(() => '') || '';
@@ -523,7 +538,10 @@ async function begin(host, id, options = {}) {
     const flaggedQuestions = new Set((Array.isArray(initialFlags) ? initialFlags : []).filter(qid => validQuestionIds.has(qid)));
 
     const p = E('section', 'exam-runner-shell');
-    let busy = false, draftSaveBusy = false, draftSaveQueued = false, omrFilter = 'all', leaveScreenCount = 0;
+    let busy = false, draftSaveBusy = false, draftSaveQueued = false, omrFilter = 'all';
+    let leaveScreenCount = Math.max(0, Number(data.session.leaveScreenCount) || 0);
+    let enteredFullscreenOnce = Boolean(document.fullscreenElement);
+    let lastViolationSentAt = 0;
     const initialPerf = performance.now(), serverAt = data.serverNow;
     const remaining = () => Math.max(0, data.session.endsAt - (serverAt + performance.now() - initialPerf));
 
@@ -535,17 +553,21 @@ async function begin(host, id, options = {}) {
       timer.textContent = automatic ? 'Hết giờ · đang nộp…' : 'Đang nộp bài…';
       status.textContent = 'Đang gửi phiếu trả lời lên máy chủ…';
       try {
-        const output = await api('submit', { id, answers: cloneAnswers(answers) });
+        const output = await api('submit', { id, answers: cloneAnswers(answers), leaveScreenCount });
         removeLocalDraft(uid, id);
         exitExamLockdown();
         showResult(host, output.result, id, {
           autoSubmitted: Boolean(output.autoSubmitted || output.result?.autoSubmitted || automatic),
+          attemptId: output.attemptId || output.result?.attemptId || '',
           attemptNumber: output.attemptNumber || output.result?.attemptNumber,
           canRetake: typeof output.canRetake === 'boolean' ? output.canRetake : (current?.exam ? !current.exam.isLocked : true),
           maxAttempts: output.maxAttempts ?? current?.exam?.maxAttempts ?? 0,
           examTitle: output.examTitle || current?.exam?.title || '',
           sourceUrl: output.sourceUrl ?? current?.exam?.sourceUrl ?? null,
-          questions: output.questions || questions
+          questions: output.questions || questions,
+          leaveScreenCount: Number(output.leaveScreenCount ?? leaveScreenCount) || 0,
+          violationEvents: Array.isArray(output.violationEvents) ? output.violationEvents : [],
+          reviewStatus: output.reviewStatus || (leaveScreenCount > 0 ? 'pending' : 'clean')
         });
       } catch (err) {
         busy = false;
@@ -574,8 +596,8 @@ async function begin(host, id, options = {}) {
       E('span', 'exam-run-meta', `Mã phòng ${id} · Lượt #${data.attemptNumber || 1} · ${data.exam.durationMinutes} phút · Hết giờ tự động nộp`)
     );
     const controlsGroup = E('div', 'exam-run-controls');
-    const violationBadge = E('span', 'exam-violation-pill', '');
-    violationBadge.hidden = true;
+    const violationBadge = E('span', 'exam-violation-pill', leaveScreenCount > 0 ? `Rời màn hình: ${leaveScreenCount}` : '');
+    violationBadge.hidden = leaveScreenCount === 0;
     const answeredLabel = E('span', 'exam-run-progress-pill', `0/${questions.length} câu`);
     const timer = E('div', 'exam-run-clock', '--:--');
     const fullscreenButton = button('', 'exam-session-tool', async () => {
@@ -975,45 +997,165 @@ async function begin(host, id, options = {}) {
       } catch { /* ignore */ }
     };
 
+    const recordViolation = (reason) => {
+      if (busy || data.session.status !== 'active') return;
+      const nowMs = Date.now();
+      if (nowMs - lastViolationSentAt < 1500) return;
+      lastViolationSentAt = nowMs;
+      leaveScreenCount += 1;
+      violationBadge.hidden = false;
+      violationBadge.textContent = `Rời màn hình: ${leaveScreenCount}`;
+      status.textContent = `Phát hiện thoát màn hình (${leaveScreenCount} lần) — bài làm sẽ cần người tạo đề duyệt trước khi lên bảng xếp hạng.`;
+      status.classList.add('exam-save-warning');
+      const sendWithToken = (token) => {
+        if (!token) return;
+        fetch('/api/exam', {
+          method: 'POST',
+          keepalive: true,
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'report-violation', id, reason })
+        })
+          .then((res) => (res.ok ? res.json().catch(() => null) : null))
+          .then((payload) => {
+            if (payload && Number(payload.leaveScreenCount) > leaveScreenCount) {
+              leaveScreenCount = Number(payload.leaveScreenCount);
+              violationBadge.hidden = false;
+              violationBadge.textContent = `Rời màn hình: ${leaveScreenCount}`;
+            }
+          })
+          .catch(() => {});
+      };
+      if (cachedIdToken) sendWithToken(cachedIdToken);
+      else auth?.currentUser?.getIdToken?.().then((tk) => { cachedIdToken = tk || ''; sendWithToken(cachedIdToken); }).catch(() => {});
+    };
+
     splitLayout.append(leftPane, rightPane);
     p.append(topBar, splitLayout);
     host.replaceChildren(p);
     enterExamLockdown(id, {
       onLeaveScreen: (hidden) => {
         if (hidden) {
-          leaveScreenCount += 1;
-          violationBadge.hidden = false;
-          violationBadge.textContent = `Rời màn hình: ${leaveScreenCount}`;
-          status.textContent = `Rời màn hình (${leaveScreenCount} lần) — đồng hồ vẫn đang chạy liên tục.`;
-          status.classList.add('exam-save-warning');
+          recordViolation('tab-hidden');
         } else {
           update();
         }
       },
       onPageHide: flushKeepaliveDraft,
-      onFullscreenChange: (isFs) => setFsButtonLabel(isFs)
+      onFullscreenChange: (isFs) => {
+        setFsButtonLabel(isFs);
+        if (isFs) {
+          enteredFullscreenOnce = true;
+        } else if (enteredFullscreenOnce && !busy) {
+          recordViolation('fullscreen-exit');
+        }
+      }
     });
     updateProgress();
     if (localIsNewer || answeredCount(answers) > 0 || flaggedQuestions.size > 0) queueDraftSave();
     ticker = setInterval(update, 250); autosaveTicker = setInterval(syncDraft, 8000); update();
   } catch (e) { exitExamLockdown(); showError(host, e); }
 }
+
+function formatViolationSummary(events = []) {
+  if (!Array.isArray(events) || !events.length) return '';
+  return events
+    .slice(0, 8)
+    .map((ev) => {
+      const timeStr = ev?.at ? new Date(ev.at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+      const labelStr = ev?.reason === 'fullscreen-exit' ? 'Thoát toàn màn hình' : 'Chuyển tab/ẩn màn hình';
+      return timeStr ? `${timeStr} (${labelStr})` : labelStr;
+    })
+    .join(' · ');
+}
+
+function renderModerationLabel(reviewStatus, leaveCount) {
+  if (leaveCount <= 0) return { text: 'Hợp lệ', cls: 'is-clean' };
+  if (reviewStatus === 'approved') return { text: `Đã duyệt lên BXH (${leaveCount} lần rời màn hình)`, cls: 'is-approved' };
+  if (reviewStatus === 'rejected') return { text: `Từ chối lên BXH (${leaveCount} lần rời màn hình)`, cls: 'is-rejected' };
+  return { text: `Chờ duyệt · Thoát màn hình ${leaveCount} lần`, cls: 'is-pending' };
+}
+
 function showResult(host, result, id, meta = {}) {
   clearTimer();
   exitExamLockdown();
-  const titleText = meta.examTitle ? `Xem lại bài thi · ${meta.examTitle}` : 'Kết quả & Xem lại bài thi';
+  const isOwnerViewing = Boolean(meta.isOwnerViewing);
+  const actorLabel = isOwnerViewing ? 'Học sinh' : 'Bạn';
+  const titleText = isOwnerViewing
+    ? `Bài làm của ${meta.studentName || 'Học sinh'} · ${meta.examTitle || id}`
+    : (meta.examTitle ? `Xem lại bài thi · ${meta.examTitle}` : 'Kết quả & Xem lại bài thi');
   const p = panel(titleText); if (!result) return showError(host, Error('Chưa nhận được kết quả.'));
+
+  const leaveCount = Math.max(0, Number(meta.leaveScreenCount) || 0);
+  const reviewStatus = leaveCount > 0 ? (meta.reviewStatus || 'pending') : 'clean';
+  const attemptId = meta.attemptId || result.attemptId || '';
+
   if (meta.autoSubmitted || result.autoSubmitted) {
-    p.append(E('p', 'exam-auto-banner', `Hết giờ làm bài — hệ thống đã tự động nộp bài làm gần nhất của bạn${meta.attemptNumber ? ` (Lượt #${meta.attemptNumber})` : ''}.`));
+    p.append(E('p', 'exam-auto-banner', `Hết giờ làm bài — hệ thống đã tự động nộp bài làm gần nhất${isOwnerViewing ? ` của ${meta.studentName || 'học sinh'}` : ' của bạn'}${meta.attemptNumber ? ` (Lượt #${meta.attemptNumber})` : ''}.`));
   } else if (meta.attemptNumber) {
-    p.append(E('p', 'exam-message', `Lượt làm thứ #${meta.attemptNumber}${meta.maxAttempts > 0 ? ` / ${meta.maxAttempts} lượt tối đa` : ' (không giới hạn lượt)'}${meta.submittedAt ? ` · Nộp lúc ${formatDateTime(meta.submittedAt)}` : ''}.`));
+    p.append(E('p', 'exam-message', `${isOwnerViewing ? `Thí sinh: ${meta.studentName || 'Học sinh'} · ` : ''}Lượt làm thứ #${meta.attemptNumber}${meta.maxAttempts > 0 ? ` / ${meta.maxAttempts} lượt tối đa` : ' (không giới hạn lượt)'}${meta.submittedAt ? ` · Nộp lúc ${formatDateTime(meta.submittedAt)}` : ''}.`));
+  }
+
+  if (leaveCount > 0 || reviewStatus === 'pending' || reviewStatus === 'rejected') {
+    const modBanner = E('div', `exam-mod-banner is-${reviewStatus}`);
+    const modHeadline = reviewStatus === 'approved'
+      ? `Người tạo đề đã duyệt hợp lệ lượt làm này (${leaveCount} lần thoát màn hình) — đã tính vào bảng xếp hạng.`
+      : reviewStatus === 'rejected'
+        ? `Lượt làm này không được duyệt lên bảng xếp hạng do dấu hiệu thoát màn hình (${leaveCount} lần).`
+        : `Phát hiện ${leaveCount} lần thoát màn hình trong lúc làm bài — kết quả đang chờ người tạo đề duyệt trước khi hiển thị trên bảng xếp hạng.`;
+    modBanner.append(E('strong', '', modHeadline));
+    const timeline = formatViolationSummary(meta.violationEvents);
+    if (timeline) {
+      modBanner.append(E('small', 'exam-mod-timeline', `Mốc ghi nhận: ${timeline}`));
+    }
+    if (meta.reviewNote) {
+      modBanner.append(E('small', 'exam-mod-timeline', `Ghi chú giáo viên: ${meta.reviewNote}`));
+    }
+    if ((isOwnerViewing || meta.isOwner) && meta.studentUid && attemptId) {
+      const modControls = E('div', 'exam-mod-controls');
+      const noteInput = field('text', 'Ghi chú duyệt (tùy chọn, VD: Lỗi mạng/nhấn nhầm ESC)…', meta.reviewNote || '');
+      noteInput.className = 'exam-input exam-mod-note-input';
+      const modMsg = E('small', 'exam-drive-tip', '');
+      const doModerate = async (decision) => {
+        approveBtn.disabled = true;
+        rejectBtn.disabled = true;
+        modMsg.textContent = 'Đang lưu quyết định duyệt…';
+        try {
+          await api('moderate-attempt', {
+            id,
+            studentUid: meta.studentUid,
+            attemptId,
+            decision,
+            note: noteInput.value.trim()
+          });
+          reviewHistory(host, id, attemptId, meta.studentUid);
+        } catch (err) {
+          modMsg.textContent = err.message || String(err);
+          approveBtn.disabled = false;
+          rejectBtn.disabled = false;
+        }
+      };
+      const approveBtn = button(reviewStatus === 'approved' ? '✓ Đã duyệt lên BXH' : '✓ Duyệt lên BXH', 'exam-mod-btn is-approve', () => doModerate('approved'));
+      const rejectBtn = button(reviewStatus === 'rejected' ? '✕ Đã từ chối BXH' : '✕ Từ chối lên BXH', 'exam-mod-btn is-reject', () => doModerate('rejected'));
+      if (reviewStatus === 'approved') approveBtn.disabled = true;
+      if (reviewStatus === 'rejected') rejectBtn.disabled = true;
+      modControls.append(noteInput, approveBtn, rejectBtn);
+      modBanner.append(modControls, modMsg);
+    }
+    p.append(modBanner);
   }
 
   if (Array.isArray(meta.attempts) && meta.attempts.length > 1) {
     const attemptBar = E('div', 'exam-review-attempts');
     for (const a of meta.attempts) {
-      const active = (a.attemptNumber || 1) === (meta.attemptNumber || 1);
-      const ab = button(`Lượt #${a.attemptNumber || 1} · ${Number(a.score || 0).toFixed(2)}đ`, active ? 'exam-tab selected' : 'exam-tab', () => reviewHistory(host, id, a.attemptId));
+      const active = (a.attemptId && attemptId ? a.attemptId === attemptId : (a.attemptNumber || 1) === (meta.attemptNumber || 1));
+      const flagSuffix = a.leaveScreenCount > 0
+        ? (a.reviewStatus === 'approved' ? ' · ✓ Đã duyệt' : a.reviewStatus === 'rejected' ? ' · ✕ Từ chối' : ' · ⚠ Chờ duyệt')
+        : '';
+      const ab = button(
+        `Lượt #${a.attemptNumber || 1} · ${Number(a.score || 0).toFixed(2)}đ${flagSuffix}`,
+        active ? 'exam-tab selected' : 'exam-tab',
+        () => reviewHistory(host, id, a.attemptId, isOwnerViewing ? meta.studentUid : '')
+      );
       attemptBar.append(ab);
     }
     p.append(attemptBar);
@@ -1021,40 +1163,55 @@ function showResult(host, result, id, meta = {}) {
 
   p.append(E('div', 'exam-score', `${Number(result.score || 0).toFixed(2)} / 10`), E('p', 'exam-message', `Đúng trọn vẹn ${result.fullyCorrect || 0}/${result.total || 0} câu${meta.elapsedMs ? ` · Thời gian làm ${formatDurationClock(meta.elapsedMs)}` : ''}`));
 
-  if (meta.sourceUrl) {
-    const docWrap = E('div', 'exam-review-doc-wrap');
-    const docBox = E('div', 'exam-pdf-pages');
-    docBox.hidden = true;
-    let docLoaded = false;
-    const toggleDocBtn = button('Mở lại đề thi gốc (PDF / Drive)', 'exam-tab', () => {
-      docBox.hidden = !docBox.hidden;
-      toggleDocBtn.textContent = docBox.hidden ? 'Mở lại đề thi gốc (PDF / Drive)' : 'Ẩn đề thi gốc';
-      toggleDocBtn.prepend(icon('exam-paper', 14));
-      if (!docBox.hidden && !docLoaded) {
-        docLoaded = true;
-        docBox.replaceChildren(E('p', 'exam-message', 'Đang tải đề thi gốc…'));
-        renderExamPdf(id, docBox).catch(() => {
-          const frame = document.createElement('iframe');
-          frame.className = 'exam-source-document';
-          frame.src = meta.sourceUrl;
-          frame.title = 'Tài liệu đề thi gốc';
-    docBox.replaceChildren(frame);
-        });
-      }
-    });
-    toggleDocBtn.prepend(icon('exam-paper', 14));
-    docWrap.append(toggleDocBtn, docBox);
-    p.append(docWrap);
+  const details = Array.isArray(result.details) ? result.details : [];
+  const isBlankDetail = (d) => d.response == null || d.response === '' || (Array.isArray(d.response) && d.response.every(v => v == null));
+  const counts = {
+    all: details.length,
+    wrong: details.filter(d => !d.correct).length,
+    correct: details.filter(d => d.correct).length,
+    blank: details.filter(isBlankDetail).length
+  };
+
+  const filterBar = E('div', 'exam-review-filter-bar');
+  const filterBtns = new Map();
+  const cardRefs = [];
+  const emptyFilterMsg = E('p', 'exam-message', 'Không có câu nào thuộc nhóm lọc này.');
+  emptyFilterMsg.hidden = true;
+
+  const applyReviewFilter = (key) => {
+    for (const [k, btn] of filterBtns.entries()) btn.classList.toggle('is-active', k === key);
+    let shown = 0;
+    for (const entry of cardRefs) {
+      const visible = key === 'all'
+        || (key === 'wrong' && !entry.detail.correct)
+        || (key === 'correct' && entry.detail.correct)
+        || (key === 'blank' && entry.blank);
+      entry.node.hidden = !visible;
+      if (visible) shown += 1;
+    }
+    emptyFilterMsg.hidden = shown > 0;
+  };
+
+  for (const [key, text] of [
+    ['all', `Tất cả (${counts.all})`],
+    ['wrong', `Sai / thiếu điểm (${counts.wrong})`],
+    ['correct', `Đúng (${counts.correct})`],
+    ['blank', `Bỏ trống (${counts.blank})`]
+  ]) {
+    const fb = button(text, `exam-omr-filter-pill ${key === 'all' ? 'is-active' : ''}`, () => applyReviewFilter(key));
+    filterBtns.set(key, fb);
+    filterBar.append(fb);
   }
 
   const qById = new Map((Array.isArray(meta.questions) ? meta.questions : []).map((q) => [q.id, q]));
   const reviewList = E('div', 'exam-review-list');
-  for (const d of result.details || []) {
+  for (const d of details) {
     const qObj = qById.get(d.id);
     const earnedPts = d.earned / 100;
     const maxPts = d.possible / 100;
+    const blank = isBlankDetail(d);
     const stateCls = d.correct ? 'is-correct' : (d.earned > 0 ? 'is-partial' : 'is-wrong');
-    const stateLabel = d.correct ? '✓ Đúng' : (d.earned > 0 ? '△ Đúng một phần' : (d.response == null || d.response === '' ? '— Bỏ trống' : '✗ Sai'));
+    const stateLabel = d.correct ? '✓ Đúng' : (d.earned > 0 ? '△ Đúng một phần' : (blank ? '— Bỏ trống' : '✗ Sai'));
 
     const item = E('article', `exam-review-card ${stateCls}`);
     const head = E('div', 'exam-review-card-head');
@@ -1098,7 +1255,7 @@ function showResult(host, result, id, meta = {}) {
         contentSpan.innerHTML = richMathHTML(optText);
         optRow.append(contentSpan);
         if (isCorrect || isUserPick) {
-          optRow.append(E('small', 'exam-review-opt-tag', isCorrect && isUserPick ? 'Bạn chọn · Đáp án đúng' : isCorrect ? 'Đáp án đúng' : 'Bạn chọn'));
+          optRow.append(E('small', 'exam-review-opt-tag', isCorrect && isUserPick ? `${actorLabel} chọn · Đáp án đúng` : isCorrect ? 'Đáp án đúng' : `${actorLabel} chọn`));
         }
         optList.append(optRow);
       });
@@ -1117,34 +1274,204 @@ function showResult(host, result, id, meta = {}) {
         textSpan.innerHTML = richMathHTML(`${letter}) ${stmts[idx] || ''}`);
         const uText = uVal === true ? 'Đúng' : uVal === false ? 'Sai' : 'Trống';
         const kText = kVal === true ? 'Đúng' : 'Sai';
-        tfRow.append(textSpan, E('small', 'exam-review-opt-tag', `Bạn: ${uText} · Đáp án: ${kText}`));
+        tfRow.append(textSpan, E('small', 'exam-review-opt-tag', `${actorLabel}: ${uText} · Đáp án: ${kText}`));
         tfList.append(tfRow);
       });
       item.append(tfList);
     } else {
-      item.append(E('p', 'exam-review-short', `Bạn nhập: ${d.response ? String(d.response) : '(Bỏ trống)'}   ·   Đáp án chuẩn: ${String(d.answer ?? '')}`));
+      item.append(E('p', 'exam-review-short', `${actorLabel} nhập: ${d.response ? String(d.response) : '(Bỏ trống)'}   ·   Đáp án chuẩn: ${String(d.answer ?? '')}`));
     }
+    cardRefs.push({ detail: d, blank, node: item });
     reviewList.append(item);
   }
-  p.append(reviewList);
+
+  if (meta.sourceUrl) {
+    const splitWrap = E('div', 'exam-review-split');
+    const paperCol = E('section', 'exam-review-paper-col');
+    const paperHead = E('div', 'exam-review-paper-head');
+    paperHead.append(E('strong', '', 'ĐỀ THI GỐC (PDF / DRIVE)'));
+    const docBox = E('div', 'exam-pdf-pages');
+    const toggleDocBtn = button('Thu gọn đề', 'exam-tab', () => {
+      const nextHidden = !docBox.hidden;
+      docBox.hidden = nextHidden;
+      splitWrap.classList.toggle('is-doc-collapsed', nextHidden);
+      toggleDocBtn.textContent = nextHidden ? 'Mở lại đề gốc' : 'Thu gọn đề';
+    });
+    paperHead.append(toggleDocBtn);
+    docBox.append(E('p', 'exam-message', 'Đang tải đề thi gốc…'));
+    paperCol.append(paperHead, docBox);
+
+    const answersCol = E('section', 'exam-review-answers-col');
+    answersCol.append(filterBar, emptyFilterMsg, reviewList);
+    splitWrap.append(paperCol, answersCol);
+    p.append(splitWrap);
+
+    renderExamPdf(id, docBox).catch(() => {
+      const frame = document.createElement('iframe');
+      frame.className = 'exam-source-document';
+      frame.src = meta.sourceUrl;
+      frame.title = 'Tài liệu đề thi gốc';
+      docBox.replaceChildren(frame);
+    });
+  } else {
+    p.append(filterBar, emptyFilterMsg, reviewList);
+  }
 
   const resultActions = E('div', 'exam-tabs');
-  if (meta.canRetake !== false) {
-    resultActions.append(button('Làm lại lượt mới →', 'primary-btn', () => begin(host, id, { retake: true })));
-  }
-  resultActions.append(
-    button('Bảng xếp hạng đề này', meta.canRetake === false ? 'primary-btn' : 'exam-tab', () => showLeaderboard(host, id, meta.examTitle || current?.exam?.title || '')),
-    button('Lịch sử & thống kê', 'exam-tab', () => showHistory(host)),
-    button('Quay lại kho đề', 'exam-tab', () => showList(host))
-  );
-  if (current?.exam?.id === id && current?.exam?.isOwner) {
-    const delBtn = button('', 'exam-card-delete-btn', () => deleteExamById(host, id, current.exam.title, () => showList(host)));
-    delBtn.append(icon('trash', 14), document.createTextNode(' Xóa đề này khỏi kho'));
-    resultActions.append(delBtn);
+  if (isOwnerViewing) {
+    resultActions.append(
+      button('← Danh sách bài nộp & Duyệt', 'primary-btn', () => showSubmissions(host, id, meta.examTitle || '')),
+      button('Bảng xếp hạng đề này', 'exam-tab', () => showLeaderboard(host, id, meta.examTitle || '')),
+      button('Quay lại kho đề', 'exam-tab', () => showList(host))
+    );
+  } else {
+    if (meta.canRetake !== false) {
+      resultActions.append(button('Làm lại lượt mới →', 'primary-btn', () => begin(host, id, { retake: true })));
+    }
+    resultActions.append(
+      button('Bảng xếp hạng đề này', meta.canRetake === false ? 'primary-btn' : 'exam-tab', () => showLeaderboard(host, id, meta.examTitle || current?.exam?.title || '')),
+      button('Lịch sử & thống kê', 'exam-tab', () => showHistory(host)),
+      button('Quay lại kho đề', 'exam-tab', () => showList(host))
+    );
+    if (current?.exam?.id === id && current?.exam?.isOwner) {
+      const delBtn = button('', 'exam-card-delete-btn', () => deleteExamById(host, id, current.exam.title, () => showList(host)));
+      delBtn.append(icon('trash', 14), document.createTextNode(' Xóa đề này khỏi kho'));
+      resultActions.append(delBtn);
+    }
   }
   p.append(resultActions);
   host.replaceChildren(p);
 }
+
+async function showSubmissions(host, id, titleHint = '') {
+  const p = panel(titleHint ? `Bài làm học sinh & Duyệt vi phạm · ${titleHint}` : `Bài làm học sinh · ${id}`);
+  p.append(E('p', 'exam-message', 'Đang tải danh sách bài nộp của học sinh…'));
+  host.replaceChildren(p);
+  if (!requireLogin(host)) return;
+  try {
+    const data = await api('submissions', { id }, 'GET');
+    const heading = p.querySelector('.exam-heading');
+    if (heading && data.examTitle) heading.textContent = `Bài làm học sinh & Duyệt vi phạm · ${data.examTitle}`;
+    const loadingMsg = p.querySelector('.exam-message');
+    if (loadingMsg) loadingMsg.remove();
+
+    const stats = E('div', 'exam-history-stats');
+    for (const [name, value, note] of [
+      ['Tổng bài nộp', data.totalSubmissions ?? 0, `${data.uniqueStudents ?? 0} học sinh đã nộp`],
+      ['Chờ duyệt vi phạm', data.pendingCount ?? 0, 'Thoát màn hình chưa lên BXH'],
+      ['Đã duyệt / Từ chối', `${data.approvedCount ?? 0} / ${data.rejectedCount ?? 0}`, 'Các bài vi phạm đã xử lý']
+    ]) {
+      const card = E('article', 'exam-history-stat');
+      card.append(E('small', '', name), E('strong', '', String(value)), E('span', '', note));
+      stats.append(card);
+    }
+    p.append(stats);
+
+    const submissions = Array.isArray(data.submissions) ? data.submissions : [];
+    const defaultFilter = (data.pendingCount || 0) > 0 ? 'pending' : 'all';
+    const filterBar = E('div', 'exam-review-filter-bar');
+    const filterBtns = new Map();
+    const listWrap = E('div', 'exam-submissions-list');
+
+    const renderFiltered = (filterKey) => {
+      for (const [k, btn] of filterBtns.entries()) btn.classList.toggle('is-active', k === filterKey);
+      listWrap.replaceChildren();
+      const filtered = submissions.filter((sub) => {
+        if (filterKey === 'pending') return sub.reviewStatus === 'pending';
+        if (filterKey === 'approved') return sub.reviewStatus === 'approved' && sub.leaveScreenCount > 0;
+        if (filterKey === 'rejected') return sub.reviewStatus === 'rejected';
+        return true;
+      });
+      if (!filtered.length) {
+        listWrap.append(E('p', 'exam-message', filterKey === 'pending'
+          ? 'Không có bài làm nào đang chờ duyệt vi phạm.'
+          : 'Chưa có bài nộp nào trong mục này.'));
+        return;
+      }
+      for (const sub of filtered) {
+        const card = E('article', `exam-submission-card is-${sub.reviewStatus}`);
+        const top = E('div', 'exam-submission-top');
+        const info = E('div', 'exam-submission-info');
+        const badgeInfo = renderModerationLabel(sub.reviewStatus, sub.leaveScreenCount);
+        info.append(
+          E('strong', '', `${sub.name} · Lượt #${sub.attemptNumber || 1}`),
+          E('small', '', `Đúng ${sub.fullyCorrect}/${sub.total} câu · Thời gian ${formatDurationClock(sub.elapsedMs)} · Nộp ${formatDateTime(sub.submittedAt)}${sub.autoSubmitted ? ' · Tự nộp' : ''}`)
+        );
+        const rightMeta = E('div', 'exam-submission-right');
+        rightMeta.append(
+          E('strong', 'exam-lb-score', `${Number(sub.score || 0).toFixed(2)}đ`),
+          E('span', `exam-mod-pill ${badgeInfo.cls}`, badgeInfo.text)
+        );
+        top.append(info, rightMeta);
+        card.append(top);
+
+        if (sub.leaveScreenCount > 0 && Array.isArray(sub.violationEvents) && sub.violationEvents.length) {
+          card.append(E('small', 'exam-mod-timeline', `Mốc thoát màn hình: ${formatViolationSummary(sub.violationEvents)}`));
+        }
+        if (sub.reviewNote) {
+          card.append(E('small', 'exam-mod-timeline', `Ghi chú: ${sub.reviewNote}`));
+        }
+
+        const actionRow = E('div', 'exam-tabs');
+        actionRow.append(
+          button('Xem bài làm kèm đề', 'exam-tab', () => reviewHistory(host, id, sub.attemptId, sub.uid))
+        );
+        if (sub.leaveScreenCount > 0) {
+          if (sub.reviewStatus !== 'approved') {
+            const approveBtn = button('✓ Duyệt lên BXH', 'exam-mod-btn is-approve', async () => {
+              approveBtn.disabled = true;
+              try {
+                await api('moderate-attempt', { id, studentUid: sub.uid, attemptId: sub.attemptId, decision: 'approved' });
+                showSubmissions(host, id, data.examTitle);
+              } catch (err) {
+                alert(err.message || String(err));
+                approveBtn.disabled = false;
+              }
+            });
+            actionRow.append(approveBtn);
+          }
+          if (sub.reviewStatus !== 'rejected') {
+            const rejectBtn = button('✕ Từ chối BXH', 'exam-mod-btn is-reject', async () => {
+              rejectBtn.disabled = true;
+              try {
+                await api('moderate-attempt', { id, studentUid: sub.uid, attemptId: sub.attemptId, decision: 'rejected' });
+                showSubmissions(host, id, data.examTitle);
+              } catch (err) {
+                alert(err.message || String(err));
+                rejectBtn.disabled = false;
+              }
+            });
+            actionRow.append(rejectBtn);
+          }
+        }
+        card.append(actionRow);
+        listWrap.append(card);
+      }
+    };
+
+    for (const [key, labelText] of [
+      ['pending', `Chờ duyệt vi phạm (${data.pendingCount || 0})`],
+      ['all', `Tất cả bài nộp (${submissions.length})`],
+      ['approved', `Đã duyệt (${data.approvedCount || 0})`],
+      ['rejected', `Từ chối BXH (${data.rejectedCount || 0})`]
+    ]) {
+      const btn = button(labelText, `exam-omr-filter-pill ${key === defaultFilter ? 'is-active' : ''}`, () => renderFiltered(key));
+      filterBtns.set(key, btn);
+      filterBar.append(btn);
+    }
+
+    p.append(filterBar, listWrap);
+    renderFiltered(defaultFilter);
+
+    const nav = E('div', 'exam-tabs');
+    nav.append(
+      button('Bảng xếp hạng đề này', 'exam-tab', () => showLeaderboard(host, id, data.examTitle || titleHint)),
+      button('Quay lại kho đề', 'exam-tab', () => showList(host))
+    );
+    p.append(nav);
+  } catch (e) { showError(host, e); }
+}
+
 async function showLeaderboard(host, id, titleHint = '') {
   const p = panel(titleHint ? `Bảng xếp hạng · ${titleHint}` : `Bảng xếp hạng · ${id}`);
   p.append(E('p', 'exam-message', 'Đang tổng hợp điểm cao nhất của từng thí sinh…'));
@@ -1156,12 +1483,17 @@ async function showLeaderboard(host, id, titleHint = '') {
     const note = p.querySelector('.exam-message');
     if (note) {
       note.textContent = data.isLocked
-        ? 'Phòng thi hiện đang khóa. Bảng xếp theo điểm cao nhất của mỗi thí sinh (ưu tiên thời gian làm ngắn hơn khi bằng điểm).'
-        : 'Bảng xếp theo điểm cao nhất của mỗi thí sinh (cùng điểm xếp thời gian làm bài nhanh hơn lên trước).';
+        ? 'Phòng thi hiện đang khóa. Chỉ các lượt thi hợp lệ (hoặc đã được người tạo đề duyệt) mới hiển thị trên bảng xếp hạng.'
+        : 'Bảng xếp theo điểm cao nhất trong các lượt hợp lệ (cùng điểm xếp thời gian làm bài nhanh hơn lên trước).';
+    }
+    if (data.myModerationStatus?.hasPending) {
+      p.append(E('p', 'exam-mod-banner is-pending', `Bài làm của bạn có ghi nhận thoát màn hình (${data.myModerationStatus.latestFlaggedLeaveCount} lần) và đang chờ người tạo đề duyệt trước khi hiển thị trên bảng xếp hạng.`));
+    } else if (data.myModerationStatus?.reviewStatus === 'rejected') {
+      p.append(E('p', 'exam-mod-banner is-rejected', `Lượt làm có dấu hiệu thoát màn hình của bạn không được người tạo đề duyệt lên bảng xếp hạng.`));
     }
     const ranking = data.ranking || [];
     if (!ranking.length) {
-      p.append(E('p', 'exam-message', 'Chưa có bài nộp nào được ghi nhận cho đề thi này.'));
+      p.append(E('p', 'exam-message', 'Chưa có bài nộp hợp lệ nào hiển thị trên bảng xếp hạng cho đề thi này.'));
     } else {
       const listEl = E('div', 'exam-leaderboard-list');
       const meUid = scopeUid();
@@ -1172,18 +1504,27 @@ async function showLeaderboard(host, id, titleHint = '') {
         const nameBlock = E('div', 'exam-lb-name');
         nameBlock.append(
           E('strong', '', `${r.name}${r.uid === meUid ? ' (Bạn)' : ''}`),
-          E('small', '', `${r.attemptCount || 1} lượt · Thời gian tốt nhất ${formatDurationClock(r.elapsedMs)}`)
+          E('small', '', `${r.attemptCount || 1} lượt hợp lệ · Thời gian tốt nhất ${formatDurationClock(r.elapsedMs)}${r.flaggedApproved ? ' · Đã duyệt' : ''}`)
         );
         left.append(rankBadge, nameBlock);
         const right = E('div', 'exam-lb-right');
         right.append(E('strong', 'exam-lb-score', `${Number(r.score || 0).toFixed(2)}đ`));
+        if (data.isOwner) {
+          right.append(button('Xem bài', 'exam-lb-review-btn', () => reviewHistory(host, id, r.bestAttemptId || '', r.uid)));
+        } else if (r.uid === meUid) {
+          right.append(button('Xem bài', 'exam-lb-review-btn', () => reviewHistory(host, id, r.bestAttemptId || '')));
+        }
         row.append(left, right);
         listEl.append(row);
       }
       p.append(listEl);
     }
     const nav = E('div', 'exam-tabs');
-    if (!data.isLocked) nav.append(button('Vào làm bài →', 'primary-btn', () => begin(host, id)));
+    if (data.isOwner) {
+      const modLabel = data.pendingCount > 0 ? `Bài làm & Duyệt (${data.pendingCount} chờ duyệt)` : 'Xem tất cả bài làm';
+      nav.append(button(modLabel, data.pendingCount > 0 ? 'primary-btn' : 'exam-tab', () => showSubmissions(host, id, data.examTitle || titleHint)));
+    }
+    if (!data.isLocked) nav.append(button('Vào làm bài →', data.isOwner && data.pendingCount > 0 ? 'exam-tab' : 'primary-btn', () => begin(host, id)));
     nav.append(
       button('Quay lại kho đề', 'exam-tab', () => showList(host)),
       button('Lịch sử cá nhân', 'exam-tab', () => showHistory(host))
@@ -1230,11 +1571,19 @@ async function showHistory(host) {
     p.append(button('Quay lại kho đề', 'exam-tab', () => showList(host)));
   } catch (e) { showError(host, e); }
 }
-async function reviewHistory(host, id, attemptId = '') {
-  host.replaceChildren(E('p', 'exam-message', 'Đang tải chi tiết kết quả…'));
+async function reviewHistory(host, id, attemptId = '', studentUid = '') {
+  host.replaceChildren(E('p', 'exam-message', 'Đang tải chi tiết bài làm…'));
   try {
-    const data = await api('review', { id, ...(attemptId ? { attemptId } : {}) }, 'GET');
+    const query = { id };
+    if (attemptId) query.attemptId = attemptId;
+    if (studentUid) query.studentUid = studentUid;
+    const data = await api('review', query, 'GET');
     showResult(host, data.result, id, {
+      attemptId: data.attemptId || attemptId,
+      studentUid: data.studentUid || studentUid || scopeUid(),
+      studentName: data.studentName || '',
+      isOwner: Boolean(data.isOwner),
+      isOwnerViewing: Boolean(data.isOwnerViewing),
       autoSubmitted: data.autoSubmitted,
       attemptNumber: data.attemptNumber,
       submittedAt: data.submittedAt,
@@ -1243,6 +1592,11 @@ async function reviewHistory(host, id, attemptId = '') {
       maxAttempts: data.maxAttempts || 0,
       canRetake: data.canRetake !== false,
       sourceUrl: data.sourceUrl || null,
+      leaveScreenCount: Number(data.leaveScreenCount) || 0,
+      violationEvents: Array.isArray(data.violationEvents) ? data.violationEvents : [],
+      reviewStatus: data.reviewStatus || 'clean',
+      reviewedAt: Number(data.reviewedAt) || 0,
+      reviewNote: data.reviewNote || '',
       questions: data.questions || [],
       attempts: data.attempts || []
     });
