@@ -70,9 +70,34 @@ export function sanitizeFontFamily(raw) {
   return ALLOWED_FONT_MAP.get(first) || '';
 }
 
+const WORD_NAMED_COLORS = Object.freeze({
+  red: '#dc2626',
+  blue: '#2563eb',
+  green: '#15803d',
+  navy: '#1e3a8a',
+  purple: '#7c3aed',
+  orange: '#ea580c',
+  maroon: '#7f1d1d',
+  teal: '#0f766e',
+  brown: '#78350f',
+  gray: '#475569',
+  grey: '#475569',
+  yellow: '#facc15',
+  pink: '#db2777',
+  cyan: '#0891b2',
+  magenta: '#c026d3',
+  olive: '#4d7c0f',
+  lime: '#65a30d',
+  aqua: '#06b6d4',
+  fuchsia: '#c026d3',
+  black: '#000000'
+});
+
 export function sanitizeColor(raw) {
   const val = String(raw || '').trim();
   if (!val) return '';
+  const named = WORD_NAMED_COLORS[val.toLowerCase()];
+  if (named) return named;
   const hex3 = /^#([0-9a-f]{3})$/i.exec(val);
   if (hex3) {
     const [r, g, b] = hex3[1].split('');
@@ -139,8 +164,8 @@ const TAG_ALIAS = {
 
 function sanitizeSpanStyle(attrText) {
   const styles = [];
-  const styleMatch = /style\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrText);
-  const rawStyle = styleMatch ? (styleMatch[1] ?? styleMatch[2] ?? '') : '';
+  const styleMatch = /style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/i.exec(attrText);
+  const rawStyle = styleMatch ? (styleMatch[1] ?? styleMatch[2] ?? styleMatch[3] ?? '') : '';
   if (rawStyle) {
     for (const part of rawStyle.split(';')) {
       const colon = part.indexOf(':');
@@ -185,9 +210,10 @@ export function sanitizeInlineRichHtml(raw) {
   let src = String(raw ?? '');
   if (!src) return '';
 
-  // Remove dangerous element trees completely (including inner text)
+  // Remove dangerous element trees and Word non-XML conditional markers (<![if ...]> / <![endif]>)
   src = src
     .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!\[(?:if\b[^\]]*|endif)\]>/gi, '')
     .replace(/<\s*(script|style|iframe|object|embed|svg|math|noscript|template)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
     .replace(/<\s*(script|style|iframe|object|embed|svg|img|link|meta|base)\b[^>]*\/?>/gi, '');
 
@@ -255,52 +281,176 @@ export function sanitizeInlineRichHtml(raw) {
   return out.join('').replace(/(?:<br>)+$/i, '');
 }
 
+function extractWordOmmlToText(ommlHtml) {
+  let s = String(ommlHtml ?? '');
+  if (!/<m:oMath/i.test(s)) return '';
+  const innerTag = (tag, body) => {
+    const m = new RegExp(`<m:${tag}\\b[^>]*>([\\s\\S]*?)<\\/m:${tag}>`, 'i').exec(body);
+    return m ? m[1] : '';
+  };
+  let hasLatex = false;
+  for (let pass = 0; pass < 8; pass++) {
+    const next = s
+      .replace(/<m:f\b[^>]*>((?:(?!<m:f\b)[\s\S])*?)<\/m:f>/gi, (_m, body) => {
+        hasLatex = true;
+        return `\\frac{${innerTag('num', body).trim()}}{${innerTag('den', body).trim()}}`;
+      })
+      .replace(/<m:sSup\b[^>]*>((?:(?!<m:sSup\b)[\s\S])*?)<\/m:sSup>/gi, (_m, body) => {
+        hasLatex = true;
+        return `${innerTag('e', body).trim()}^{${innerTag('sup', body).trim()}}`;
+      })
+      .replace(/<m:sSub\b[^>]*>((?:(?!<m:sSub\b)[\s\S])*?)<\/m:sSub>/gi, (_m, body) => {
+        hasLatex = true;
+        return `${innerTag('e', body).trim()}_{${innerTag('sub', body).trim()}}`;
+      })
+      .replace(/<m:rad\b[^>]*>((?:(?!<m:rad\b)[\s\S])*?)<\/m:rad>/gi, (_m, body) => {
+        hasLatex = true;
+        const deg = innerTag('deg', body).trim();
+        const base = innerTag('e', body).trim();
+        return deg ? `\\sqrt[${deg}]{${base}}` : `\\sqrt{${base}}`;
+      });
+    if (next === s) break;
+    s = next;
+  }
+  const plain = s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  if (!plain) return '';
+  return hasLatex ? `$${plain}$` : plain;
+}
+
+function normalizeWordSpans(html) {
+  const stack = [];
+  const tokenRe = /<(\/?)span\b([^<>]*)>/gi;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = tokenRe.exec(html)) !== null) {
+    out += html.slice(last, m.index);
+    const isClose = m[1] === '/';
+    const attrs = m[2] || '';
+    if (!isClose) {
+      const styleMatch = /style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/i.exec(attrs);
+      const rawStyle = styleMatch ? (styleMatch[1] ?? styleMatch[2] ?? styleMatch[3] ?? '') : '';
+      const closeTags = [];
+      const safeStyle = sanitizeSpanStyle(attrs);
+      if (safeStyle) {
+        out += `<span style="${safeStyle.replace(/"/g, '&quot;')}">`;
+        closeTags.push('span');
+      }
+      if (/\bfont-weight\s*:\s*(?:bold|bolder|[6-9]\d{2})\b/i.test(rawStyle)) {
+        out += '<strong>';
+        closeTags.push('strong');
+      }
+      if (/\bfont-style\s*:\s*(?:italic|oblique)\b/i.test(rawStyle)) {
+        out += '<em>';
+        closeTags.push('em');
+      }
+      if (/\btext-decoration(?:-line)?\s*:[^;"']*\bunderline\b/i.test(rawStyle)) {
+        out += '<u>';
+        closeTags.push('u');
+      }
+      if (/\btext-decoration(?:-line)?\s*:[^;"']*\bline-through\b/i.test(rawStyle)) {
+        out += '<s>';
+        closeTags.push('s');
+      }
+      const vAlign = /\bvertical-align\s*:\s*(super|sub)\b/i.exec(rawStyle);
+      const raiseMatch = /\bmso-text-raise\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:pt|%)/i.exec(rawStyle);
+      if (vAlign) {
+        const tag = vAlign[1].toLowerCase() === 'super' ? 'sup' : 'sub';
+        out += `<${tag}>`;
+        closeTags.push(tag);
+      } else if (raiseMatch && Number(raiseMatch[1]) !== 0) {
+        const tag = Number(raiseMatch[1]) > 0 ? 'sup' : 'sub';
+        out += `<${tag}>`;
+        closeTags.push(tag);
+      }
+      stack.push(closeTags);
+    } else if (stack.length > 0) {
+      const closeTags = stack.pop();
+      for (let i = closeTags.length - 1; i >= 0; i--) {
+        out += `</${closeTags[i]}>`;
+      }
+    }
+    last = m.index + m[0].length;
+  }
+  out += html.slice(last);
+  while (stack.length > 0) {
+    const closeTags = stack.pop();
+    for (let i = closeTags.length - 1; i >= 0; i--) {
+      out += `</${closeTags[i]}>`;
+    }
+  }
+  return out;
+}
+
 /**
  * Clean clipboard HTML pasted from Microsoft Word / Google Docs / Web while preserving
- * bold, italic, underline, superscript, subscript, line breaks, and `<=>` arrows.
+ * bold, italic, underline, colors, sizes, superscript, subscript, tables, lists, and `<=>` arrows.
  */
 export function cleanWordClipboardHtml(rawHtml, fallbackPlain = '') {
   const html = String(rawHtml ?? '').trim();
-  if (!html) {
-    return sanitizeInlineRichHtml(
-      String(fallbackPlain ?? '')
-        .replace(/\r\n/g, '\n')
-        .replace(/\n/g, '<br>')
-    );
+  const plainFallback = sanitizeInlineRichHtml(
+    String(fallbackPlain ?? '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\n/g, '<br>')
+  );
+  if (!html) return plainFallback;
+
+  // Slice between CF_HTML StartFragment/EndFragment markers if present so <head>/<style> noise is skipped
+  let fragment = html;
+  const startFrag = /<!--\s*StartFragment\s*-->/i.exec(fragment);
+  const endFrag = /<!--\s*EndFragment\s*-->/i.exec(fragment);
+  if (startFrag && endFrag && endFrag.index > startFrag.index) {
+    fragment = fragment.slice(startFrag.index + startFrag[0].length, endFrag.index);
   }
 
-  let cleaned = html
-    // Remove MSO conditional comments and normal comments
+  // Convert Word OMML equation blocks before stripping comments; drop redundant sibling !msEquation image fallback
+  fragment = fragment.replace(
+    /<!--\[if\s+gte\s+msEquation[^\]]*\]>([\s\S]*?)<!\[endif\]-->\s*(?:<!\[if\s+!msEquation\]>[\s\S]*?<!\[endif\]>)?/gi,
+    (_m, eqBody) => extractWordOmmlToText(eqBody)
+  );
+  fragment = fragment.replace(/<m:oMathPara\b[^>]*>([\s\S]*?)<\/m:oMathPara>|<m:oMath\b[^>]*>[\s\S]*?<\/m:oMath>/gi, (m) =>
+    extractWordOmmlToText(m)
+  );
+
+  let cleaned = fragment
+    // Remove standard HTML comments and MSO conditional delimiters while keeping inner text (e.g. list numbers inside !supportLists)
     .replace(/<!--[\s\S]*?-->/g, '')
-    // Remove <xml>, <style>, <script>, <meta>, <link>, <head>, <title> blocks
+    .replace(/<!\[(?:if\b[^\]]*|endif)\]>/gi, '')
+    // Remove <xml>, <style>, <script>, <head>, <title>, <noscript> blocks
     .replace(/<\s*(xml|style|script|head|title|noscript)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    // Remove Word namespace empty tags like <o:p></o:p>, <w:...>, <v:...>
+    // Remove Word namespace tags like <o:p></o:p>, <w:...>, <v:...>
     .replace(/<\/?\s*(?:o|w|v|m|st1):[a-zA-Z0-9_-]+(?:\s[^<>]*)?\/?>/gi, '')
-    // Convert Word superscript/subscript spans into <sup> / <sub>
-    .replace(
-      /<\s*span\b([^<>]*?\bvertical-align\s*:\s*(super|sub)\b[^<>]*)>([\s\S]*?)<\s*\/\s*span\s*>/gi,
-      (_m, _attrs, align, inner) => (String(align).toLowerCase() === 'super' ? `<sup>${inner}</sup>` : `<sub>${inner}</sub>`)
-    )
-    .replace(
-      /<\s*span\b([^<>]*?\bmso-text-raise\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:pt|%)[^<>]*)>([\s\S]*?)<\s*\/\s*span\s*>/gi,
-      (_m, _attrs, raiseVal, inner) => (Number(raiseVal) > 0 ? `<sup>${inner}</sup>` : Number(raiseVal) < 0 ? `<sub>${inner}</sub>` : inner)
-    )
-    // Convert table cells to tab separation and rows/list items to line breaks
-    .replace(/<\s*\/\s*(?:td|th)\s*>/gi, '\t')
-    .replace(/<\s*\/\s*(?:tr|li|p|div|h[1-6])\s*>/gi, '@@WORD_BR@@')
+    // Collapse soft line-wraps (\r\n) that Word inserts inside paragraphs/attributes
+    .replace(/\r?\n+/g, ' ');
+
+  // Preserve HTML list bullets/numbers for <ul>/<ol> before stripping list tags
+  cleaned = cleaned.replace(/<(ol|ul)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_m, listType, listBody) => {
+    let idx = 0;
+    return String(listBody).replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_lm, itemBody) => {
+      idx += 1;
+      const plainHead = itemBody.replace(/<[^>]+>/g, '').trim();
+      const prefix =
+        listType.toLowerCase() === 'ol'
+          ? (/^\d+[.)]\s/.test(plainHead) ? '' : `${idx}. `)
+          : (/^[•\-\*–]\s/.test(plainHead) ? '' : '• ');
+      return `${prefix}${itemBody}@@WORD_BR@@`;
+    });
+  });
+
+  // Convert nested Word spans (bold/italic/underline/strike/sub/sup + safe colors/sizes)
+  cleaned = normalizeWordSpans(cleaned)
+    // Preserve readable spacing between table cells while breaking on rows/blocks
+    .replace(/<\s*\/\s*(?:td|th)\s*>(?!\s*<\s*\/\s*tr\b)/gi, ' \u00A0 ')
+    .replace(/<\s*\/\s*(?:td|th|tr|li|p|div|h[1-6])\s*>/gi, '@@WORD_BR@@')
     .replace(/<\s*br\s*\/?>/gi, '@@WORD_BR@@')
-    // Collapse soft line-wraps (\r\n) that Word inserts inside paragraphs into single spaces
-    .replace(/\r?\n+/g, ' ')
     .replace(/[ \t]*@@WORD_BR@@[ \t]*/g, '<br>')
     .replace(/(?:<br>\s*){3,}/gi, '<br><br>');
 
-  // Strip Mso* classes and mso-* inline style properties before passing to sanitizeInlineRichHtml
-  cleaned = cleaned
-    .replace(/\sclass\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/mso-[a-zA-Z0-9-]+\s*:[^;"]+;?/gi, '');
-
-  return sanitizeInlineRichHtml(cleaned)
-    .replace(/^(?:<br>\s*)+|(?:<br>\s*)+$/gi, '');
+  const result = sanitizeInlineRichHtml(cleaned).replace(/^(?:<br>\s*)+|(?:<br>\s*)+$/gi, '');
+  if (!stripRichHtmlToPlainText(result).trim() && stripRichHtmlToPlainText(plainFallback).trim()) {
+    return plainFallback;
+  }
+  return result;
 }
 
 /**

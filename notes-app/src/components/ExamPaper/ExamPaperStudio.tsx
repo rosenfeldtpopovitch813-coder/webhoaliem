@@ -57,6 +57,7 @@ import {
 } from '../../types/board';
 import {
   autoNormalizeFormulaText,
+  cleanWordClipboardHtml,
   convertFormulaDisplayMode,
   parseSmartExamClipboardText
 } from '../../../../shared/exam-rich-text.js';
@@ -140,6 +141,7 @@ export default function ExamPaperStudio({
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
   const isFirstRenderRef = useRef(true);
   const imageUploadRef = useRef<HTMLInputElement | null>(null);
+  const windowPasteHandlerRef = useRef<(e: ClipboardEvent) => void>(() => {});
 
   const refreshSelectionToolbar = () => {
     const active = getActiveRichSelection();
@@ -153,8 +155,13 @@ export default function ExamPaperStudio({
 
   useEffect(() => {
     const onSelChange = () => refreshSelectionToolbar();
+    const onWindowPaste = (e: ClipboardEvent) => windowPasteHandlerRef.current(e);
     document.addEventListener('selectionchange', onSelChange);
-    return () => document.removeEventListener('selectionchange', onSelChange);
+    window.addEventListener('paste', onWindowPaste);
+    return () => {
+      document.removeEventListener('selectionchange', onSelChange);
+      window.removeEventListener('paste', onWindowPaste);
+    };
   }, []);
 
   // Freehand canvas state when source.kind === 'board'
@@ -779,6 +786,147 @@ export default function ExamPaperStudio({
     });
     setFocusedBlockId(created.id);
     focusRichBlock(created.id, 'start');
+  };
+
+  const pasteHtmlIntoPaperBlocks = (
+    anchorBlockId: string | null,
+    cleanHtml: string,
+    beforeHtml = '',
+    afterHtml = ''
+  ): boolean => {
+    const parts = cleanHtml
+      .split(/<\s*br\s*\/?>/i)
+      .map(s => s.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, ''))
+      .filter(s => stripRichHtmlToPlainText(s).trim().length > 0);
+    if (parts.length === 0) return false;
+
+    const preIds = parts.map(() => crypto.randomUUID());
+    const hasBefore = Boolean(stripRichHtmlToPlainText(beforeHtml).trim());
+    const hasAfter = Boolean(stripRichHtmlToPlainText(afterHtml).trim());
+
+    setPaper(prev => {
+      const next = [...prev.blocks];
+      const anchorIdx = anchorBlockId ? next.findIndex(b => b.id === anchorBlockId) : -1;
+      const anchor = anchorIdx >= 0 ? next[anchorIdx] : null;
+      const inheritedStyle: Partial<ExamBlockStyle> =
+        anchor && anchor.type === 'paragraph'
+          ? {
+              align: anchor.align,
+              fontFamily: anchor.fontFamily,
+              fontSizePt: anchor.fontSizePt,
+              textColor: anchor.textColor
+            }
+          : {};
+      const makePara = (text: string, idx: number): ExamBlock => ({
+        id: preIds[idx],
+        type: 'paragraph',
+        variant: 'text',
+        text,
+        ...inheritedStyle
+      });
+
+      if (anchor && anchor.type === 'paragraph') {
+        if (!hasBefore && !hasAfter) {
+          next.splice(anchorIdx, 1, ...parts.map(makePara));
+        } else {
+          const firstText = hasBefore ? `${beforeHtml}${parts[0]}` : parts[0];
+          const rest = parts.slice(1).map((part, i, arr) =>
+            makePara(hasAfter && i === arr.length - 1 ? `${part}${afterHtml}` : part, i + 1)
+          );
+          next[anchorIdx] = { ...anchor, text: firstText };
+          if (rest.length > 0) next.splice(anchorIdx + 1, 0, ...rest);
+        }
+      } else {
+        const focusIdx = focusedBlockId ? next.findIndex(b => b.id === focusedBlockId) : -1;
+        const inserted = parts.map(makePara);
+        if (focusIdx >= 0) {
+          const fb = next[focusIdx];
+          if (fb.type === 'paragraph' && !stripRichHtmlToPlainText(fb.text).trim()) {
+            next.splice(focusIdx, 1, ...inserted);
+          } else {
+            next.splice(focusIdx + 1, 0, ...inserted);
+          }
+        } else {
+          const last = next[next.length - 1];
+          if (last && last.type === 'paragraph' && !stripRichHtmlToPlainText(last.text).trim()) {
+            next.splice(next.length - 1, 1, ...inserted);
+          } else {
+            next.push(...inserted);
+          }
+        }
+      }
+      return { ...prev, blocks: next, updatedAt: Date.now() };
+    });
+
+    const targetFocusId = anchorBlockId && (hasBefore || hasAfter) && parts.length === 1 ? anchorBlockId : preIds[preIds.length - 1];
+    if (targetFocusId) {
+      setFocusedBlockId(targetFocusId);
+      focusRichBlock(targetFocusId, 'end');
+    }
+    setSaveBadge(`✓ Đã dán nguyên văn ${parts.length} đoạn từ Word`);
+    return true;
+  };
+
+  const handlePasteImageFile = (file: File, targetBlockId?: string | null) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl) return;
+      const srcId = crypto.randomUUID();
+      const figId = crypto.randomUUID();
+      const newSource: ExamFigureSource = {
+        id: srcId,
+        kind: 'upload',
+        label: file.name || 'Hình dán từ Word',
+        src: dataUrl,
+        aspectRatio: 1.4,
+        pointFontSize: 16,
+        strokeColor: '#1e293b'
+      };
+      const newFig: ExamInlineFigure = { id: figId, sourceId: srcId, src: dataUrl, width: 280, align: 'center' };
+      setPaper(prev => {
+        const destId = targetBlockId || (focusedBlockId && !focusedBlockId.startsWith('hdr:') ? focusedBlockId : null);
+        const idx = destId ? prev.blocks.findIndex(b => b.id === destId) : -1;
+        const nextBlocks = [...prev.blocks];
+        if (idx >= 0 && (nextBlocks[idx].type === 'paragraph' || nextBlocks[idx].type === 'question')) {
+          const b = nextBlocks[idx] as Extract<ExamBlock, { type: 'paragraph' | 'question' }>;
+          nextBlocks[idx] = { ...b, figures: [...(b.figures || []), newFig] };
+        } else {
+          nextBlocks.push({ id: crypto.randomUUID(), type: 'paragraph', variant: 'text', text: '', figures: [newFig] });
+        }
+        return { ...prev, figureSources: [...prev.figureSources, newSource], blocks: nextBlocks, updatedAt: Date.now() };
+      });
+      setSaveBadge('✓ Đã dán hình ảnh vào đề');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  windowPasteHandlerRef.current = (e: ClipboardEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (
+      smartComposerOpen ||
+      formulaModal ||
+      headerFooterOpen ||
+      target?.closest('input, textarea, select, [contenteditable="true"]')
+    ) {
+      return;
+    }
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const html = cd.getData('text/html');
+    const plain = cd.getData('text/plain');
+    const safe = cleanWordClipboardHtml(html, plain);
+    const hasText = Boolean(stripRichHtmlToPlainText(safe).trim());
+    if (hasText) {
+      e.preventDefault();
+      pasteHtmlIntoPaperBlocks(null, safe);
+      return;
+    }
+    const imgFile = Array.from(cd.files || []).find(f => f.type.startsWith('image/'));
+    if (imgFile) {
+      e.preventDefault();
+      handlePasteImageFile(imgFile, focusedBlockId);
+    }
   };
 
   const handleBackspaceEmptyParagraph = (blockId: string) => {
@@ -2403,7 +2551,7 @@ export default function ExamPaperStudio({
                       }))
                     }
                     onNormalizeBlockFormula={() => normalizeBlockFormulasById('hdr:prologue')}
-                    onMultiQuestionPaste={raw => applySmartParsedText(raw, null)}
+                    onPasteImageFile={f => handlePasteImageFile(f, null)}
                     onSelectionChange={refreshSelectionToolbar}
                   />
                 </div>
@@ -2662,7 +2810,10 @@ export default function ExamPaperStudio({
                         }}
                         onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
                         onSlashTrigger={(info) => setSlashMenu(info)}
-                        onMultiQuestionPaste={(raw) => applySmartParsedText(raw, block.id)}
+                        onPasteMultiParagraph={(pastedHtml, beforeHtml, afterHtml) =>
+                          pasteHtmlIntoPaperBlocks(block.id, pastedHtml, beforeHtml, afterHtml)
+                        }
+                        onPasteImageFile={f => handlePasteImageFile(f, block.id)}
                         onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
                         onSelectionChange={refreshSelectionToolbar}
                       />
@@ -2879,7 +3030,8 @@ export default function ExamPaperStudio({
                               const lastLine = lines[lines.length - 1] || '';
                               const autoOpts = parseInlineOptionsLine(lastLine);
                               if (autoOpts && lines.length > 1) {
-                                const promptWithoutOpts = lines.slice(0, -1).join('<br>');
+                                const htmlLines = cleaned.split(/<\s*br\s*\/?>/i);
+                                const promptWithoutOpts = htmlLines.length > 1 ? htmlLines.slice(0, -1).join('<br>') : lines.slice(0, -1).join('<br>');
                                 setPaper(p => ({
                                   ...p,
                                   blocks: p.blocks.map(x =>
@@ -2906,7 +3058,7 @@ export default function ExamPaperStudio({
                             }}
                             onNavigateVertical={(dir) => handleNavigateVertical(block.id, dir)}
                             onSlashTrigger={(info) => setSlashMenu(info)}
-                            onMultiQuestionPaste={(raw) => applySmartParsedText(raw, block.id)}
+                            onPasteImageFile={f => handlePasteImageFile(f, block.id)}
                             onNormalizeBlockFormula={() => normalizeBlockFormulasById(block.id)}
                             onSelectionChange={refreshSelectionToolbar}
                           />

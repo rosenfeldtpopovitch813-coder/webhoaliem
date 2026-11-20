@@ -224,11 +224,61 @@ type Props = {
   onTurnIntoVariant?: (variant: ExamParagraphVariant, cleanHtml: string) => void;
   onNavigateVertical?: (dir: -1 | 1) => void;
   onSlashTrigger?: (info: { blockId: string; query: string; rect: DOMRect } | null) => void;
-  onMultiQuestionPaste?: (rawText: string) => boolean;
+  onPasteMultiParagraph?: (pastedHtml: string, beforeHtml: string, afterHtml: string) => void;
+  onPasteImageFile?: (file: File) => void;
   onNormalizeBlockFormula?: () => void;
   onSelectionChange?: () => void;
   onBlurBlock?: () => void;
 };
+
+function extractBeforeAfterHtmlAtSelection(el: HTMLElement): [string, string] {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer)) {
+    const range = sel.getRangeAt(0);
+    const beforeRange = document.createRange();
+    beforeRange.selectNodeContents(el);
+    beforeRange.setEnd(range.startContainer, range.startOffset);
+    const afterRange = document.createRange();
+    afterRange.selectNodeContents(el);
+    afterRange.setStart(range.endContainer, range.endOffset);
+    const bDiv = document.createElement('div');
+    bDiv.appendChild(beforeRange.cloneContents());
+    const aDiv = document.createElement('div');
+    aDiv.appendChild(afterRange.cloneContents());
+    return [sanitizeInlineRichHtml(bDiv.innerHTML), sanitizeInlineRichHtml(aDiv.innerHTML)];
+  }
+  return [sanitizeInlineRichHtml(el.innerHTML), ''];
+}
+
+function insertHtmlAtSelection(el: HTMLElement, html: string) {
+  el.focus();
+  const sel = window.getSelection();
+  if (!sel) {
+    el.innerHTML += html;
+    return;
+  }
+  let range: Range;
+  if (sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer)) {
+    range = sel.getRangeAt(0);
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  range.deleteContents();
+  const frag = range.createContextualFragment(html);
+  const lastNode = frag.lastChild;
+  range.insertNode(frag);
+  if (lastNode) {
+    const nextRange = document.createRange();
+    nextRange.setStartAfter(lastNode);
+    nextRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(nextRange);
+  }
+}
 
 function getCaretCoordinates(fallbackEl: HTMLElement): DOMRect {
   const sel = window.getSelection();
@@ -285,7 +335,8 @@ export default function RichEditableBlock({
   onTurnIntoVariant,
   onNavigateVertical,
   onSlashTrigger,
-  onMultiQuestionPaste,
+  onPasteMultiParagraph,
+  onPasteImageFile,
   onNormalizeBlockFormula,
   onSelectionChange,
   onBlurBlock
@@ -444,19 +495,33 @@ export default function RichEditableBlock({
           e.preventDefault();
           const html = e.clipboardData.getData('text/html');
           const plain = e.clipboardData.getData('text/plain');
-          // Check if pasted content contains multiple exam questions (e.g. from Word)
-          if (onMultiQuestionPaste && plain) {
-            const qMatches = plain.match(/(?:^|\n)\s*(?:Câu|Question)\s*\d+\s*(?:\([^)]+\))?\s*[.:]/gi);
-            const hasSection = /(?:^|\n)\s*PHẦN\s+[IVX0-9]+/i.test(plain);
-            if ((qMatches && qMatches.length >= 2) || (hasSection && qMatches && qMatches.length >= 1)) {
-              if (onMultiQuestionPaste(plain)) {
-                return;
-              }
+          const safe = cleanWordClipboardHtml(html, plain);
+          const hasText = Boolean(stripRichHtmlToPlainText(safe).trim());
+          if (!hasText && onPasteImageFile) {
+            const imgFile = Array.from(e.clipboardData.files || []).find(f => f.type.startsWith('image/'));
+            if (imgFile) {
+              onPasteImageFile(imgFile);
+              return;
             }
           }
-          const safe = cleanWordClipboardHtml(html, plain);
-          document.execCommand('insertHTML', false, safe);
-          emitChangeFromDom();
+          if (!hasText) return;
+          const el = ref.current;
+          if (allowBlockSplit && onPasteMultiParagraph && /<\s*br\s*\/?>/i.test(safe)) {
+            const [beforeHtml, afterHtml] = el
+              ? extractBeforeAfterHtmlAtSelection(el)
+              : [sanitizeInlineRichHtml(value), ''];
+            onPasteMultiParagraph(safe, beforeHtml, afterHtml);
+            onSlashTrigger?.(null);
+            return;
+          }
+          if (el) {
+            insertHtmlAtSelection(el, safe);
+            const cleaned = sanitizeInlineRichHtml(el.innerHTML);
+            lastEmittedRef.current = cleaned;
+            onChange(cleaned);
+          } else {
+            onChange(safe);
+          }
         }}
         onKeyDown={e => {
           if (slashMenuOpen && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
@@ -493,23 +558,8 @@ export default function RichEditableBlock({
 
           if (e.key === 'Enter' && !e.shiftKey && allowBlockSplit && onEnterSplit) {
             e.preventDefault();
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer)) {
-              const range = sel.getRangeAt(0);
-              const beforeRange = document.createRange();
-              beforeRange.selectNodeContents(el);
-              beforeRange.setEnd(range.startContainer, range.startOffset);
-              const afterRange = document.createRange();
-              afterRange.selectNodeContents(el);
-              afterRange.setStart(range.endContainer, range.endOffset);
-              const bDiv = document.createElement('div');
-              bDiv.appendChild(beforeRange.cloneContents());
-              const aDiv = document.createElement('div');
-              aDiv.appendChild(afterRange.cloneContents());
-              onEnterSplit(sanitizeInlineRichHtml(bDiv.innerHTML), sanitizeInlineRichHtml(aDiv.innerHTML));
-            } else {
-              onEnterSplit(sanitizeInlineRichHtml(el.innerHTML), '');
-            }
+            const [beforeHtml, afterHtml] = extractBeforeAfterHtmlAtSelection(el);
+            onEnterSplit(beforeHtml, afterHtml);
             onSlashTrigger?.(null);
             return;
           }
