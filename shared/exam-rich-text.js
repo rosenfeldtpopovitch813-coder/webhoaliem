@@ -255,13 +255,15 @@ export function sanitizeInlineRichHtml(raw) {
   return out.join('').replace(/(?:<br>)+$/i, '');
 }
 
+export function stripFormattedHtmlTags(raw) {
+  return String(raw ?? '')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>]*)?\/?>/g, '');
+}
+
 export function stripRichHtmlToPlainText(raw) {
   const safe = sanitizeInlineRichHtml(raw);
-  return decodeBasicEntities(
-    safe
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/?[^>]+>/g, '')
-  ).trim();
+  return decodeBasicEntities(stripFormattedHtmlTags(safe)).trim();
 }
 
 export function hasRichInlineTags(raw) {
@@ -270,6 +272,201 @@ export function hasRichInlineTags(raw) {
 
 export function hasMathNotation(raw) {
   return /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\ce\{/.test(String(raw || ''));
+}
+
+/**
+ * Convert mhchem-like \ce{...} inner body to pure KaTeX LaTeX without sentinel strings.
+ * Preserves arrow conditions ([$...$] or plain text like [H2SO4 đặc]) and chemical subscripts.
+ */
+export function convertChemicalExprToLatex(ceExpr) {
+  const decoded = decodeBasicEntities(String(ceExpr ?? '')).trim();
+  const arrowRe = /(<=>|->)(?:\[([^\]]*)\])?/g;
+
+  const formatChemBody = (part) => part
+    .replace(/\s+\^(?=\s|$)/g, '\\uparrow ')
+    .replace(/\s+v(?=\s|$)/g, '\\downarrow ')
+    .replace(/([A-Za-z)\]])(\d+)/g, '$1_{$2}');
+
+  const formatCondition = (rawCond) => {
+    const cond = String(rawCond ?? '').trim();
+    if (!cond) return '';
+    const dollar = /^\$([\s\S]*)\$$/.exec(cond);
+    const inner = (dollar ? dollar[1] : cond).trim();
+    if (/[\\_^]/.test(inner)) return inner;
+    return inner.replace(/([A-Za-z0-9()]+)|([^A-Za-z0-9()]+)/g, (_seg, word, other) => {
+      if (other) return `\\text{${other}}`;
+      if (/\d/.test(word) && /[A-Za-z)]/.test(word)) {
+        return `\\mathrm{${word.replace(/([A-Za-z)])(\d+)/g, '$1_{$2}')}}`;
+      }
+      return `\\text{${word}}`;
+    });
+  };
+
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = arrowRe.exec(decoded)) !== null) {
+    out += formatChemBody(decoded.slice(last, m.index));
+    const op = m[1];
+    const condRaw = m[2];
+    if (condRaw !== undefined) {
+      const condTex = formatCondition(condRaw);
+      out += op === '<=>' ? `\\xrightleftharpoons{${condTex}} ` : `\\xrightarrow{${condTex}} `;
+    } else {
+      out += op === '<=>' ? '\\rightleftharpoons ' : '\\rightarrow ';
+    }
+    last = arrowRe.lastIndex;
+  }
+  out += formatChemBody(decoded.slice(last));
+  return `\\mathrm{${out.trim()}}`;
+}
+
+export function expandCeCommands(input) {
+  const src = String(input ?? '');
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const idx = src.indexOf('\\ce{', i);
+    if (idx < 0) {
+      out += src.slice(i);
+      break;
+    }
+    out += src.slice(i, idx);
+    let pos = idx + 4;
+    let depth = 1;
+    while (pos < src.length && depth > 0) {
+      const ch = src[pos];
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      pos++;
+    }
+    if (depth === 0) {
+      out += convertChemicalExprToLatex(src.slice(idx + 4, pos - 1));
+      i = pos;
+    } else {
+      out += src.slice(idx);
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Split exam text into prose segments and math segments (with nested [$...$] inside \ce{...} kept intact).
+ */
+export function splitRichExamSegments(source) {
+  const str = String(source ?? '');
+  const segments = [];
+  let textStart = 0;
+  let i = 0;
+
+  const pushText = (end) => {
+    if (end > textStart) segments.push({ type: 'text', raw: str.slice(textStart, end) });
+  };
+
+  const readBracedEnd = (openBraceIdx) => {
+    let depth = 1;
+    let p = openBraceIdx + 1;
+    while (p < str.length && depth > 0) {
+      if (str[p] === '\\' && p + 1 < str.length) { p += 2; continue; }
+      if (str[p] === '{') depth++;
+      else if (str[p] === '}') depth--;
+      p++;
+    }
+    return depth === 0 ? p : -1;
+  };
+
+  const findClosingInlineDollar = (openIdx) => {
+    let p = openIdx + 1;
+    let braceDepth = 0;
+    while (p < str.length) {
+      const ch = str[p];
+      if (ch === '\n' || ch === '\r') return -1;
+      if (ch === '\\') {
+        if (str.startsWith('\\ce{', p)) {
+          const endBrace = readBracedEnd(p + 3);
+          if (endBrace > 0) { p = endBrace; continue; }
+        }
+        p += Math.min(2, str.length - p);
+        continue;
+      }
+      if (ch === '{') braceDepth++;
+      else if (ch === '}' && braceDepth > 0) braceDepth--;
+      else if (braceDepth > 0 && ch === '[' && str[p + 1] === '$') {
+        const innerClose = str.indexOf('$', p + 2);
+        if (innerClose > 0 && innerClose < str.indexOf('\n', p + 2) >>> 0) {
+          p = innerClose + 1;
+          continue;
+        }
+      } else if (ch === '$') {
+        return p;
+      }
+      p++;
+    }
+    return -1;
+  };
+
+  while (i < str.length) {
+    if (str.startsWith('$$', i)) {
+      const close = str.indexOf('$$', i + 2);
+      if (close > i + 2) {
+        pushText(i);
+        segments.push({ type: 'math', raw: str.slice(i, close + 2), tex: str.slice(i + 2, close), displayMode: true });
+        i = close + 2;
+        textStart = i;
+        continue;
+      }
+    }
+    if (str.startsWith('\\[', i)) {
+      const close = str.indexOf('\\]', i + 2);
+      if (close > i + 2) {
+        pushText(i);
+        segments.push({ type: 'math', raw: str.slice(i, close + 2), tex: str.slice(i + 2, close), displayMode: true });
+        i = close + 2;
+        textStart = i;
+        continue;
+      }
+    }
+    if (str.startsWith('\\(', i)) {
+      const close = str.indexOf('\\)', i + 2);
+      if (close > i + 2) {
+        pushText(i);
+        segments.push({ type: 'math', raw: str.slice(i, close + 2), tex: str.slice(i + 2, close), displayMode: false });
+        i = close + 2;
+        textStart = i;
+        continue;
+      }
+    }
+    if (str[i] === '$') {
+      const close = findClosingInlineDollar(i);
+      if (close > i + 1) {
+        pushText(i);
+        segments.push({ type: 'math', raw: str.slice(i, close + 1), tex: str.slice(i + 1, close), displayMode: false });
+        i = close + 1;
+        textStart = i;
+        continue;
+      }
+    }
+    if (str.startsWith('\\ce{', i)) {
+      const endBrace = readBracedEnd(i + 3);
+      if (endBrace > i + 4) {
+        pushText(i);
+        segments.push({ type: 'math', raw: str.slice(i, endBrace), tex: str.slice(i, endBrace), displayMode: false });
+        i = endBrace;
+        textStart = i;
+        continue;
+      }
+    }
+    i++;
+  }
+  pushText(str.length);
+  return segments;
+}
+
+export function prepareExamMathForKatex(rawMath) {
+  const withoutTags = stripFormattedHtmlTags(String(rawMath ?? ''));
+  const decoded = decodeBasicEntities(withoutTags).trim();
+  return expandCeCommands(decoded);
 }
 
 /**

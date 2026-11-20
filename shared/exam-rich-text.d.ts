@@ -35,9 +35,17 @@ export declare function sanitizeColor(raw?: string): string;
 export declare function sanitizeFontSizePt(raw?: string | number | null): number | null;
 export declare function escapeHtmlText(raw?: string): string;
 export declare function sanitizeInlineRichHtml(raw?: string): string;
+export declare function stripFormattedHtmlTags(raw?: string): string;
 export declare function stripRichHtmlToPlainText(raw?: string): string;
 export declare function hasRichInlineTags(raw?: string): boolean;
 export declare function hasMathNotation(raw?: string): boolean;
+export declare function convertChemicalExprToLatex(ceExpr?: string): string;
+export declare function expandCeCommands(input?: string): string;
+export declare function prepareExamMathForKatex(rawMath?: string): string;
+export declare function splitRichExamSegments(source?: string): Array<
+  | { type: 'text'; raw: string }
+  | { type: 'math'; raw: string; tex: string; displayMode: boolean }
+>;
 export declare function parseRichInlineRuns(
   raw?: string,
   baseStyle?: {

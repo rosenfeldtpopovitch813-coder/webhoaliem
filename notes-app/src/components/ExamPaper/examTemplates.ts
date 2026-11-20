@@ -6,7 +6,9 @@ import {
   EXAM_TEXT_COLORS,
   EXAM_BG_COLORS,
   compileSafeMathExpression,
+  prepareExamMathForKatex,
   sanitizeInlineRichHtml,
+  splitRichExamSegments,
   stripRichHtmlToPlainText
 } from '../../../../shared/exam-rich-text.js';
 
@@ -285,62 +287,6 @@ export const MOLECULE_PRESETS: Record<string, {
   }
 };
 
-function convertCeToLatex(ceExpr: string): string {
-  let s = ceExpr
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .trim();
-  // Arrows with condition: <=>[@LATEX:cond@] or <=>[$cond$] or ->[cond]
-  s = s.replace(/<=>\[@LATEX:([\s\S]+?)@\]/g, '\\xrightleftharpoons{$1}');
-  s = s.replace(/->\[@LATEX:([\s\S]+?)@\]/g, '\\xrightarrow{$1}');
-  s = s.replace(/<=>\[\$([^$]+)\$\]/g, '\\xrightleftharpoons{$1}');
-  s = s.replace(/<=>\[([^\]]+)\]/g, (_m, inner: string) =>
-    inner.includes('\\') ? `\\xrightleftharpoons{${inner}}` : `\\xrightleftharpoons{\\text{${inner}}}`
-  );
-  s = s.replace(/->\[\$([^$]+)\$\]/g, '\\xrightarrow{$1}');
-  s = s.replace(/->\[([^\]]+)\]/g, (_m, inner: string) =>
-    inner.includes('\\') ? `\\xrightarrow{${inner}}` : `\\xrightarrow{\\text{${inner}}}`
-  );
-  s = s.replace(/<=>/g, '\\rightleftharpoons ');
-  s = s.replace(/->/g, '\\rightarrow ');
-  s = s.replace(/\s+\^(?=\s|$)/g, '\\uparrow ');
-  s = s.replace(/\s+v(?=\s|$)/g, '\\downarrow ');
-  // Convert chemical formulas like H2SO4, Fe(OH)2, CH3COOH (skip inside \text{...} or commands)
-  s = s.replace(/([A-Za-z)\]])(\d+)/g, '$1_{$2}');
-  return `\\mathrm{${s}}`;
-}
-
-function expandCeCommands(input: string): string {
-  let out = '';
-  let i = 0;
-  while (i < input.length) {
-    const idx = input.indexOf('\\ce{', i);
-    if (idx < 0) {
-      out += input.slice(i);
-      break;
-    }
-    out += input.slice(i, idx);
-    let pos = idx + 4;
-    let depth = 1;
-    while (pos < input.length && depth > 0) {
-      const ch = input[pos];
-      if (ch === '{') depth++;
-      else if (ch === '}') depth--;
-      pos++;
-    }
-    if (depth === 0) {
-      const inner = input.slice(idx + 4, pos - 1);
-      out += convertCeToLatex(inner);
-      i = pos;
-    } else {
-      out += input.slice(idx);
-      break;
-    }
-  }
-  return out;
-}
-
 function escapeHtml(raw: string): string {
   return String(raw ?? '')
     .replace(/&/g, '&amp;')
@@ -358,61 +304,20 @@ export function renderRichExamText(source: string): string {
     return key;
   };
 
-  // Protect inner [$...$] inside \ce{...} arrows BEFORE math scanning & HTML sanitizing
-  let text = String(source)
-    .replace(/(?:<=>|&lt;=&gt;)\[\$([^$]+)\$\]/g, '<=>[@LATEX:$1@]')
-    .replace(/(?:->|-&gt;)\[\$([^$]+)\$\]/g, '->[@LATEX:$1@]');
-
-  // 1) Render $$...$$ or \[...\] or $...$ or \(...\) BEFORE sanitizing HTML so `<=>` and `->` stay intact
-  text = text.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)/g, (all, b1, b2, i1, i2) => {
-    const rawTex = (b1 ?? b2 ?? i1 ?? i2 ?? '')
-      .replace(/<\/?[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .trim();
-    const displayMode = b1 !== undefined || b2 !== undefined;
-    const tex = expandCeCommands(rawTex);
-    try {
-      return stash(katex.renderToString(tex, { throwOnError: false, displayMode, trust: false, strict: 'ignore' }));
-    } catch {
-      return escapeHtml(all);
-    }
-  });
-
-  // 2) Render standalone \ce{...} outside $...$ (supporting nested braces)
-  if (text.includes('\\ce{')) {
-    let rebuilt = '';
-    let idx = 0;
-    while (idx < text.length) {
-      const start = text.indexOf('\\ce{', idx);
-      if (start < 0) { rebuilt += text.slice(idx); break; }
-      rebuilt += text.slice(idx, start);
-      let pos = start + 4;
-      let depth = 1;
-      while (pos < text.length && depth > 0) {
-        if (text[pos] === '{') depth++;
-        else if (text[pos] === '}') depth--;
-        pos++;
+  // Split math segments directly with brace-aware handling (no inline sentinel tokens)
+  const text = splitRichExamSegments(String(source))
+    .map(seg => {
+      if (seg.type === 'text') return seg.raw;
+      const tex = prepareExamMathForKatex(seg.tex);
+      try {
+        return stash(katex.renderToString(tex, { throwOnError: false, displayMode: seg.displayMode, trust: false, strict: 'ignore' }));
+      } catch {
+        return escapeHtml(seg.raw);
       }
-      if (depth === 0) {
-        const inner = text.slice(start + 4, pos - 1).replace(/<\/?[^>]+>/g, '');
-        const tex = convertCeToLatex(inner);
-        try {
-          rebuilt += stash(katex.renderToString(tex, { throwOnError: false, displayMode: false, trust: false, strict: 'ignore' }));
-        } catch {
-          rebuilt += escapeHtml(inner);
-        }
-        idx = pos;
-      } else {
-        rebuilt += text.slice(start);
-        break;
-      }
-    }
-    text = rebuilt;
-  }
+    })
+    .join('');
 
-  // 3) Strictly sanitize remaining prose HTML (whitelist tags & styles, zero XSS) + Markdown shortcuts
+  // Strictly sanitize remaining prose HTML (whitelist tags & styles, zero XSS) + Markdown shortcuts
   let safe = sanitizeInlineRichHtml(text)
     .replace(/\*\*([^*<>]+)\*\*/g, '<strong>$1</strong>')
     .replace(/__([^_<>]+)__/g, '<u>$1</u>')

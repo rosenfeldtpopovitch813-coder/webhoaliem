@@ -3,10 +3,11 @@ import { renderRichExamText } from './examTemplates';
 import {
   extractPrimaryFontName,
   parseRichInlineRuns,
+  prepareExamMathForKatex,
   sanitizeColor,
   sanitizeFontFamily,
   sanitizeFontSizePt,
-  stripRichHtmlToPlainText
+  splitRichExamSegments
 } from '../../../../shared/exam-rich-text.js';
 
 function escapeXml(str: string): string {
@@ -33,13 +34,14 @@ function escapeHtml(str: string): string {
 function latexToOmmlInner(texInput: string): string {
   let tex = texInput.trim();
 
-  // Handle \ce{...}
-  tex = tex.replace(/\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m, inner: string) => {
-    return inner
-      .replace(/<=>/g, '⇌')
-      .replace(/->/g, '→')
-      .replace(/([A-Za-z)\]])(\d+)/g, '$1_$2');
-  });
+  // Expand \ce{...} using shared brace-aware converter first, preserving <=>[$...$] conditions cleanly
+  if (tex.includes('\\ce{')) {
+    tex = prepareExamMathForKatex(tex);
+  }
+  tex = tex
+    .replace(/\\xrightleftharpoons\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m, cond: string) => ` ⇌[${cond.replace(/\\text\{([^{}]*)\}/g, '$1')}] `)
+    .replace(/\\xrightarrow\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_m, cond: string) => ` →[${cond.replace(/\\text\{([^{}]*)\}/g, '$1')}] `)
+    .replace(/\\mathrm\{((?:[^{}]|\{[^{}]*\})*)\}/g, '$1');
 
   // Handle system of equations \begin{cases} ... \end{cases}
   const casesMatch = tex.match(/\\begin\{cases\}([\s\S]*?)\\end\{cases\}/);
@@ -200,10 +202,6 @@ function textWithMathToWordXml(
     ? boldOrOpts
     : { bold: boldOrOpts, colorHex, underline };
   const defaultFont = opts.fontName || 'Times New Roman';
-  const parts: string[] = [];
-  const pattern = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\ce\{((?:[^{}]|\{[^{}]*\})*)\}/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
 
   const makeStyledRuns = (rawSegment: string) => {
     if (!rawSegment) return '';
@@ -237,19 +235,13 @@ function textWithMathToWordXml(
     }).join('');
   };
 
-  while ((match = pattern.exec(source)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(makeStyledRuns(source.slice(lastIndex, match.index)));
-    }
-    const rawTex = match[1] ?? match[2] ?? match[3] ?? match[4] ?? (match[5] ? `\\ce{${match[5]}}` : '');
-    const cleanTex = stripRichHtmlToPlainText(rawTex);
-    parts.push(`<m:oMath>${latexToOmmlInner(cleanTex)}</m:oMath>`);
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < source.length) {
-    parts.push(makeStyledRuns(source.slice(lastIndex)));
-  }
-  return parts.join('');
+  return splitRichExamSegments(source)
+    .map((seg) =>
+      seg.type === 'text'
+        ? makeStyledRuns(seg.raw)
+        : `<m:oMath>${latexToOmmlInner(prepareExamMathForKatex(seg.tex))}</m:oMath>`
+    )
+    .join('');
 }
 
 function wordAlign(align?: ExamBlockStyle['align']): string {
