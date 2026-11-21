@@ -1914,11 +1914,47 @@
 }
 
 @media print {
-  .exam-prologue-presets {
-    display: none !important;
+  html,
+  body,
+  #root,
+  .exam-studio-shell,
+  .exam-workspace,
+  .exam-paper-viewport {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
+  .exam-ribbon,
+  .exam-subbar,
+  .exam-board-pane,
+  .exam-block-controls,
+  .exam-gutter-handle,
+  .exam-notion-bottom-zone,
+  .exam-notion-canvas-hint,
+  .exam-page-break-chip,
+  .exam-prologue-presets,
   .exam-prologue-zone.is-empty {
     display: none !important;
+  }
+  .exam-a4-sheet {
+    width: 100% !important;
+    min-height: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 10mm 12mm !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  .exam-a4-sheet:last-of-type {
+    page-break-after: auto;
+    break-after: auto;
   }
   .exam-prologue-zone {
     border: 0 !important;

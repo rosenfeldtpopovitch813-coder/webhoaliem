@@ -28,35 +28,97 @@ const nav = [
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
+const SIDEBAR_COLLAPSED_KEY = 'htvvm-sidebar-collapsed-v1';
+const SIDEBAR_WIDTH_KEY = 'htvvm-sidebar-width-v1';
+let sidebarCollapsed = (() => {
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'; } catch { return false; }
+})();
+let sidebarWidth = (() => {
+  try {
+    const v = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return Number.isFinite(v) && v >= 180 && v <= 340 ? Math.round(v) : 252;
+  } catch { return 252; }
+})();
+
 function makeButton(text, className, handler) { return button(text, className, handler); }
 function createShell() {
   root.replaceChildren();
   const shell = element('div', 'app-shell');
+  shell.style.setProperty('--sidebar-w', `${sidebarWidth}px`);
   const sidebar = element('aside', 'sidebar'); sidebar.id = 'sidebar';
   const backdrop = element('div', 'sidebar-backdrop');
   backdrop.addEventListener('click', () => { sidebarOpen = false; updateSidebar(); });
   const brand = element('div', 'brand');
-  brand.append(element('span', 'brand-symbol', 'H'), element('div', 'brand-copy'));
-  brand.lastChild.append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO')); 
+  const collapsePinBtn = makeButton('«', 'sidebar-collapse-pin', () => toggleSidebar());
+  collapsePinBtn.title = 'Thu gọn thanh điều hướng (Ctrl+B hoặc kéo mép phải)';
+  brand.append(element('span', 'brand-symbol', 'H'), element('div', 'brand-copy'), collapsePinBtn);
+  brand.children[1].append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO'));
   const navLabel = element('div', 'nav-section-label', 'ĐIỀU HƯỚNG');
   const links = element('nav', 'nav-list');
   for (const [path, iconName, title] of nav) {
-    const link = element('a', 'nav-link'); link.href = path; link.dataset.path = path;
+    const link = element('a', 'nav-link'); link.href = path; link.dataset.path = path; link.title = title;
     const glyphWrap = element('span', 'nav-glyph');
     glyphWrap.append(icon(iconName, 18));
-    link.append(glyphWrap, element('span', '', title));
+    link.append(glyphWrap, element('span', 'nav-link-text', title));
     link.addEventListener('click', (event) => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); sidebarOpen = false; updateSidebar(); navigate(path);
     }); links.append(link);
   }
   const sideFooter = element('div', 'sidebar-bottom');
-  sideFooter.append(element('span', 'brand-status-dot'), element('span', '', 'Không gian học tập')); 
-  sidebar.append(brand, navLabel, links, sideFooter);
+  sideFooter.append(element('span', 'brand-status-dot'), element('span', '', 'Không gian học tập'));
+
+  const resizer = element('div', 'sidebar-resizer');
+  resizer.title = 'Kéo sang trái để ẩn hoặc thay đổi độ rộng thanh điều hướng (Nhấp đúp để đặt lại)';
+  resizer.addEventListener('dblclick', () => {
+    sidebarWidth = 252;
+    sidebarCollapsed = false;
+    updateSidebar();
+  });
+  resizer.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    resizer.setPointerCapture?.(e.pointerId);
+    shell.classList.add('is-resizing-sidebar');
+    const onMove = (ev) => {
+      const x = ev.clientX;
+      if (x < 120) {
+        if (!sidebarCollapsed) {
+          sidebarCollapsed = true;
+          updateSidebar();
+        }
+      } else {
+        sidebarCollapsed = false;
+        sidebarWidth = Math.max(180, Math.min(340, Math.round(x)));
+        shell.style.setProperty('--sidebar-w', `${sidebarWidth}px`);
+        updateSidebar();
+      }
+    };
+    const onUp = () => {
+      shell.classList.remove('is-resizing-sidebar');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      updateSidebar();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+
+  sidebar.append(brand, navLabel, links, sideFooter, resizer);
+
+  const expandEdgeBtn = makeButton('»', 'sidebar-expand-edge', () => {
+    sidebarCollapsed = false;
+    sidebarOpen = true;
+    updateSidebar();
+  });
+  expandEdgeBtn.title = 'Hiện thanh điều hướng (Ctrl+B)';
+
   const content = element('div', 'content-area');
   const topbar = element('header', 'topbar');
   const left = element('div', 'top-left');
-  left.append(makeButton('☰', 'mobile-menu', () => { sidebarOpen = !sidebarOpen; updateSidebar(); }), element('div', 'page-title', 'Tổng quan'));
+  const toggleBtn = makeButton('☰', 'mobile-menu sidebar-toggle-btn', () => toggleSidebar());
+  toggleBtn.title = 'Ẩn / hiện thanh điều hướng (Ctrl+B)';
+  left.append(toggleBtn, element('div', 'page-title', 'Tổng quan'));
   left.lastChild.id = 'page-title';
   const right = element('div', 'top-right');
   const status = element('span', 'server-status', 'Đang đồng bộ giờ'); status.id = 'server-status';
@@ -77,8 +139,9 @@ function createShell() {
   right.append(status, diagnosticsButton, installApp, select, account); topbar.append(left, right);
   const notice = element('div', 'notice'); notice.id = 'notice'; notice.hidden = true;
   const main = element('main', 'main-content'); main.id = 'main-content';
-  content.append(topbar, notice, main); shell.append(sidebar, backdrop, content); root.append(shell);
-  frame = { sidebar, backdrop, links, select, account, main, notice, status, installApp };
+  content.append(topbar, notice, main); shell.append(sidebar, expandEdgeBtn, backdrop, content); root.append(shell);
+  frame = { shell, sidebar, backdrop, links, select, account, main, notice, status, installApp, toggleBtn, expandEdgeBtn };
+  updateSidebar();
 }
 let entryScreen = null;
 function safeWelcomeSeen(uid) { try { return localStorage.getItem(`htvvm-welcome-seen:${uid}`) === '1'; } catch { return false; } }
@@ -242,10 +305,40 @@ async function runFirebaseDiagnostics() {
   }
 }
 
-function updateSidebar() {
-  frame.sidebar.classList.toggle('open', sidebarOpen);
-  if (frame.backdrop) frame.backdrop.classList.toggle('open', sidebarOpen);
+function toggleSidebar() {
+  if (window.matchMedia('(max-width: 780px)').matches) {
+    sidebarOpen = !sidebarOpen;
+  } else {
+    sidebarCollapsed = !sidebarCollapsed;
+  }
+  updateSidebar();
 }
+
+function updateSidebar() {
+  if (!frame) return;
+  frame.sidebar.classList.toggle('open', sidebarOpen);
+  frame.sidebar.classList.toggle('is-collapsed', sidebarCollapsed);
+  if (frame.shell) {
+    frame.shell.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    frame.shell.style.setProperty('--sidebar-w', `${sidebarWidth}px`);
+  }
+  if (frame.backdrop) frame.backdrop.classList.toggle('open', sidebarOpen);
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+  } catch {}
+}
+
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+    const target = e.target;
+    if (target && typeof target.closest === 'function' && target.closest('input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+    e.preventDefault();
+    toggleSidebar();
+  }
+});
 function drawAccount() {
   const { user, authLoading } = AppStore.getState();
   frame.account.replaceChildren();

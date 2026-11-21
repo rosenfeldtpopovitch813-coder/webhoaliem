@@ -18,6 +18,7 @@ import {
   MAX_FOCUS_AWAY_MS,
   normalizeFocusTarget,
   isUrlAllowedInFocus,
+  getNextStreakMilestone,
   rankProgressFor,
   titleFor
 } from '../../../shared/study-core.js';
@@ -932,24 +933,24 @@ export function renderFocus() {
     const studyStreak = Math.max(statsSnapshot.streak || 0, !auth?.currentUser && todaySeconds > 0 ? 1 : 0);
     stats.replaceChildren();
     for (const [label, val] of [
-      ['Hôm nay', fmtFull(todaySeconds)],
-      ['Tổng giờ', fmtFull(totalSeconds)],
-      ['Chuỗi học', `${studyStreak} ngày`],
-      ['Danh hiệu', titleFor(totalSeconds)]
+      ['Hôm nay (1 ngày)', fmtFull(todaySeconds)],
+      ['Chuỗi học', `${studyStreak} ngày · ${fmtFull(totalSeconds)}`],
+      ['Mốc chuỗi kế', `${getNextStreakMilestone(studyStreak)} ngày`],
+      ['Rank hôm nay', titleFor(todaySeconds)]
     ]) {
       const item = element('div', 'focus-stat');
       item.append(element('small', '', label), element('strong', '', val));
       stats.append(item);
     }
-    const rp = rankProgressFor(totalSeconds);
+    const rp = rankProgressFor(todaySeconds);
     const pct = Math.round(rp.progressRatio * 100);
     rankRageBox.classList.toggle('is-charging', isCountingStudy());
     rankRageBox.classList.toggle('is-max', rp.isMax);
     if (rp.isMax) {
-      rankRageTitle.textContent = `${rp.currentTitle} · Cấp cao nhất`;
-      rankRageRemain.textContent = '100% · Đã đạt mức tối đa';
+      rankRageTitle.textContent = `${rp.currentTitle} · Đạt đỉnh Rank ngày hôm nay`;
+      rankRageRemain.textContent = '100% · Đã đạt mức tối đa trong ngày';
     } else {
-      rankRageTitle.textContent = `Thanh tiến độ hạng: ${rp.currentTitle} → ${rp.nextTitle}`;
+      rankRageTitle.textContent = `Rank trong ngày: ${rp.currentTitle} → ${rp.nextTitle}`;
       rankRageRemain.textContent = `${pct}% · Còn ${fmtFull(rp.remainingSeconds)}`;
     }
     rankRageFill.style.width = `${pct}%`;

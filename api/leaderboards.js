@@ -22,20 +22,23 @@ function buildBoardRows(sourceMap, now) {
       bestStreak: st.bestStreak,
       title: st.title
     });
-    if (st.streak > 0) {
+    if (st.streak > 0 || st.totalSeconds > 0) {
       streakRows.push({
         uid,
         name,
         streak: st.streak,
         bestStreak: st.bestStreak,
         totalSeconds: st.totalSeconds,
+        todaySeconds: st.todaySeconds,
         title: st.title
       });
     }
   }
-  rows.sort((a, b) => b.totalSeconds - a.totalSeconds || b.todaySeconds - a.todaySeconds);
-  streakRows.sort((a, b) => b.streak - a.streak || b.bestStreak - a.bestStreak || b.totalSeconds - a.totalSeconds);
-  return { rows: rows.slice(0, 30), streakRows: streakRows.slice(0, 30) };
+  // Study time leaderboard ranks by 1-day study time (todaySeconds), tie-breaking by totalSeconds
+  rows.sort((a, b) => b.todaySeconds - a.todaySeconds || b.totalSeconds - a.totalSeconds || b.streak - a.streak);
+  // Streak leaderboard ranks by consecutive days (streak), accompanied by total cumulative study time (totalSeconds)
+  streakRows.sort((a, b) => b.streak - a.streak || b.totalSeconds - a.totalSeconds || b.bestStreak - a.bestStreak);
+  return { rows: rows.slice(0, 100), streakRows: streakRows.slice(0, 100) };
 }
 
 async function loadPublicBoard(now) {
@@ -53,8 +56,10 @@ async function loadPublicBoard(now) {
         displayName: String(s.displayName || 'Người học').slice(0, 80),
         sharing: true,
         totalMs: Math.max(0, Math.floor(Number(s.totalMs) || 0)),
+        dayIndex: Number.isInteger(s.dayIndex) ? s.dayIndex : null,
+        dailyMs: Math.max(0, Math.floor(Number(s.dailyMs) || Number(s.todayMs) || 0)),
         todayKey: String(s.todayKey || ''),
-        todayMs: Math.max(0, Math.floor(Number(s.todayMs) || 0)),
+        todayMs: Math.max(0, Math.floor(Number(s.dailyMs) || Number(s.todayMs) || 0)),
         streak: Math.max(0, Math.floor(Number(s.streak) || 0)),
         bestStreak: Math.max(0, Math.floor(Number(s.bestStreak) || 0)),
         lastStudyDay: Number.isInteger(s.lastStudyDay) ? s.lastStudyDay : null,
@@ -82,10 +87,18 @@ export default async function handler(req, res) {
       rtdbGet(`study_tracking/${user.uid}`)
     ]);
     const me = myRaw && typeof myRaw === 'object' ? myRaw : {};
+    const myStats = summarizeStudyStats(me, now);
+    const myStudyIdx = board.rows.findIndex((r) => r.uid === user.uid);
+    const myStreakIdx = board.streakRows.findIndex((r) => r.uid === user.uid);
     return res.json({
+      uid: user.uid,
       rows: board.rows,
       streakRows: board.streakRows,
-      myStats: summarizeStudyStats(me, now)
+      myRank: {
+        study: myStudyIdx >= 0 ? myStudyIdx + 1 : null,
+        streak: myStreakIdx >= 0 ? myStreakIdx + 1 : null
+      },
+      myStats
     });
   } catch (err) {
     return fail(res, err);

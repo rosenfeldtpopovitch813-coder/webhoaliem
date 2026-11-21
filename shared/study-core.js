@@ -175,8 +175,11 @@ export function applyLoginStreak(current, now = Date.now(), name = 'Người h�
 /** Serialize canonical server study + streak stats shared across tracker and leaderboard APIs. */
 export function summarizeStudyStats(s = {}, now = Date.now()) {
   const day = getVNDayIndex(now);
-  const totalSeconds = Math.floor((s?.totalMs || 0) / 1000);
-  const todaySeconds = s?.dayIndex === day ? Math.floor((s?.dailyMs || 0) / 1000) : 0;
+  const totalSeconds = Math.floor((Number(s?.totalMs) || 0) / 1000);
+  const rawDailyMs = s?.dayIndex === day
+    ? (Number(s?.dailyMs) || Number(s?.todayMs) || 0)
+    : 0;
+  const todaySeconds = Math.max(0, Math.floor(rawDailyMs / 1000));
   const streak = Number(s?.lastStudyDay) >= day - 1 ? Math.max(0, Math.floor(Number(s?.streak) || 0)) : 0;
   const bestStreak = Math.max(Math.floor(Number(s?.bestStreak) || 0), streak);
   const rawLoginStreak = activeLoginStreakFor(s, day);
@@ -191,8 +194,128 @@ export function summarizeStudyStats(s = {}, now = Date.now()) {
     bestLoginStreak,
     lastStudyDay: s?.lastStudyDay ?? null,
     lastLoginDay: s?.lastLoginDay ?? null,
-    title: titleFor(totalSeconds),
+    // Rank is determined strictly by 1-day study time (todaySeconds)
+    title: titleFor(todaySeconds),
+    milestone: getReachedStreakMilestone(streak),
+    isMilestoneToday: isStreakMilestone(streak),
     sharing: !!s?.sharing,
     serverNow: now
+  };
+}
+
+export const STREAK_MILESTONES = Object.freeze([3, 10, 30, 100, 200, 300, 400, 500]);
+
+export function isStreakMilestone(days) {
+  const d = Math.floor(Number(days) || 0);
+  if (d <= 0) return false;
+  return d === 3 || d === 10 || d === 30 || (d >= 100 && d % 100 === 0);
+}
+
+export function getReachedStreakMilestone(days) {
+  const d = Math.floor(Number(days) || 0);
+  if (d >= 100) return Math.floor(d / 100) * 100;
+  if (d >= 30) return 30;
+  if (d >= 10) return 10;
+  if (d >= 3) return 3;
+  return 0;
+}
+
+export function getNextStreakMilestone(days) {
+  const d = Math.max(0, Math.floor(Number(days) || 0));
+  if (d < 3) return 3;
+  if (d < 10) return 10;
+  if (d < 30) return 30;
+  if (d < 100) return 100;
+  return (Math.floor(d / 100) + 1) * 100;
+}
+
+export const COUNTDOWN_UNITS = Object.freeze(['years', 'months', 'days', 'hours', 'minutes', 'seconds']);
+
+function addCalendarMonths(baseDate, totalMonths) {
+  const d = new Date(baseDate.getTime());
+  const origDay = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + totalMonths);
+  const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(origDay, maxDay));
+  return d;
+}
+
+/**
+ * Compute countdown from nowMs to targetMsOrIso with dynamic unit cascading.
+ * When larger units (e.g. years/months) are disabled, their duration cascades accurately into the enabled smaller units.
+ */
+export function computeEventCountdown(targetMsOrIso, nowMs = Date.now(), enabledUnits = COUNTDOWN_UNITS) {
+  const targetMs = typeof targetMsOrIso === 'number' ? targetMsOrIso : new Date(targetMsOrIso).getTime();
+  const now = Number(nowMs) || Date.now();
+  const validUnits = Array.isArray(enabledUnits)
+    ? COUNTDOWN_UNITS.filter((u) => enabledUnits.includes(u))
+    : [...COUNTDOWN_UNITS];
+  const activeUnits = validUnits.length ? validUnits : ['seconds'];
+  const activeSet = new Set(activeUnits);
+  const zeroValues = { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+
+  if (!Number.isFinite(targetMs) || targetMs <= now) {
+    return {
+      expired: true,
+      totalRemainingSeconds: 0,
+      values: zeroValues,
+      activeUnits
+    };
+  }
+
+  let cursor = new Date(now);
+  let totalMonthsDiff = 0;
+  if (activeSet.has('years') || activeSet.has('months')) {
+    while (true) {
+      const next = addCalendarMonths(new Date(now), totalMonthsDiff + 1);
+      if (next.getTime() <= targetMs) {
+        totalMonthsDiff += 1;
+        cursor = next;
+      } else {
+        break;
+      }
+    }
+  }
+
+  let years = 0;
+  let months = 0;
+  if (activeSet.has('years') && activeSet.has('months')) {
+    years = Math.floor(totalMonthsDiff / 12);
+    months = totalMonthsDiff % 12;
+  } else if (activeSet.has('years') && !activeSet.has('months')) {
+    years = Math.floor(totalMonthsDiff / 12);
+    cursor = addCalendarMonths(new Date(now), years * 12);
+  } else if (!activeSet.has('years') && activeSet.has('months')) {
+    months = totalMonthsDiff;
+  }
+
+  let remSec = Math.max(0, Math.floor((targetMs - cursor.getTime()) / 1000));
+  let days = 0;
+  let hours = 0;
+  let minutes = 0;
+  let seconds = 0;
+
+  if (activeSet.has('days')) {
+    days = Math.floor(remSec / 86400);
+    remSec %= 86400;
+  }
+  if (activeSet.has('hours')) {
+    hours = Math.floor(remSec / 3600);
+    remSec %= 3600;
+  }
+  if (activeSet.has('minutes')) {
+    minutes = Math.floor(remSec / 60);
+    remSec %= 60;
+  }
+  if (activeSet.has('seconds')) {
+    seconds = remSec;
+  }
+
+  return {
+    expired: false,
+    totalRemainingSeconds: Math.max(0, Math.floor((targetMs - now) / 1000)),
+    values: { years, months, days, hours, minutes, seconds },
+    activeUnits
   };
 }

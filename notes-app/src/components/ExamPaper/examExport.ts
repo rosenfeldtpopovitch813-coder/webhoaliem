@@ -822,6 +822,15 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
   <style>
     @page { size: A4; margin: 14mm 16mm 15mm 18mm; }
     * { box-sizing: border-box; }
+    html, body, #root {
+      width: auto !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+      position: static !important;
+      display: block !important;
+    }
     body {
       font-family: ${paper.fontFamily || '"Times New Roman", Times, serif'};
       font-size: ${paper.fontSizePt || 12}pt;
@@ -881,7 +890,19 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
       .print-banner { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-family: system-ui, sans-serif; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
       .print-banner button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 6px 14px; font-weight: 700; cursor: pointer; }
     }
-    @media print { .print-banner { display: none !important; } }
+    @media print {
+      html, body {
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+      }
+      .print-banner { display: none !important; }
+    }
   </style></head><body>
     <div class="print-banner">
       <span><strong>${isTeacher ? 'Bản Giáo viên (có đáp án & lời giải)' : 'Bản phát cho Học sinh (đã ẩn đáp án & lời giải)'}</strong> — Chọn máy in hoặc “Lưu dưới dạng PDF (Save as PDF)”.</span>
