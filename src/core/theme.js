@@ -1,11 +1,16 @@
 import { AppStore } from './store.js';
 import { setUserTheme } from './firebase.js';
-export const THEMES = Object.freeze({ aurora: 'Aurora', light: 'Sáng', midnight: 'Midnight' });
+export const THEMES = Object.freeze({ aurora: 'Aurora', light: 'Sáng', midnight: 'Midnight', clay: 'Clay & Pine' });
+const THEME_COLORS = Object.freeze({ aurora: '#0c1224', light: '#f1f5f9', midnight: '#070712', clay: '#efe9e0' });
 const STORAGE_KEY = 'htvvm-theme-v2';
 export function normalizeTheme(value) { return Object.hasOwn(THEMES, value) ? value : 'aurora'; }
 export function applyTheme(name, { persist = true } = {}) {
   const theme = normalizeTheme(name);
-  if (typeof document !== 'undefined') document.documentElement.dataset.theme = theme;
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_COLORS[theme] || '#0c1224');
+  }
   AppStore.set('theme', theme);
   if (persist && typeof localStorage !== 'undefined') {
     try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* private mode */ }

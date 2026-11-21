@@ -471,7 +471,8 @@ export function mountBrownian3D(host) {
   }
 
   function renderFrame() {
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const activeTheme = document.documentElement.getAttribute('data-theme');
+    const isLight = activeTheme === 'light' || activeTheme === 'clay';
     ctx.clearRect(0, 0, cssW, cssH);
 
     // Subtle background backdrop matching theme
