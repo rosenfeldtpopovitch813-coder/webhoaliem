@@ -1709,6 +1709,8 @@ body.is-exam-lockdown .bg-music-mini{display:none!important}
 
 /* Taste-Skill Editorial Theme: Clay & Pine (warm archival stone, pine accent, zero violet/gradient glow) */
 [data-theme="clay"] body{background:var(--bg);font-family:var(--font-clay-sans)}
+[data-theme="clay"] .entry-screen{background:var(--bg)}
+[data-theme="clay"] .entry-logo{box-shadow:none}
 [data-theme="clay"] .sidebar{background:var(--panel);backdrop-filter:none}
 [data-theme="clay"] .topbar{background:color-mix(in srgb,var(--panel) 94%,var(--bg));backdrop-filter:blur(10px)}
 [data-theme="clay"] .brand-symbol{background:var(--accent);box-shadow:none}

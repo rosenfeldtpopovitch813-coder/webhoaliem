@@ -1,4 +1,4 @@
-const CACHE_NAME = 'htvvm-studio-clean-ui-31';
+const CACHE_NAME = 'htvvm-studio-clean-ui-32';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
