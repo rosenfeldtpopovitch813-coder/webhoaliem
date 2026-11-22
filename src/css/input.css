@@ -1326,7 +1326,10 @@ body.is-exam-lockdown .exam-pdf-pages{max-height:calc(100vh - 134px)}
 .focus-audio-controls{display:flex;align-items:center;gap:10px}
 .focus-audio-seek{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
 .focus-audio-vol{width:76px;flex:none;accent-color:var(--accent);cursor:pointer}
-.focus-audio-err{margin:0;font-size:11px;color:#fb7185}
+.focus-audio-err{margin:0;font-size:11px;line-height:1.55;color:#fb7185}
+.focus-audio-err.is-hint{color:var(--accent)}
+[data-theme="clay"] .focus-audio-err{color:#b91c1c}
+[data-theme="clay"] .focus-audio-err.is-hint{color:var(--accent)}
 
 .bg-music-mini{position:fixed;left:16px;bottom:18px;z-index:760;width:44px;height:44px;border-radius:999px;touch-action:none;user-select:none;cursor:grab}
 .bg-music-mini[hidden]{display:none!important}

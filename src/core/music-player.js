@@ -34,19 +34,87 @@ export function formatAudioTime(seconds) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+export const AUDIO_FILE_EXT_RE = /\.(mp3|wav|m4a|aac|ogg|opus|flac|webm|weba|oga|mp4|m4b)$/i;
+
+export function isSupportedAudioFile(file) {
+  if (!file) return false;
+  const type = String(file.type || '').toLowerCase();
+  if (type.startsWith('audio/') || type === 'video/mp4' || type === 'video/webm' || type === 'video/ogg') {
+    return true;
+  }
+  return AUDIO_FILE_EXT_RE.test(String(file.name || ''));
+}
+
+export function classifyAudioError(err, mediaErrorCode = 0) {
+  const name = err?.name || '';
+  if (name === 'AbortError' && !mediaErrorCode) return null;
+  if (mediaErrorCode === 3 || mediaErrorCode === 4 || name === 'NotSupportedError') {
+    return {
+      kind: 'error',
+      message: 'Không thể giải mã tệp âm thanh này (sai định dạng, codec không hỗ trợ hoặc file tải về bị hỏng). Hãy chọn file MP3/WAV/M4A chuẩn hoặc bấm "Phát nhạc có sẵn".'
+    };
+  }
+  if (name === 'NotAllowedError') {
+    return {
+      kind: 'hint',
+      message: 'Trình duyệt tạm giữ tự phát. Hãy bấm nút ▶ bên trên để bắt đầu nghe.'
+    };
+  }
+  if (mediaErrorCode === 2) {
+    return { kind: 'error', message: 'Lỗi đọc dữ liệu tệp âm thanh.' };
+  }
+  return {
+    kind: 'error',
+    message: 'Không thể phát tệp âm thanh này. Hãy thử tệp khác hoặc bấm "Phát nhạc có sẵn".'
+  };
+}
+
 let audioEl = null;
 let objectUrl = '';
+let currentLocalFile = null;
 let currentTitle = DEFAULT_TRACK_TITLE;
 let activated = false;
 let errorMsg = '';
+let errorKind = '';
+let detectedHtmlFile = false;
+let playAttemptSeq = 0;
 let lastTimeNotify = 0;
 let mounted = false;
 const listeners = new Set();
 
 function releaseObjectUrl() {
-  if (!objectUrl) return;
-  URL.revokeObjectURL(objectUrl);
-  objectUrl = '';
+  if (objectUrl) {
+    URL.revokeObjectURL(objectUrl);
+    objectUrl = '';
+  }
+  currentLocalFile = null;
+  detectedHtmlFile = false;
+}
+
+function inspectUnreadableLocalFile(file, seq) {
+  if (!file || typeof file.slice !== 'function' || typeof file.slice(0, 128).text !== 'function') return;
+  file.slice(0, 128).text().then((head) => {
+    if (seq !== playAttemptSeq) return;
+    const trimmed = String(head || '').trimStart().toLowerCase();
+    if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.startsWith('<?xml') || trimmed.startsWith('{"error')) {
+      detectedHtmlFile = true;
+      errorKind = 'error';
+      errorMsg = 'Tệp tải về này thực chất là trang web lỗi (HTML), không phải file nhạc thật. Hãy tải lại tệp MP3/M4A hợp lệ hoặc bấm "Phát nhạc có sẵn".';
+      notify();
+    }
+  }).catch(() => {});
+}
+
+function applyPlaybackFailure(err, mediaErrorCode, seq) {
+  if (seq !== playAttemptSeq || detectedHtmlFile) return;
+  const classified = classifyAudioError(err, mediaErrorCode);
+  if (!classified) return;
+  errorKind = classified.kind;
+  errorMsg = classified.message;
+  notify();
+  if (classified.kind === 'error' && currentLocalFile) {
+    inspectUnreadableLocalFile(currentLocalFile, seq);
+  }
 }
 
 function getAudio() {
@@ -60,12 +128,15 @@ function getAudio() {
   audioEl.addEventListener('play', () => {
     activated = true;
     errorMsg = '';
+    errorKind = '';
+    detectedHtmlFile = false;
     notify();
   });
   audioEl.addEventListener('pause', emit);
   audioEl.addEventListener('ended', emit);
   audioEl.addEventListener('loadedmetadata', emit);
   audioEl.addEventListener('durationchange', emit);
+  audioEl.addEventListener('canplay', emit);
   audioEl.addEventListener('volumechange', emit);
   audioEl.addEventListener('timeupdate', () => {
     const now = Date.now();
@@ -74,15 +145,16 @@ function getAudio() {
     notify();
   });
   audioEl.addEventListener('error', () => {
-    errorMsg = 'Không thể phát tệp âm thanh này.';
-    notify();
+    applyPlaybackFailure(null, audioEl.error?.code || 4, playAttemptSeq);
   });
   return audioEl;
 }
 
 export function getMusicState() {
   const audio = getAudio();
-  const duration = audio && Number.isFinite(audio.duration) ? audio.duration : 0;
+  const rawDuration = audio ? audio.duration : 0;
+  const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 0;
+  const durationUnknown = Boolean(audio && rawDuration === Infinity);
   const currentTime = audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
   const playing = Boolean(audio && !audio.paused && !audio.ended);
   return {
@@ -93,8 +165,10 @@ export function getMusicState() {
     isCustom: Boolean(objectUrl),
     currentTime,
     duration,
+    durationUnknown,
     volume: audio ? audio.volume : 1,
-    errorMsg
+    errorMsg,
+    errorKind
   };
 }
 
@@ -111,13 +185,18 @@ export function subscribeMusic(callback) {
 
 function attemptPlay(audio) {
   if (!audio) return;
+  const seq = ++playAttemptSeq;
   activated = true;
   errorMsg = '';
+  errorKind = '';
+  detectedHtmlFile = false;
+  if (audio.error) {
+    try { audio.load(); } catch {}
+  }
   const result = audio.play();
   if (result && typeof result.catch === 'function') {
-    result.catch(() => {
-      errorMsg = 'Trình duyệt đang chặn tự phát. Bấm Phát để tiếp tục.';
-      notify();
+    result.catch((err) => {
+      applyPlaybackFailure(err, audio.error?.code || 0, seq);
     });
   }
   notify();
@@ -129,6 +208,7 @@ export function playPresetMusic() {
   if (objectUrl || !audio.getAttribute('src')?.includes(DEFAULT_TRACK_URL)) {
     releaseObjectUrl();
     audio.src = DEFAULT_TRACK_URL;
+    audio.load();
   }
   currentTitle = DEFAULT_TRACK_TITLE;
   attemptPlay(audio);
@@ -136,15 +216,20 @@ export function playPresetMusic() {
 
 export function loadLocalMusicFile(file) {
   if (!file) return { ok: false, error: '' };
-  if (!file.type || !file.type.startsWith('audio/')) {
-    return { ok: false, error: 'Tệp đã chọn không phải tệp âm thanh.' };
+  if (!isSupportedAudioFile(file)) {
+    return { ok: false, error: 'Tệp đã chọn không phải định dạng âm thanh/phương tiện được hỗ trợ.' };
+  }
+  if (Number(file.size) === 0) {
+    return { ok: false, error: 'Tệp âm thanh rỗng (0 byte).' };
   }
   const audio = getAudio();
   if (!audio) return { ok: false, error: 'Trình phát chưa sẵn sàng.' };
   releaseObjectUrl();
+  currentLocalFile = file;
   objectUrl = URL.createObjectURL(file);
   currentTitle = file.name.replace(/\.[^.]+$/, '') || file.name;
   audio.src = objectUrl;
+  audio.load();
   attemptPlay(audio);
   return { ok: true, title: currentTitle };
 }
@@ -153,7 +238,10 @@ export function toggleMusicPlay() {
   const audio = getAudio();
   if (!audio) return;
   if (audio.paused) {
-    if (!audio.getAttribute('src')) audio.src = DEFAULT_TRACK_URL;
+    if (!audio.getAttribute('src')) {
+      audio.src = DEFAULT_TRACK_URL;
+      audio.load();
+    }
     attemptPlay(audio);
   } else {
     audio.pause();
@@ -176,6 +264,7 @@ export function setMusicVolume(volume) {
 }
 
 export function stopAndResetMusic() {
+  playAttemptSeq += 1;
   const audio = getAudio();
   if (audio) {
     audio.pause();
@@ -183,6 +272,8 @@ export function stopAndResetMusic() {
   }
   activated = false;
   errorMsg = '';
+  errorKind = '';
+  detectedHtmlFile = false;
   notify();
 }
 

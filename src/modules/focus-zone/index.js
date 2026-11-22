@@ -557,24 +557,26 @@ export function renderFocus() {
 
   const audioInput = document.createElement('input');
   audioInput.type = 'file';
-  audioInput.accept = 'audio/*';
+  audioInput.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus,.webm,.mp4';
   audioInput.hidden = true;
   audioInput.addEventListener('change', () => {
     const file = audioInput.files?.[0];
+    audioInput.value = '';
     if (!file) return;
     const res = loadLocalMusicFile(file);
     if (!res.ok) {
       status.textContent = res.error || 'Tệp đã chọn không phải tệp âm thanh.';
-      audioInput.value = '';
       return;
     }
-    status.textContent = `Đang phát nhạc: ${res.title}`;
+    status.textContent = `Đã chọn nhạc: ${res.title}`;
   });
 
   let lastMusicPlaying = null;
   const unsubMusic = subscribeMusic((mState) => {
     audioTitle.textContent = mState.title;
-    audioTime.textContent = `${formatAudioTime(mState.currentTime)} / ${formatAudioTime(mState.duration)}`;
+    audioTime.textContent = mState.durationUnknown
+      ? `${formatAudioTime(mState.currentTime)} / Đang phát`
+      : `${formatAudioTime(mState.currentTime)} / ${formatAudioTime(mState.duration)}`;
     if (!isScrubbing) {
       const ratio = mState.duration > 0 ? Math.round((mState.currentTime / mState.duration) * 1000) : 0;
       seekInput.value = String(Math.max(0, Math.min(1000, ratio)));
@@ -582,6 +584,7 @@ export function renderFocus() {
     seekInput.disabled = !(mState.duration > 0);
     volInput.value = String(Math.round((mState.volume ?? 1) * 100));
     audioErr.hidden = !mState.errorMsg;
+    audioErr.classList.toggle('is-hint', mState.errorKind === 'hint');
     audioErr.textContent = mState.errorMsg || '';
     if (lastMusicPlaying !== mState.playing) {
       lastMusicPlaying = mState.playing;
