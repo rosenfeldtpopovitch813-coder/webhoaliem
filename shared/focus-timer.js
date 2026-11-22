@@ -38,3 +38,49 @@ export function studyStorageKeyForUid(uid) {
   const safe = String(uid || '').trim().replace(/[^A-Za-z0-9_-]/g, '');
   return `htvvm-local-study-stats-v3:${safe || 'guest'}`;
 }
+
+export function formatTimerClock(s) {
+  const safe = Math.max(0, Math.floor(Number(s) || 0));
+  const hrs = Math.floor(safe / 3600);
+  const mins = Math.floor((safe % 3600) / 60);
+  const secs = safe % 60;
+  return hrs > 0
+    ? `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+export function formatFullDuration(s) {
+  const safe = Math.max(0, Math.floor(Number(s) || 0));
+  return `${String(Math.floor(safe / 3600)).padStart(2, '0')}:${String(Math.floor((safe % 3600) / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+}
+
+export function selectPopupDisplayStrategy(env) {
+  if (!env) return 'none';
+  if (env.documentPictureInPicture && typeof env.documentPictureInPicture.requestWindow === 'function') {
+    return 'doc-pip';
+  }
+  const doc = env.document;
+  if (
+    doc &&
+    doc.pictureInPictureEnabled &&
+    typeof env.HTMLCanvasElement !== 'undefined' &&
+    typeof env.HTMLCanvasElement.prototype?.captureStream === 'function' &&
+    typeof env.HTMLVideoElement !== 'undefined' &&
+    typeof env.HTMLVideoElement.prototype?.requestPictureInPicture === 'function'
+  ) {
+    return 'video-pip';
+  }
+  if (typeof env.open === 'function') return 'window';
+  return 'none';
+}
+
+export function formatTabTitle({ running, selectedMode, seconds, manualActive, liveTodaySeconds }, baseTitle = 'HTVVM Studio — Học tập và luyện thi') {
+  if (running) {
+    const label = selectedMode === 'break' ? 'Nghỉ' : 'Tập trung';
+    return `${formatTimerClock(seconds)} · ${label} — HTVVM Studio`;
+  }
+  if (manualActive) {
+    return `${formatFullDuration(liveTodaySeconds)} · Đang học — HTVVM Studio`;
+  }
+  return baseTitle;
+}

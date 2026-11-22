@@ -1339,7 +1339,25 @@ body.is-exam-lockdown .exam-pdf-pages{max-height:calc(100vh - 134px)}
 .bg-music-mini-close{position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:999px;border:1px solid var(--stroke);background:var(--panel);color:var(--muted);display:grid;place-items:center;padding:0;box-shadow:0 2px 6px #0003;opacity:.85}
 .bg-music-mini-close:hover{opacity:1;color:var(--text);border-color:var(--accent)}
 body.is-dragging-music-fab iframe{pointer-events:none}
-body.is-exam-lockdown .bg-music-mini{display:none!important}
+body.is-exam-lockdown .bg-music-mini,body.is-exam-lockdown .focus-mini-pill{display:none!important}
+
+/* Persistent Floating In-App Focus Mini Pill & Popup Display Button */
+.focus-card-header-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.focus-popup-btn.is-active{background:color-mix(in srgb,var(--accent) 16%,var(--panel-2));border-color:var(--accent);color:var(--accent);font-weight:750}
+.focus-mini-pill{position:fixed;left:70px;bottom:18px;z-index:755;display:inline-flex;align-items:center;gap:6px;padding:5px 7px 5px 10px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--stroke));background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 28px -8px rgba(2,6,23,.42);touch-action:none;user-select:none;cursor:grab}
+.focus-mini-pill[hidden]{display:none!important}
+.focus-mini-pill.is-dragging{cursor:grabbing;scale:1.03}
+.focus-mini-info{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--text);padding:2px 4px 2px 0;text-align:left;cursor:inherit}
+.focus-mini-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);flex:none}
+.focus-mini-pill.is-break .focus-mini-dot{background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.6)}
+.focus-mini-texts{display:flex;flex-direction:column;line-height:1.15}
+.focus-mini-digits{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent)}
+.focus-mini-sub{font-size:9.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.focus-mini-action{width:30px;height:30px;border-radius:50%;border:1px solid var(--stroke);background:var(--panel-2);color:var(--text);display:inline-grid;place-items:center;padding:0;flex:none}
+.focus-mini-action:hover,.focus-mini-action.is-active{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel-2))}
+[data-theme="clay"] .focus-mini-pill{background:var(--panel);backdrop-filter:none;box-shadow:0 6px 18px -8px rgba(34,38,31,.22)}
+[data-theme="clay"] .focus-mini-digits{font-family:var(--font-clay-mono)}
+[data-theme="clay"] .focus-mini-dot{box-shadow:none}
 
 /* Home Leaderboard Top 1/2/3 Gold-Silver-Bronze & Login Streak */
 .home-board-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
