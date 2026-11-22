@@ -147,6 +147,16 @@ function getAudio() {
   audioEl.addEventListener('error', () => {
     applyPlaybackFailure(null, audioEl.error?.code || 4, playAttemptSeq);
   });
+  if (typeof window !== 'undefined') {
+    window.addEventListener('securitypolicyviolation', (ev) => {
+      const dir = String(ev?.effectiveDirective || ev?.violatedDirective || '').toLowerCase();
+      if (!dir.startsWith('media-src')) return;
+      detectedHtmlFile = true;
+      errorKind = 'error';
+      errorMsg = 'Chính sách bảo mật (CSP media-src) đang chặn phát tệp âm thanh từ máy. Hãy tải lại trang (Ctrl+Shift+R) để cập nhật bản mới.';
+      notify();
+    });
+  }
   return audioEl;
 }
 
