@@ -4,6 +4,21 @@ import { navigate } from '../../core/router.js';
 import { auth } from '../../core/firebase.js';
 import { AppStore } from '../../core/store.js';
 import {
+  subscribeFocus,
+  togglePomodoro,
+  toggleFocusPopupDisplay,
+  formatTimerClock
+} from '../../core/focus-session.js';
+import {
+  subscribeMusic,
+  toggleMusicPlay,
+  playPresetMusic,
+  formatAudioTime,
+  DEFAULT_TRACK_TITLE
+} from '../../core/music-player.js';
+import { subscribeYouTube } from '../../core/youtube-player.js';
+import { stagePendingExamImportFile, openSmartImportMode } from '../exam-paper/index.js';
+import {
   COUNTDOWN_UNITS,
   computeEventCountdown,
   getNextStreakMilestone,
@@ -13,15 +28,15 @@ import {
 } from '../../../shared/study-core.js';
 
 const modules = [
-  ['exam-paper', 'Soạn đề', 'Gõ đề trực tiếp, tùy chỉnh phông chữ, màu sắc, công thức Toán/Hóa, xuất .docx & PDF', '/exam-paper'],
-  ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay, dựng hình không gian, vẽ đồ thị và ghi chú lên PDF', '/whiteboard'],
-  ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR bên phải, chấm điểm tự động', '/exam'],
-  ['arena', 'Đấu trường học tập', 'Đối kháng theo vòng, ôn Tiếng Anh, Ai là Triệu Phú và Đấu trường 100', '/arena'],
-  ['flask', 'Mô hình thí nghiệm', 'Chọn môn học, xem cơ sở lý thuyết 6 mục và thực hành mô phỏng 3D tương tác', '/experiments'],
-  ['handbook', 'Sổ tay học tập', 'Bảng tuần hoàn, phổ IR và vẽ đồ thị hàm số', '/handbook'],
-  ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro, thống kê giờ học và nhạc tập trung', '/focus'],
-  ['library', 'Thư viện học liệu', 'Kho tài liệu, đề cương và bài giảng chọn lọc', '/library'],
-  ['admissions', 'Nguyện vọng', 'So sánh tổ hợp và tính điểm xét tuyển đại học', '/admissions']
+  ['exam-paper', 'Soạn đề', 'Soạn trực tiếp trên trang, tách công thức Word/PDF & trộn mã đề', '/exam-paper'],
+  ['exam-room', 'Phòng thi trực tuyến', 'Đề bên trái, phiếu OMR bên phải, chấm điểm chuẩn 2025', '/exam'],
+  ['whiteboard', 'Bảng vẽ Mực', 'Bảng viết tay, dựng hình không gian, vẽ đồ thị & ghi chú PDF', '/whiteboard'],
+  ['arena', 'Đấu trường học tập', 'Đối kháng theo vòng, ôn Tiếng Anh, Triệu Phú & Đấu trường 100', '/arena'],
+  ['flask', 'Mô hình thí nghiệm', 'Cơ sở lý thuyết 6 mục & mô phỏng 3D tương tác trực quan', '/experiments'],
+  ['handbook', 'Sổ tay học tập', 'Bảng tuần hoàn 118 nguyên tố, phổ IR & vẽ đồ thị hàm số', '/handbook'],
+  ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro chạy nền, YouTube nền & thống kê chuỗi học', '/focus'],
+  ['library', 'Thư viện học liệu', 'Kho tài liệu, chuyên đề & bài giảng chọn lọc', '/library'],
+  ['admissions', 'Nguyện vọng', 'So sánh tổ hợp & tính điểm xét tuyển đại học', '/admissions']
 ];
 
 const fmt = seconds => {
@@ -63,7 +78,7 @@ function createDefaultEvents() {
   ];
 }
 
-function loadSavedEvents() {
+export function loadSavedEvents() {
   try {
     const raw = JSON.parse(localStorage.getItem(EVENTS_STORAGE_KEY) || 'null');
     if (Array.isArray(raw) && raw.length) {
@@ -85,11 +100,28 @@ function loadSavedEvents() {
   return createDefaultEvents();
 }
 
+export function readActiveCountdownSummary(nowMs = Date.now()) {
+  const events = loadSavedEvents();
+  let activeId = '';
+  try { activeId = localStorage.getItem(ACTIVE_EVENT_KEY) || ''; } catch {}
+  const ev = events.find(x => x.id === activeId) || events[0];
+  if (!ev) return null;
+  const cd = computeEventCountdown(ev.targetMs, nowMs, ['days', 'hours', 'minutes', 'seconds']);
+  const p2 = n => String(n ?? 0).padStart(2, '0');
+  const shortTitle = ev.title.replace(/^Kỳ thi Tốt nghiệp\s+/i, '').slice(0, 26);
+  return {
+    title: ev.title,
+    shortTitle,
+    text: `${shortTitle} · ${cd.values.days} ngày ${p2(cd.values.hours)}:${p2(cd.values.minutes)}:${p2(cd.values.seconds)}`
+  };
+}
+
 function saveEventsToStorage(events, activeId) {
   try {
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
     if (activeId) localStorage.setItem(ACTIVE_EVENT_KEY, activeId);
   } catch {}
+  window.dispatchEvent(new CustomEvent('htvvm-events-updated'));
 }
 
 function loadEnabledUnits() {
@@ -117,28 +149,28 @@ function renderCelebrationCanvasPng({ studentName, streakDays, totalSeconds, tod
   if (!ctx) return null;
 
   const grad = ctx.createLinearGradient(0, 0, 1200, 720);
-  grad.addColorStop(0, '#071126');
-  grad.addColorStop(0.52, '#131c38');
-  grad.addColorStop(1, '#1e163b');
+  grad.addColorStop(0, '#0d1c17');
+  grad.addColorStop(0.55, '#13261f');
+  grad.addColorStop(1, '#1a3329');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 1200, 720);
 
   const glow = ctx.createRadialGradient(600, 210, 30, 600, 210, 440);
-  glow.addColorStop(0, 'rgba(245, 158, 11, 0.28)');
-  glow.addColorStop(0.6, 'rgba(45, 212, 191, 0.12)');
-  glow.addColorStop(1, 'rgba(15, 23, 42, 0)');
+  glow.addColorStop(0, 'rgba(245, 158, 11, 0.24)');
+  glow.addColorStop(0.6, 'rgba(24, 92, 71, 0.18)');
+  glow.addColorStop(1, 'rgba(13, 28, 23, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 1200, 720);
 
   ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 3;
   ctx.strokeRect(36, 36, 1128, 648);
-  ctx.strokeStyle = 'rgba(94, 234, 212, 0.28)';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(167, 243, 208, 0.25)';
+  ctx.lineWidth = 1.2;
   ctx.strokeRect(48, 48, 1104, 624);
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#5eead4';
+  ctx.fillStyle = '#a7f3d0';
   ctx.font = '800 20px "Be Vietnam Pro", system-ui, sans-serif';
   ctx.fillText('HTVVM STUDIO · CHỨNG NHẬN CỘT MỐC CHUỖI HỌC TẬP', 600, 105);
 
@@ -170,17 +202,17 @@ function renderCelebrationCanvasPng({ studentName, streakDays, totalSeconds, tod
   cards.forEach(([label, val], idx) => {
     const x = 95 + idx * 345;
     const y = 430;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+    ctx.fillStyle = 'rgba(10, 22, 18, 0.72)';
     ctx.fillRect(x, y, 320, 125);
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+    ctx.strokeStyle = 'rgba(167, 243, 208, 0.28)';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, 320, 125);
 
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = '#9ca3af';
     ctx.font = '700 15px "Be Vietnam Pro", system-ui, sans-serif';
     ctx.fillText(label, x + 160, y + 44);
 
-    ctx.fillStyle = '#5eead4';
+    ctx.fillStyle = '#a7f3d0';
     ctx.font = '800 22px "Be Vietnam Pro", system-ui, sans-serif';
     ctx.fillText(val, x + 160, y + 88);
   });
@@ -190,7 +222,7 @@ function renderCelebrationCanvasPng({ studentName, streakDays, totalSeconds, tod
     month: '2-digit',
     year: 'numeric'
   });
-  ctx.fillStyle = '#94a3b8';
+  ctx.fillStyle = '#9ca3af';
   ctx.font = '600 17px "Be Vietnam Pro", system-ui, sans-serif';
   ctx.fillText(`Xác lập ngày ${dateStr} trên HTVVM Studio — Kiên trì mỗi ngày tạo nên bứt phá.`, 600, 628);
 
@@ -199,15 +231,110 @@ function renderCelebrationCanvasPng({ studentName, streakDays, totalSeconds, tod
 
 export function renderHome() {
   const wrap = element('div', 'home-page');
-  const hero = element('section', 'hero home-hero');
-  hero.append(
-    element('h2', 'hero-title', 'Luyện thi & Học tập trực tuyến'),
-    element('p', 'hero-subtitle', 'Soạn đề, làm bài kiểm tra tính giờ, tra cứu bảng tuần hoàn, theo dõi giờ học và đếm ngược mục tiêu.')
-  );
-  wrap.append(hero);
 
   // ============================================================================
-  // 1. EVENT CALENDAR & 3D FLIP COUNTDOWN CLOCK
+  // 1. HÀNG ĐẦU BENTO BẤT ĐỐI XỨNG (64% LỘ TRÌNH & TÁCH ĐỀ · 36% GÓC TẬP TRUNG)
+  // ============================================================================
+  const bentoTop = element('section', 'home-bento-top');
+
+  const workbenchCard = element('article', 'home-workbench-card');
+  const wbKicker = element('span', 'home-bento-kicker', 'Tiếp tục lộ trình & Soạn đề thông minh');
+  const wbTitle = element('h2', 'home-bento-title', 'Ôn luyện Hóa – Toán – Anh & Đề chuẩn THPT 2025');
+  const wbActions = element('div', 'home-bento-cta-row');
+  const practiceMistakesBtn = button('Luyện lại câu vừa sai →', 'primary-btn home-primary-cta', () => {
+    try { sessionStorage.setItem('htvvm_exam_open_tab', 'mistakes'); } catch {}
+    navigate('/exam');
+  });
+  const enterExamBtn = button('Vào Phòng thi', 'focus-btn home-secondary-cta', () => navigate('/exam'));
+  wbActions.append(practiceMistakesBtn, enterExamBtn);
+
+  // Quick-Drop Strip (.DOCX / .PDF -> Exam Studio)
+  const quickDrop = element('label', 'home-quick-drop');
+  const quickInput = document.createElement('input');
+  quickInput.type = 'file';
+  quickInput.accept = '.docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  quickInput.hidden = true;
+
+  const dropUpIcon = element('span', 'home-quick-drop-icon');
+  dropUpIcon.append(icon('upload', 18));
+  const dropCopy = element('span', 'home-quick-drop-text', 'Kéo thả đề .DOCX hoặc .PDF (tự tách công thức LaTeX, hình vẽ & phiếu tô OMR 2025)');
+  const dropPills = element('div', 'home-quick-drop-pills');
+  const samplePillBtn = button('Thử đề mẫu Hóa 12 (4 mã đề)', 'home-file-pill', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openSmartImportMode();
+    navigate('/exam-paper');
+  });
+  const a4PillBtn = button('Mở trình Soạn đề', 'home-file-pill', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate('/exam-paper');
+  });
+  dropPills.append(samplePillBtn, a4PillBtn);
+  quickDrop.append(quickInput, dropUpIcon, dropCopy, dropPills);
+
+  quickInput.addEventListener('change', () => {
+    const f = quickInput.files?.[0];
+    quickInput.value = '';
+    if (f) {
+      stagePendingExamImportFile(f);
+      navigate('/exam-paper');
+    }
+  });
+  quickDrop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    quickDrop.classList.add('is-dragover');
+  });
+  quickDrop.addEventListener('dragleave', () => quickDrop.classList.remove('is-dragover'));
+  quickDrop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    quickDrop.classList.remove('is-dragover');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) {
+      stagePendingExamImportFile(f);
+      navigate('/exam-paper');
+    }
+  });
+
+  workbenchCard.append(wbKicker, wbTitle, wbActions, quickDrop);
+
+  // Thẻ Góc tập trung tương phản sâu (#13221C)
+  const focusBento = element('article', 'home-focus-bento');
+  const fbHead = element('div', 'home-focus-bento-head');
+  const fbKicker = element('span', 'home-focus-bento-kicker', 'GÓC TẬP TRUNG');
+  const fbStreakPill = element('span', 'home-focus-streak-pill', 'Chuỗi 0 ngày');
+  fbHead.append(fbKicker, fbStreakPill);
+
+  const fbDigits = element('div', 'home-focus-digits', '25:00');
+  const fbSub = element('p', 'home-focus-sub', 'Sẵn sàng phiên tập trung (Pomodoro 25p)');
+
+  const fbControls = element('div', 'home-focus-controls');
+  const fbToggleBtn = button('Bắt đầu', 'home-focus-btn is-main', () => togglePomodoro());
+  const fbPipBtn = button('Mở cửa sổ nổi PiP', 'home-focus-btn', () => {
+    void toggleFocusPopupDisplay();
+  });
+  fbControls.append(fbToggleBtn, fbPipBtn);
+
+  const fbAudioBar = element('div', 'home-focus-audio-strip');
+  const fbAudioRow = element('div', 'home-focus-audio-row');
+  const fbAudioBtn = button('', 'home-focus-audio-play', () => {
+    toggleMusicPlay();
+  });
+  fbAudioBtn.append(icon('play', 12));
+  const fbAudioTitle = element('span', 'home-focus-audio-title', 'study-break-music.wav');
+  const fbAudioTime = element('span', 'home-focus-audio-time', '00:00 / 00:00');
+  fbAudioRow.append(fbAudioBtn, fbAudioTitle, fbAudioTime);
+  const fbAudioTrack = element('div', 'home-focus-audio-track');
+  const fbAudioFill = element('div', 'home-focus-audio-fill');
+  fbAudioTrack.append(fbAudioFill);
+  fbAudioBar.append(fbAudioRow, fbAudioTrack);
+
+  focusBento.append(fbHead, fbDigits, fbSub, fbControls, fbAudioBar);
+  bentoTop.append(workbenchCard, focusBento);
+  wrap.append(bentoTop);
+
+  // ============================================================================
+  // 2. EVENT CALENDAR & 3D FLIP COUNTDOWN CLOCK (PROGRESSIVE DISCLOSURE DRAWER)
   // ============================================================================
   let savedEvents = loadSavedEvents();
   let activeEventId = (() => {
@@ -223,13 +350,33 @@ export function renderHome() {
     return act ? new Date(act.year, act.month - 1, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   })();
 
+  const countdownDrawer = document.createElement('details');
+  countdownDrawer.className = 'home-countdown-drawer';
+  countdownDrawer.id = 'home-countdown-drawer';
+  try {
+    if (sessionStorage.getItem('htvvm_open_countdown_drawer') === '1') {
+      countdownDrawer.open = true;
+      sessionStorage.removeItem('htvvm_open_countdown_drawer');
+    }
+  } catch {}
+
+  const drawerSummary = document.createElement('summary');
+  drawerSummary.className = 'home-countdown-summary';
+  const summaryLeft = element('div', 'home-countdown-summary-left');
+  summaryLeft.append(icon('calendar', 16));
+  const summaryTitle = element('strong', '', '');
+  const summaryClock = element('span', 'home-countdown-summary-mono', '');
+  summaryLeft.append(summaryTitle, summaryClock);
+  const summaryHint = element('span', 'home-countdown-summary-action', 'Lịch sự kiện & Đồng hồ lật 3D ▾');
+  drawerSummary.append(summaryLeft, summaryHint);
+
   const countdownSection = element('section', 'home-countdown-panel');
   const countdownGrid = element('div', 'home-countdown-layout');
   const clockPane = element('div', 'home-flip-pane');
   const calendarPane = element('div', 'home-calendar-pane');
   countdownGrid.append(clockPane, calendarPane);
   countdownSection.append(countdownGrid);
-  wrap.append(countdownSection);
+  countdownDrawer.append(drawerSummary, countdownSection);
 
   const clockHead = element('div', 'home-flip-header');
   const clockTitleWrap = element('div', 'home-flip-title-wrap');
@@ -283,6 +430,24 @@ export function renderHome() {
     unitChipsWrap.append(presetDaysBtn, presetAllBtn);
   }
 
+  const upcomingEventsList = element('div', 'home-upcoming-mini-list');
+  function renderUpcomingMini() {
+    upcomingEventsList.replaceChildren();
+    const sorted = [...savedEvents].sort((a, b) => a.targetMs - b.targetMs).slice(0, 2);
+    sorted.forEach((ev) => {
+      const p2 = n => String(n).padStart(2, '0');
+      const row = button('', 'home-upcoming-mini-row', () => {
+        countdownDrawer.open = true;
+        countdownDrawer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      row.append(
+        element('span', 'home-upcoming-date', `${p2(ev.day)} Th${p2(ev.month)}`),
+        element('span', 'home-upcoming-name', ev.title)
+      );
+      upcomingEventsList.append(row);
+    });
+  }
+
   function rebuildEventPills() {
     eventPillsBar.replaceChildren();
     savedEvents.forEach(ev => {
@@ -294,6 +459,7 @@ export function renderHome() {
         rebuildEventPills();
         renderCalendarWidget();
         updateFlipClockDom(true);
+        renderUpcomingMini();
       });
       pill.append(selectBtn);
       if (savedEvents.length > 1) {
@@ -304,6 +470,7 @@ export function renderHome() {
           rebuildEventPills();
           renderCalendarWidget();
           updateFlipClockDom(true);
+          renderUpcomingMini();
         });
         delBtn.title = 'Xóa sự kiện này';
         pill.append(delBtn);
@@ -318,6 +485,10 @@ export function renderHome() {
     clockEventTitle.textContent = activeEvent.title;
     const pad2 = n => String(n).padStart(2, '0');
     clockEventMeta.textContent = `Mục tiêu: ${pad2(activeEvent.day)}/${pad2(activeEvent.month)}/${activeEvent.year} lúc ${pad2(activeEvent.hour)}:${pad2(activeEvent.minute)}`;
+
+    const summaryCd = computeEventCountdown(activeEvent.targetMs, Date.now(), ['days', 'hours', 'minutes', 'seconds']);
+    summaryTitle.textContent = activeEvent.title;
+    summaryClock.textContent = `Còn ${summaryCd.values.days} ngày ${pad2(summaryCd.values.hours)}:${pad2(summaryCd.values.minutes)}:${pad2(summaryCd.values.seconds)}`;
 
     const cd = computeEventCountdown(activeEvent.targetMs, Date.now(), enabledUnits);
     if (forceRebuild || flipCardsRow.children.length !== cd.activeUnits.length) {
@@ -364,7 +535,6 @@ export function renderHome() {
 
   clockPane.append(clockHead, eventPillsBar, unitBar, flipCardsRow);
 
-  // Interactive Monthly Calendar & Event Form
   const calHeader = element('div', 'home-cal-header');
   const calMonthTitle = element('strong', 'home-cal-month-title', '');
   const calPrevBtn = button('‹', 'focus-btn is-sm', () => {
@@ -453,6 +623,7 @@ export function renderHome() {
     rebuildEventPills();
     renderCalendarWidget();
     updateFlipClockDom(true);
+    renderUpcomingMini();
   });
 
   function renderCalendarWidget() {
@@ -502,6 +673,7 @@ export function renderHome() {
   rebuildEventPills();
   renderCalendarWidget();
   updateFlipClockDom(true);
+  renderUpcomingMini();
 
   const flipTimerId = window.setInterval(() => {
     if (!wrap.isConnected) {
@@ -512,25 +684,23 @@ export function renderHome() {
   }, 1000);
 
   // ============================================================================
-  // 2. LEADERBOARD (TOP 3 + MY POSITION + FULL POPUP) & STREAK CELEBRATION
+  // 3. HÀNG DƯỚI BENTO (58% PHÒNG THI OMR & TIẾN TRÌNH · 42% BẢNG XẾP HẠNG & LỊCH)
   // ============================================================================
   const boardPanel = element('section', 'home-leaderboard-panel');
   const boardHeader = element('div', 'home-board-header');
   const boardTitle = element('div', 'home-board-title');
-  const boardIcon = element('span', 'home-board-icon');
-  boardIcon.append(icon('trophy', 22));
-  boardTitle.append(boardIcon, element('div', '', ''));
-  const boardSubtitle = element('p', 'home-board-subtitle', 'Giờ học & Rank tính theo 1 ngày · Chuỗi tính số ngày & tổng giờ học.');
-  boardTitle.lastChild.append(element('h3', 'section-heading', 'Bảng xếp hạng'), boardSubtitle);
-  const refresh = button('Làm mới', 'focus-btn', () => loadBoard());
+  const boardSubtitle = element('p', 'home-board-subtitle', 'Giờ học 1 ngày · Chuỗi học & Lịch sắp tới.');
+  boardTitle.append(element('div', '', ''));
+  boardTitle.lastChild.append(element('h3', 'section-heading', 'Bảng xếp hạng & Lịch sắp tới'), boardSubtitle);
+  const refresh = button('Làm mới', 'focus-btn is-sm', () => loadBoard());
   boardHeader.append(boardTitle, refresh);
 
   const boardToolbar = element('div', 'home-board-toolbar');
   const boardTabs = element('div', 'home-board-tabs');
-  let activeBoardTab = 'study'; // 'study' | 'streak'
-  const tabStudyBtn = button('Giờ học hôm nay', 'home-board-tab is-active', () => switchBoardTab('study'));
+  let activeBoardTab = 'study';
+  const tabStudyBtn = button('Hôm nay', 'home-board-tab is-active', () => switchBoardTab('study'));
   const tabStreakBtn = button('', 'home-board-tab', () => switchBoardTab('streak'));
-  tabStreakBtn.append(icon('flame', 14), document.createTextNode(' Chuỗi học'));
+  tabStreakBtn.append(icon('flame', 13), document.createTextNode(' Chuỗi học'));
   boardTabs.append(tabStudyBtn, tabStreakBtn);
 
   const shareWrap = element('label', 'home-board-optin');
@@ -543,7 +713,15 @@ export function renderHome() {
   myStreakBanner.hidden = true;
   const board = element('div', 'home-board-list');
   const boardFooterActions = element('div', 'home-board-footer-actions');
-  boardPanel.append(boardHeader, boardToolbar, myStreakBanner, board, boardFooterActions);
+  const upcomingHead = element('div', 'home-upcoming-head');
+  upcomingHead.append(
+    element('span', 'home-upcoming-kicker', 'LỊCH SỰ KIỆN SẮP TỚI'),
+    button('Chỉnh lịch ↗', 'home-inline-link-btn', () => {
+      countdownDrawer.open = !countdownDrawer.open;
+      if (countdownDrawer.open) countdownDrawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    })
+  );
+  boardPanel.append(boardHeader, boardToolbar, myStreakBanner, board, boardFooterActions, upcomingHead, upcomingEventsList);
 
   let cachedBoardData = null;
   function switchBoardTab(nextTab) {
@@ -558,13 +736,13 @@ export function renderHome() {
       'div',
       `home-board-row${rankNumber <= 3 ? ` top-${rankNumber}` : ''}${isCurrentUser ? ' is-me' : ''}`
     );
-    const rank = element('span', 'home-board-rank', String(rankNumber));
+    const rank = element('span', 'home-board-rank', `#${rankNumber}`);
     const details = element('div', 'home-board-person');
     const dailyTitle = titleFor(Number(row.todaySeconds) || 0);
     const nameLine = element('strong', '', `${row.name || 'Người học'}${isCurrentUser ? ' (Bạn)' : ''}`);
     const subText = tabMode === 'streak'
-      ? `Tổng ${fmt(row.totalSeconds)} · Kỷ lục ${row.bestStreak || row.streak || 1} ngày · Rank hôm nay: ${dailyTitle}`
-      : `Rank hôm nay: ${dailyTitle}${row.streak ? ` · Chuỗi ${row.streak} ngày (Tổng ${fmt(row.totalSeconds)})` : ''}`;
+      ? `Tổng ${fmt(row.totalSeconds)} · Kỷ lục ${row.bestStreak || row.streak || 1} ngày`
+      : `Rank: ${dailyTitle}${row.streak ? ` · Chuỗi ${row.streak} ngày` : ''}`;
     details.append(nameLine, element('small', '', subText));
     const metric = tabMode === 'streak'
       ? `${row.streak || 0} ngày · ${fmt(row.totalSeconds)}`
@@ -575,16 +753,23 @@ export function renderHome() {
 
   function openFullLeaderboardModal() {
     if (!cachedBoardData) return;
+    const prevFocused = document.activeElement;
     const overlay = element('div', 'home-modal-backdrop');
     const modal = element('section', 'home-modal-dialog');
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
+    modal.tabIndex = -1;
     let modalTab = activeBoardTab;
+
+    const closeModal = () => {
+      overlay.remove();
+      if (prevFocused && typeof prevFocused.focus === 'function') prevFocused.focus();
+    };
 
     const head = element('div', 'home-modal-head');
     head.append(
       element('h3', 'section-heading', 'Toàn bộ Bảng xếp hạng'),
-      button('Đóng ✕', 'focus-btn is-sm', () => overlay.remove())
+      button('Đóng', 'focus-btn is-sm', closeModal)
     );
 
     const tabsBar = element('div', 'home-board-tabs');
@@ -619,17 +804,14 @@ export function renderHome() {
     paintModalList();
     modal.append(head, tabsBar, listContainer);
     overlay.append(modal);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    window.addEventListener('keydown', function onEsc(e) {
-      if (e.key === 'Escape') {
-        overlay.remove();
-        window.removeEventListener('keydown', onEsc);
-      }
-    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
     document.body.append(overlay);
+    modal.focus();
   }
 
   function openStreakCelebrationModal(statsInput = {}) {
+    const prevFocused = document.activeElement;
     const user = auth?.currentUser;
     const studentName = user?.displayName || 'Học viên HTVVM';
     const streakDays = Math.max(0, Math.floor(Number(statsInput.streak) || 0));
@@ -644,6 +826,12 @@ export function renderHome() {
     const card = element('section', 'streak-celebration-modal');
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
+    card.tabIndex = -1;
+
+    const closeCard = () => {
+      overlay.remove();
+      if (prevFocused && typeof prevFocused.focus === 'function') prevFocused.focus();
+    };
 
     const kicker = element('span', 'streak-celebration-kicker', 'CHÚC MỪNG CỘT MỐC CHUỖI HỌC TẬP');
     const badge = element('div', 'streak-celebration-badge');
@@ -664,7 +852,7 @@ export function renderHome() {
 
     const captureStatus = element('p', 'streak-capture-status', '');
     const actionsRow = element('div', 'streak-celebration-actions');
-    const captureBtn = button('📸 Chụp màn hình kỷ niệm (Tải PNG)', 'primary-btn', async () => {
+    const captureBtn = button('Tải chứng nhận PNG', 'primary-btn', async () => {
       const canvas = renderCelebrationCanvasPng({
         studentName,
         streakDays: milestoneDays,
@@ -684,31 +872,65 @@ export function renderHome() {
         canvas.toBlob(async (blob) => {
           if (blob && navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            captureStatus.textContent = '✓ Đã tải ảnh PNG và chép vào Clipboard để bạn dán chia sẻ ngay!';
+            captureStatus.textContent = '✓ Đã tải ảnh PNG và chép vào Clipboard!';
           } else {
-            captureStatus.textContent = '✓ Đã tải ảnh chụp màn hình chứng nhận (.png) về máy!';
+            captureStatus.textContent = '✓ Đã tải ảnh chứng nhận (.png) về máy!';
           }
         }, 'image/png');
       } catch {
-        captureStatus.textContent = '✓ Đã tải ảnh chụp màn hình chứng nhận (.png) về máy!';
+        captureStatus.textContent = '✓ Đã tải ảnh chứng nhận (.png) về máy!';
       }
     });
-    const closeBtn = button('Đóng', 'focus-btn', () => overlay.remove());
+    const closeBtn = button('Đóng', 'focus-btn', closeCard);
     actionsRow.append(captureBtn, closeBtn);
 
     card.append(kicker, badge, title, sub, metricsGrid, captureStatus, actionsRow);
     overlay.append(card);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeCard(); });
+    card.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCard(); });
     document.body.append(overlay);
+    card.focus();
   }
 
+  // Live bindings for Home Focus & Audio Bento Card
   let alive = true;
+  const unsubHomeFocus = subscribeFocus((fState) => {
+    if (!alive || !fState) return;
+    fbDigits.textContent = formatTimerClock(fState.seconds);
+    fbStreakPill.textContent = `Chuỗi ${fState.liveStreak || 0} ngày`;
+    fbToggleBtn.textContent = fState.running ? 'Tạm dừng' : 'Bắt đầu';
+    fbPipBtn.textContent = fState.popupOpen ? 'Đóng cửa sổ PiP' : 'Mở cửa sổ nổi PiP';
+    fbPipBtn.classList.toggle('is-active', Boolean(fState.popupOpen));
+    fbSub.textContent = fState.running
+      ? `Đang chạy nền · ${fState.selectedMode === 'break' ? 'Phiên nghỉ' : 'Pomodoro'} (${Math.round(fState.duration / 60)}p)`
+      : `Hôm nay: ${fmt(fState.liveTodaySeconds)} · Rank: ${titleFor(fState.liveTodaySeconds)}`;
+  });
+
+  const unsubHomeMusic = subscribeMusic((mState) => {
+    if (!alive || !mState) return;
+    fbAudioBtn.replaceChildren(icon(mState.playing ? 'pause' : 'play', 12));
+    fbAudioTitle.textContent = mState.title || DEFAULT_TRACK_TITLE;
+    fbAudioTime.textContent = `${formatAudioTime(mState.currentTime)} / ${mState.duration > 0 ? formatAudioTime(mState.duration) : '00:00'}`;
+    const ratio = mState.duration > 0 ? Math.min(1, Math.max(0, mState.currentTime / mState.duration)) : 0;
+    fbAudioFill.style.transform = `scaleX(${ratio.toFixed(3)})`;
+  });
+
+  const unsubHomeYt = subscribeYouTube((yt) => {
+    if (!alive || !yt) return;
+    if (yt.active) {
+      fbAudioTitle.textContent = 'YouTube đang phát nền';
+    }
+  });
+
   const unsubscribeUser = AppStore.subscribe('user', () => { if (alive) { loadBoard(); loadExamProgress(); } });
   const unsubscribeStats = AppStore.subscribe('studyStats', (stats) => { if (alive && stats) paintMyBanner(stats); });
   const watcher = new MutationObserver(() => {
     if (!wrap.isConnected) {
       alive = false;
       window.clearInterval(flipTimerId);
+      unsubHomeFocus();
+      unsubHomeMusic();
+      unsubHomeYt();
       unsubscribeUser();
       unsubscribeStats();
       watcher.disconnect();
@@ -716,25 +938,42 @@ export function renderHome() {
   });
   watcher.observe(document.getElementById('main-content') || document.body, { childList: true });
 
+  // Cột trái hàng 2: Phòng thi chuẩn THPT 2025 & Ngân hàng câu hỏi
   const examProgress = element('section', 'home-exam-stats-panel');
   const examProgressHeader = element('div', 'home-exam-stats-header');
   const examProgressTitle = element('div', '');
-  examProgressTitle.append(element('h3', 'section-heading', 'Tiến trình luyện thi'), element('p', 'home-board-subtitle', 'Tổng hợp các lượt thi đã nộp trên máy chủ.'));
-  const examOpen = button('Mở phòng thi', 'primary-btn', () => navigate('/exam'));
+  examProgressTitle.append(
+    element('h3', 'section-heading', 'Phòng thi chuẩn THPT 2025 & Tiến trình'),
+    element('p', 'home-board-subtitle', 'Tách đôi tờ đề và Phiếu tô OMR · Lưu điểm đồng bộ từng lượt.')
+  );
+  const examOpen = button('Mở phòng thi', 'focus-btn is-sm', () => navigate('/exam'));
   examProgressHeader.append(examProgressTitle, examOpen);
+
+  // Miniature preview of Chemistry + 2025 OMR structure right inside the card
+  const omrMiniPreview = element('div', 'home-omr-mini-preview');
+  const miniPaper = element('div', 'home-mini-paper-box');
+  miniPaper.innerHTML = '<strong>Câu mẫu · Este – Lipit</strong><p>Thủy phân <code>CH₃COOC₂H₅ + NaOH → CH₃COONa + C₂H₅OH</code></p><div class="home-mini-opts"><span>A. Axit & Ancol</span><span class="is-correct">B. Muối & Ancol</span></div>';
+  const miniSheet = element('div', 'home-mini-omr-box');
+  miniSheet.innerHTML = '<strong>Phiếu OMR 2025</strong><small>Phần I (A–D) · Phần II (Đ/S) · Phần III (Số)</small><div class="home-mini-bubbles"><i>A</i><i class="on">B</i><i>C</i><i>D</i></div>';
+  omrMiniPreview.append(miniPaper, miniSheet);
+
   const examProgressBody = element('div', 'home-exam-stats-body');
-  examProgress.append(examProgressHeader, examProgressBody);
+  examProgress.append(examProgressHeader, omrMiniPreview, examProgressBody);
+
   const dashboardGrid = element('div', 'home-dashboard-grid');
   dashboardGrid.append(examProgress, boardPanel);
-  wrap.append(dashboardGrid, element('h3', 'section-heading', 'Không gian học tập'));
+  wrap.append(dashboardGrid, countdownDrawer, element('h3', 'section-heading home-dir-heading', 'Danh mục công cụ học tập'));
 
   const grid = element('div', 'module-grid');
   for (const [iconName, title, description, path] of modules) {
     const card = element('button', 'module-card'); card.type = 'button';
     const modIcon = element('span', 'module-icon');
-    modIcon.append(icon(iconName, 22));
-    card.append(modIcon, element('strong', 'module-title', title), element('span', 'module-description', description), element('span', 'module-link', 'Mở mục'));
-    card.addEventListener('click', () => navigate(path)); grid.append(card);
+    modIcon.append(icon(iconName, 20));
+    const textWrap = element('div', 'module-card-copy');
+    textWrap.append(element('strong', 'module-title', title), element('span', 'module-description', description));
+    card.append(modIcon, textWrap, element('span', 'module-link', '→'));
+    card.addEventListener('click', () => navigate(path));
+    grid.append(card);
   }
   wrap.append(grid);
 
@@ -770,26 +1009,24 @@ export function renderHome() {
     if (!list.length) {
       const emptyMsg = activeBoardTab === 'streak'
         ? 'Chưa có thành viên bật chia sẻ chuỗi học. Hãy tick "Hiện tôi trên BXH" để góp mặt!'
-        : 'Chưa có người bật chia sẻ thời gian học hôm nay. Bạn có thể bật chia sẻ tại đây hoặc trong Góc tập trung.';
+        : 'Chưa có người bật chia sẻ thời gian học hôm nay.';
       board.append(element('p', 'home-board-empty', emptyMsg));
       return;
     }
 
-    // 1. Only show Top 3 on the main Overview panel
     const top3 = list.slice(0, 3);
     top3.forEach((row, index) => {
       const isMe = Boolean(currentUid && row.uid === currentUid);
       board.append(createLeaderboardRowEl(row, index + 1, activeBoardTab, isMe));
     });
 
-    // 2. Always show current user's own position below Top 3 if not already inside Top 3
     const myIdx = currentUid ? list.findIndex(r => r.uid === currentUid) : -1;
     if (currentUid && myIdx >= 3) {
       const sep = element('div', 'home-board-my-divider', 'Vị trí của bạn trên Bảng xếp hạng');
       const myRow = createLeaderboardRowEl(list[myIdx], myIdx + 1, activeBoardTab, true);
       board.append(sep, myRow);
     } else if (currentUid && myIdx < 0) {
-      const sep = element('div', 'home-board-my-divider', 'Vị trí của bạn (Chưa bật hiển thị công khai trên BXH)');
+      const sep = element('div', 'home-board-my-divider', 'Vị trí của bạn (Chưa bật hiển thị công khai)');
       const selfRowObj = {
         uid: currentUid,
         name: auth?.currentUser?.displayName || 'Bạn',
@@ -803,7 +1040,6 @@ export function renderHome() {
       board.append(sep, myRow);
     }
 
-    // 3. "Xem thêm" button to open full leaderboard popup
     const viewAllBtn = button(
       `Xem thêm toàn bộ BXH (${list.length} học viên)`,
       'focus-btn home-board-view-all-btn',
@@ -828,21 +1064,19 @@ export function renderHome() {
 
     myStreakBanner.hidden = false;
     const certBtn = button(
-      reachedMilestone ? `🎉 Mốc ${reachedMilestone} ngày` : '🎉 Xem mốc chuỗi',
+      reachedMilestone ? `Mốc ${reachedMilestone} ngày` : 'Chứng nhận chuỗi',
       'focus-btn is-sm home-streak-cert-btn',
       () => openStreakCelebrationModal({ streak: studyStreak, totalSeconds: totalSec, todaySeconds: todaySec })
     );
     certBtn.title = 'Mở màn hình chúc mừng cột mốc chuỗi học và chụp ảnh PNG kỷ niệm';
 
     myStreakBanner.replaceChildren(
-      icon('flame', 15),
-      element('span', '', 'Chuỗi học của bạn: '),
-      element('strong', '', `${studyStreak} ngày · Tổng ${fmt(totalSec)}`),
-      element('small', '', `(Hôm nay ${fmt(todaySec)} · Rank ngày: ${todayRank} · Kỷ lục ${bestStudyStreak} ngày · Mốc kế: ${nextMilestone} ngày)`),
+      icon('flame', 14),
+      element('strong', '', `${studyStreak} ngày · ${fmt(totalSec)}`),
+      element('small', '', `(Rank: ${todayRank} · Kỷ lục ${bestStudyStreak}n · Kế: ${nextMilestone}n)`),
       certBtn
     );
 
-    // Auto-show celebration screen once when hitting an exact milestone day (3, 10, 30, 100, 200, 300, 400, 500...)
     const uid = auth.currentUser.uid;
     if (uid && isStreakMilestone(studyStreak)) {
       const seenKey = `htvvm-streak-milestone-seen:${uid}:${studyStreak}`;
@@ -891,7 +1125,7 @@ export function renderHome() {
     examProgressBody.replaceChildren(element('p', 'home-board-empty', 'Đang tải thống kê luyện thi…'));
     const user = auth?.currentUser;
     if (!user) {
-      examProgressBody.replaceChildren(element('p', 'home-board-empty', 'Đăng nhập Google để lưu và xem lịch sử thi đồng bộ.'));
+      examProgressBody.replaceChildren(element('p', 'home-board-empty', 'Đăng nhập Google để lưu điểm TB và lịch sử làm đề.'));
       return;
     }
     try {
@@ -902,7 +1136,7 @@ export function renderHome() {
       if (!response.ok) throw new Error(data.error || 'Không tải được tiến trình luyện thi.');
       const stats = data.summary || {}, history = data.history || [];
       const cards = element('div', 'home-exam-stats-cards');
-      for (const [label, value] of [['Lượt thi', stats.total ?? history.length], ['Điểm TB', `${Number(stats.averageScore || 0).toFixed(2)}/10`], ['Cao nhất', `${Number(stats.bestScore || 0).toFixed(2)}/10`]]) {
+      for (const [label, value] of [['Đã giải', `${stats.total ?? history.length} đề`], ['Điểm TB', `${Number(stats.averageScore || 0).toFixed(2)}`], ['Cao nhất', `${Number(stats.bestScore || 0).toFixed(2)}`]]) {
         const card = element('article', 'home-exam-stat'); card.append(element('small', '', label), element('strong', '', String(value))); cards.append(card);
       }
       examProgressBody.replaceChildren(cards);
@@ -911,7 +1145,7 @@ export function renderHome() {
         const row = element('div', 'home-exam-recent');
         const info = element('div', 'home-exam-recent-info');
         info.append(element('strong', '', record.examTitle || record.examId), element('small', '', record.submittedAt ? new Date(record.submittedAt).toLocaleDateString('vi-VN') : ''));
-        row.append(info, element('strong', 'home-exam-recent-score', `${Number(record.score || 0).toFixed(2)}/10`)); examProgressBody.append(row);
+        row.append(info, element('strong', 'home-exam-recent-score', `${Number(record.score || 0).toFixed(2)} đ`)); examProgressBody.append(row);
       }
     } catch (error) {
       if (alive) examProgressBody.replaceChildren(element('p', 'home-board-empty', error.message || 'Không tải được tiến trình luyện thi.'));

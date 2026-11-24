@@ -12,11 +12,14 @@ const makeMessage = (role, text) => {
 export function mountAIBot() {
   if (document.getElementById('ai-chat-launcher')) return;
   const launcher = button('', 'ai-chat-launcher', () => toggle());
-  launcher.append(icon('ai', 20));
+  const setLauncherClosed = () => {
+    launcher.replaceChildren(icon('ai', 15), element('span', 'ai-launcher-label', 'Hỏi AI Hóa-Toán'));
+  };
+  setLauncherClosed();
   launcher.id = 'ai-chat-launcher';
   launcher.type = 'button';
-  launcher.setAttribute('aria-label', 'Mở trợ lý AI');
-  launcher.title = 'Trợ lý AI';
+  launcher.setAttribute('aria-label', 'Mở trợ lý AI Hóa-Toán');
+  launcher.title = 'Hỏi AI Hóa-Toán';
 
   const panel = element('section', 'ai-chat-window');
   panel.id = 'ai-chat-window';
@@ -58,21 +61,25 @@ export function mountAIBot() {
       panel.hidden = true;
       launcher.hidden = true;
       launcher.classList.remove('is-open');
-      launcher.replaceChildren(icon('ai', 20));
+      setLauncherClosed();
       return;
     }
     const open = typeof force === 'boolean' ? force : panel.hidden;
     panel.hidden = !open;
     launcher.classList.toggle('is-open', open);
-    launcher.replaceChildren(open ? document.createTextNode('×') : icon('ai', 20));
-    if (open) input.focus();
+    if (open) {
+      launcher.replaceChildren(icon('close', 15), element('span', 'ai-launcher-label', 'Đóng AI'));
+      input.focus();
+    } else {
+      setLauncherClosed();
+    }
   }
   AppStore.subscribe('examLockdown', (locked) => {
     if (locked) {
       panel.hidden = true;
       launcher.hidden = true;
       launcher.classList.remove('is-open');
-      launcher.replaceChildren(icon('ai', 20));
+      setLauncherClosed();
     } else {
       launcher.hidden = false;
     }

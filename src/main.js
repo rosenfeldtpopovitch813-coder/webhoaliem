@@ -2,30 +2,57 @@ import 'katex/dist/katex.min.css';
 import './css/input.css';
 import { AppStore } from './core/store.js';
 import { AppClock } from './core/clock.js';
-import { startRouter, ROUTES, resolveRoute, loadRouteView, navigate } from './core/router.js';
+import { startRouter, resolveRoute, loadRouteView, navigate } from './core/router.js';
 import { initializeTheme, THEMES, changeTheme } from './core/theme.js';
 import { auth, firebaseReady, databaseReady, signInGoogle, signOutUser, detectInAppBrowser, describeAuthError } from './core/firebase.js';
 import { startAuth } from './core/auth.js';
 import { element, button } from './core/dom.js';
 import { icon } from './core/icons.js';
-import { mountPersistentMusicPlayer } from './core/music-player.js';
-import { mountPersistentFocusWidget } from './core/focus-session.js';
+import { mountPersistentMusicPlayer, subscribeMusic, toggleMusicPlay } from './core/music-player.js';
+import {
+  mountPersistentFocusWidget,
+  subscribeFocus,
+  togglePomodoro,
+  toggleFocusPopupDisplay,
+  formatTimerClock
+} from './core/focus-session.js';
+import { mountPersistentYouTubePlayer, subscribeYouTube, stopYouTubePlayer } from './core/youtube-player.js';
+import { readActiveCountdownSummary } from './modules/home/index.js';
 import { mountAIBot } from './modules/ai-bot.js';
 
 const root = document.getElementById('app');
-const nav = [
-  ['/', 'home', 'Tổng quan'],
-  ['/exam-paper', 'exam-paper', 'Soạn đề'],
-  ['/whiteboard', 'whiteboard', 'Bảng vẽ Mực'],
-  ['/exam', 'exam-room', 'Phòng thi'],
-  ['/arena', 'arena', 'Đấu trường học tập'],
-  ['/experiments', 'flask', 'Mô hình thí nghiệm'],
-  ['/handbook', 'handbook', 'Sổ tay'],
-  ['/focus', 'focus', 'Góc tập trung'],
-  ['/library', 'library', 'Thư viện học liệu'],
-  ['/admissions', 'admissions', 'Nguyện vọng'],
-  ['/community', 'ai', 'Trợ lý AI']
+
+const NAV_GROUPS = [
+  {
+    label: 'HỌC & LUYỆN THI',
+    items: [
+      ['/', 'home', 'Tổng quan', ''],
+      ['/exam', 'exam-room', 'Phòng thi OMR', ''],
+      ['/arena', 'arena', 'Đấu trường', '']
+    ]
+  },
+  {
+    label: 'SOẠN ĐỀ & CÔNG CỤ',
+    items: [
+      ['/exam-paper', 'exam-paper', 'Soạn đề', 'Mới'],
+      ['/whiteboard', 'whiteboard', 'Bảng vẽ Mực', ''],
+      ['/experiments', 'flask', 'Thí nghiệm 3D', ''],
+      ['/handbook', 'handbook', 'Sổ tay Hóa - Toán', '']
+    ]
+  },
+  {
+    label: 'CÁ NHÂN',
+    items: [
+      ['/focus', 'focus', 'Góc tập trung', ''],
+      ['/admissions', 'admissions', 'Nguyện vọng ĐH', ''],
+      ['/library', 'library', 'Thư viện học liệu', ''],
+      ['/community', 'ai', 'Trợ lý AI', '']
+    ]
+  }
 ];
+
+const FLAT_NAV = NAV_GROUPS.flatMap((g) => g.items);
+
 let renderId = 0;
 let frame;
 let sidebarOpen = false;
@@ -37,11 +64,90 @@ let sidebarCollapsed = (() => {
 let sidebarWidth = (() => {
   try {
     const v = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
-    return Number.isFinite(v) && v >= 180 && v <= 340 ? Math.round(v) : 252;
-  } catch { return 252; }
+    return Number.isFinite(v) && v >= 180 && v <= 340 ? Math.round(v) : 236;
+  } catch { return 236; }
 })();
 
 function makeButton(text, className, handler) { return button(text, className, handler); }
+
+function formatTodayVi() {
+  try {
+    return new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: 'short' });
+  } catch {
+    return '';
+  }
+}
+
+function openQuickCommandModal() {
+  if (AppStore.get('examLockdown')) return;
+  const prevFocused = document.activeElement;
+  const overlay = element('div', 'cmd-modal-backdrop');
+  const dialog = element('section', 'cmd-modal-dialog');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', 'Tìm nhanh công cụ');
+
+  const closeCmd = () => {
+    overlay.remove();
+    if (prevFocused && typeof prevFocused.focus === 'function') prevFocused.focus();
+  };
+
+  const inputWrap = element('div', 'cmd-input-row');
+  inputWrap.append(icon('search', 16));
+  const searchInput = document.createElement('input');
+  searchInput.type = 'search';
+  searchInput.className = 'cmd-search-input';
+  searchInput.placeholder = 'Tìm nhanh công cụ (VD: Phòng thi, Soạn đề, Bảng tuần hoàn, Tập trung…)';
+  const escHint = button('Esc', 'cmd-esc-pill', closeCmd);
+  inputWrap.append(searchInput, escHint);
+
+  const resultsBox = element('div', 'cmd-results-list');
+
+  function renderHits(query = '') {
+    resultsBox.replaceChildren();
+    const q = query.trim().toLowerCase();
+    const filtered = FLAT_NAV.filter(([, , label, badge]) =>
+      !q || label.toLowerCase().includes(q) || badge.toLowerCase().includes(q)
+    );
+    if (!filtered.length) {
+      resultsBox.append(element('p', 'cmd-empty', 'Không tìm thấy mục phù hợp.'));
+      return;
+    }
+    filtered.forEach(([path, iconName, title, badge], idx) => {
+      const row = button('', `cmd-hit-row${idx === 0 ? ' is-first' : ''}`, () => {
+        closeCmd();
+        navigate(path);
+      });
+      const ic = element('span', 'cmd-hit-icon');
+      ic.append(icon(iconName, 17));
+      row.append(ic, element('span', 'cmd-hit-title', title));
+      if (badge) row.append(element('span', 'nav-badge', badge));
+      resultsBox.append(row);
+    });
+  }
+
+  searchInput.addEventListener('input', () => renderHits(searchInput.value));
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCmd();
+    } else if (e.key === 'Enter') {
+      const first = resultsBox.querySelector('.cmd-hit-row');
+      if (first) {
+        e.preventDefault();
+        first.click();
+      }
+    }
+  });
+
+  renderHits('');
+  dialog.append(inputWrap, resultsBox);
+  overlay.append(dialog);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeCmd(); });
+  document.body.append(overlay);
+  searchInput.focus();
+}
+
 function createShell() {
   root.replaceChildren();
   const shell = element('div', 'app-shell');
@@ -49,30 +155,114 @@ function createShell() {
   const sidebar = element('aside', 'sidebar'); sidebar.id = 'sidebar';
   const backdrop = element('div', 'sidebar-backdrop');
   backdrop.addEventListener('click', () => { sidebarOpen = false; updateSidebar(); });
+
   const brand = element('div', 'brand');
-  const collapsePinBtn = makeButton('«', 'sidebar-collapse-pin', () => toggleSidebar());
+  const brandMark = element('span', 'brand-symbol');
+  brandMark.append(icon('flask', 20));
+  const collapsePinBtn = makeButton('', 'sidebar-collapse-pin', () => toggleSidebar(false));
+  collapsePinBtn.append(icon('chevron-left', 15));
   collapsePinBtn.title = 'Thu gọn thanh điều hướng (Ctrl+B hoặc kéo mép phải)';
-  brand.append(element('span', 'brand-symbol', 'H'), element('div', 'brand-copy'), collapsePinBtn);
-  brand.children[1].append(element('strong', '', 'HTVVM'), element('span', '', 'STUDIO'));
-  const navLabel = element('div', 'nav-section-label', 'ĐIỀU HƯỚNG');
+  collapsePinBtn.setAttribute('aria-label', 'Thu gọn thanh điều hướng');
+  const brandCopy = element('div', 'brand-copy');
+  brandCopy.append(element('strong', '', 'HTVVM Studio'));
+  brand.append(brandMark, brandCopy, collapsePinBtn);
+
+  // Quick Search Trigger (Ctrl + K)
+  const searchBtn = button('', 'sidebar-search-trigger', () => openQuickCommandModal());
+  const sLeft = element('span', 'sidebar-search-left');
+  sLeft.append(icon('search', 14), element('span', '', 'Tìm nhanh...'));
+  searchBtn.append(sLeft, element('kbd', 'sidebar-search-kbd', 'Ctrl K'));
+
   const links = element('nav', 'nav-list');
-  for (const [path, iconName, title] of nav) {
-    const link = element('a', 'nav-link'); link.href = path; link.dataset.path = path; link.title = title;
-    const glyphWrap = element('span', 'nav-glyph');
-    glyphWrap.append(icon(iconName, 18));
-    link.append(glyphWrap, element('span', 'nav-link-text', title));
-    link.addEventListener('click', (event) => {
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      event.preventDefault(); sidebarOpen = false; updateSidebar(); navigate(path);
-    }); links.append(link);
+  const navAnchors = [];
+  for (const group of NAV_GROUPS) {
+    const groupWrap = element('div', 'nav-group');
+    groupWrap.append(element('div', 'nav-section-label', group.label));
+    for (const [path, iconName, title, badge] of group.items) {
+      const link = element('a', 'nav-link');
+      link.href = path;
+      link.dataset.path = path;
+      link.title = title;
+      const glyphWrap = element('span', 'nav-glyph');
+      glyphWrap.append(icon(iconName, 17));
+      link.append(glyphWrap, element('span', 'nav-link-text', title));
+      if (badge) link.append(element('span', 'nav-badge', badge));
+      link.addEventListener('click', (event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        sidebarOpen = false;
+        updateSidebar();
+        navigate(path);
+      });
+      groupWrap.append(link);
+      navAnchors.push(link);
+    }
+    links.append(groupWrap);
   }
+
+  // Sidebar Footer: User Profile Summary + Settings Gear Popover (houses Theme, Sync Status, Install PWA, Firebase Diagnostics)
   const sideFooter = element('div', 'sidebar-bottom');
-  sideFooter.append(element('span', 'brand-status-dot'), element('span', '', 'Không gian học tập'));
+  const sideUserSlot = element('div', 'sidebar-user-slot');
+  const settingsWrap = element('div', 'sidebar-settings-wrap');
+  const settingsPopover = element('div', 'sidebar-settings-popover');
+  settingsPopover.hidden = true;
+
+  const select = element('select', 'theme-select');
+  select.id = 'theme-select';
+  select.setAttribute('aria-label', 'Chọn giao diện');
+  Object.entries(THEMES).forEach(([key, label]) => {
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = label;
+    select.append(option);
+  });
+  select.addEventListener('change', () => changeTheme(select.value));
+
+  const status = element('span', 'server-status', 'Đang đồng bộ giờ');
+  status.id = 'server-status';
+
+  const installApp = makeButton('Cài ứng dụng về máy', 'install-app-btn', async () => {
+    const promptEvent = window.__htvvmInstallPrompt;
+    if (!promptEvent) return;
+    promptEvent.prompt();
+    await promptEvent.userChoice.catch(() => null);
+    window.__htvvmInstallPrompt = null;
+    installApp.hidden = true;
+  });
+  installApp.hidden = true;
+  installApp.id = 'install-app-btn';
+
+  const diagnosticsButton = makeButton('Chẩn đoán Firebase', 'firebase-diagnostics-btn', () => {
+    settingsPopover.hidden = true;
+    void runFirebaseDiagnostics();
+  });
+
+  const themeField = element('label', 'settings-field');
+  themeField.append(element('span', 'settings-field-label', 'Giao diện (5 chủ đề)'), select);
+  settingsPopover.append(themeField, status, installApp, diagnosticsButton);
+
+  const gearBtn = button('', 'sidebar-gear-btn', (e) => {
+    e.stopPropagation();
+    settingsPopover.hidden = !settingsPopover.hidden;
+    gearBtn.setAttribute('aria-expanded', String(!settingsPopover.hidden));
+  });
+  gearBtn.append(icon('settings', 16));
+  gearBtn.title = 'Cài đặt giao diện & hệ thống';
+  gearBtn.setAttribute('aria-label', 'Cài đặt giao diện & hệ thống');
+  settingsWrap.append(gearBtn, settingsPopover);
+  sideFooter.append(sideUserSlot, settingsWrap);
+
+  document.addEventListener('click', (e) => {
+    if (!settingsPopover.hidden && !settingsWrap.contains(e.target)) {
+      settingsPopover.hidden = true;
+      gearBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
 
   const resizer = element('div', 'sidebar-resizer');
   resizer.title = 'Kéo sang trái để ẩn hoặc thay đổi độ rộng thanh điều hướng (Nhấp đúp để đặt lại)';
   resizer.addEventListener('dblclick', () => {
-    sidebarWidth = 252;
+    sidebarWidth = 236;
     sidebarCollapsed = false;
     updateSidebar();
   });
@@ -105,45 +295,108 @@ function createShell() {
     window.addEventListener('pointerup', onUp);
   });
 
-  sidebar.append(brand, navLabel, links, sideFooter, resizer);
+  sidebar.append(brand, searchBtn, links, sideFooter, resizer);
 
-  const expandEdgeBtn = makeButton('»', 'sidebar-expand-edge', () => {
+  const expandEdgeBtn = makeButton('', 'sidebar-expand-edge', () => {
     sidebarCollapsed = false;
     sidebarOpen = true;
     updateSidebar();
   });
+  expandEdgeBtn.append(icon('chevron-right', 15));
   expandEdgeBtn.title = 'Hiện thanh điều hướng (Ctrl+B)';
+  expandEdgeBtn.setAttribute('aria-label', 'Hiện thanh điều hướng');
 
   const content = element('div', 'content-area');
   const topbar = element('header', 'topbar');
   const left = element('div', 'top-left');
-  const toggleBtn = makeButton('☰', 'mobile-menu sidebar-toggle-btn', () => toggleSidebar());
+  const toggleBtn = makeButton('', 'mobile-menu sidebar-toggle-btn', () => toggleSidebar(false));
+  toggleBtn.append(icon('menu', 17));
   toggleBtn.title = 'Ẩn / hiện thanh điều hướng (Ctrl+B)';
-  left.append(toggleBtn, element('div', 'page-title', 'Tổng quan'));
-  left.lastChild.id = 'page-title';
+  toggleBtn.setAttribute('aria-label', 'Mở thanh điều hướng');
+
+  const titleStack = element('div', 'top-title-stack');
+  const pageTitleEl = element('div', 'page-title', 'Không gian học tập');
+  pageTitleEl.id = 'page-title';
+  const dateSubEl = element('span', 'top-date-sub', formatTodayVi());
+  titleStack.append(pageTitleEl, dateSubEl);
+  left.append(toggleBtn, titleStack);
+
+  // Topbar Right: Compact Countdown Pill + Unified Live Dock (Focus + Audio + YouTube + PiP) + Quick Theme + Account
   const right = element('div', 'top-right');
-  const status = element('span', 'server-status', 'Đang đồng bộ giờ'); status.id = 'server-status';
-  const select = element('select', 'theme-select'); select.id = 'theme-select'; select.setAttribute('aria-label', 'Chọn giao diện');
-  Object.entries(THEMES).forEach(([key, label]) => { const option = document.createElement('option'); option.value = key; option.textContent = label; select.append(option); });
-  select.addEventListener('change', () => changeTheme(select.value));
-  const account = element('div', 'account'); account.id = 'account';
-  const installApp = makeButton('Cài ứng dụng', 'install-app-btn', async () => {
-    const promptEvent = window.__htvvmInstallPrompt;
-    if (!promptEvent) return;
-    promptEvent.prompt();
-    await promptEvent.userChoice.catch(() => null);
-    window.__htvvmInstallPrompt = null;
-    installApp.hidden = true;
+
+  const countdownPill = button('', 'topbar-countdown-pill', () => {
+    try { sessionStorage.setItem('htvvm_open_countdown_drawer', '1'); } catch {}
+    if (AppStore.get('route') === '/') {
+      const dr = document.getElementById('home-countdown-drawer');
+      if (dr) {
+        dr.open = true;
+        dr.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } else {
+      navigate('/');
+    }
   });
-  installApp.hidden = true; installApp.id = 'install-app-btn';
-  const diagnosticsButton = makeButton('Chẩn đoán Firebase', 'firebase-diagnostics-btn', () => runFirebaseDiagnostics());
-  right.append(status, diagnosticsButton, installApp, select, account); topbar.append(left, right);
+  countdownPill.title = 'Xem lịch đếm ngược kỳ thi';
+
+  const liveDock = element('div', 'topbar-live-dock');
+  const dockFocusBtn = button('', 'dock-segment is-focus', () => togglePomodoro());
+  dockFocusBtn.title = 'Bắt đầu / Tạm dừng đồng hồ tập trung';
+  const dockDot = element('span', 'dock-live-dot');
+  const dockFocusText = element('span', 'dock-mono-text', 'Tập trung 25:00');
+  dockFocusBtn.append(dockDot, dockFocusText);
+
+  const dockAudioBtn = button('', 'dock-segment is-audio', () => toggleMusicPlay());
+  dockAudioBtn.title = 'Phát / Tạm dừng nhạc học tập';
+  dockAudioBtn.append(icon('music', 13), element('span', 'dock-audio-label', 'Lofi Study'));
+
+  const dockYtBtn = button('', 'dock-segment is-yt', () => stopYouTubePlayer('user'));
+  dockYtBtn.hidden = true;
+  dockYtBtn.title = 'YouTube đang phát nền — Bấm để tắt YouTube';
+  dockYtBtn.append(icon('video', 13), element('span', '', 'YouTube ✕'));
+
+  const dockPipBtn = button('', 'dock-segment is-pip', () => { void toggleFocusPopupDisplay(); });
+  dockPipBtn.title = 'Mở / Đóng cửa sổ nổi chạy nền (PiP)';
+  dockPipBtn.append(icon('pip', 13), element('span', '', 'PiP'));
+
+  liveDock.append(dockFocusBtn, dockAudioBtn, dockYtBtn, dockPipBtn);
+
+  // Quick theme select mirrored in topbar on desktop for 1-click theme testing
+  const topThemeSelect = element('select', 'theme-select topbar-theme-select');
+  topThemeSelect.setAttribute('aria-label', 'Đổi nhanh giao diện');
+  Object.entries(THEMES).forEach(([key, label]) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = label;
+    topThemeSelect.append(opt);
+  });
+  topThemeSelect.addEventListener('change', () => changeTheme(topThemeSelect.value));
+
+  const account = element('div', 'account');
+  account.id = 'account';
+  right.append(countdownPill, liveDock, topThemeSelect, account);
+  topbar.append(left, right);
+
   const notice = element('div', 'notice'); notice.id = 'notice'; notice.hidden = true;
   const main = element('main', 'main-content'); main.id = 'main-content';
-  content.append(topbar, notice, main); shell.append(sidebar, expandEdgeBtn, backdrop, content); root.append(shell);
-  frame = { shell, sidebar, backdrop, links, select, account, main, notice, status, installApp, toggleBtn, expandEdgeBtn };
+  content.append(topbar, notice, main);
+  shell.append(sidebar, expandEdgeBtn, backdrop, content);
+  root.append(shell);
+
+  frame = {
+    shell, sidebar, backdrop, links, navAnchors, select, topThemeSelect,
+    account, sideUserSlot, main, notice, status, installApp,
+    toggleBtn, expandEdgeBtn, countdownPill, dockDot, dockFocusText, dockAudioBtn, dockYtBtn, dockPipBtn
+  };
   updateSidebar();
+  refreshTopCountdown();
 }
+
+function refreshTopCountdown() {
+  if (!frame?.countdownPill) return;
+  const summary = readActiveCountdownSummary();
+  frame.countdownPill.textContent = summary ? summary.text : 'Đặt lịch kỳ thi';
+}
+
 let entryScreen = null;
 function safeWelcomeSeen(uid) { try { return localStorage.getItem(`htvvm-welcome-seen:${uid}`) === '1'; } catch { return false; } }
 function markWelcomeSeen(uid) { try { localStorage.setItem(`htvvm-welcome-seen:${uid}`, '1'); } catch {} }
@@ -161,15 +414,15 @@ function drawEntryScreen() {
   } else if (!user) {
     const layout = element('div', 'entry-layout');
     const intro = element('div', 'entry-intro');
-    intro.append(element('span', 'entry-logo', 'H'), element('h1', 'entry-title', 'HTVVM Studio'), element('p', 'entry-copy', 'Soạn đề chuẩn in, tổ chức thi trên phiếu OMR theo giờ máy chủ và ôn tập Hóa – Toán – Anh.'));
+    intro.append(element('span', 'entry-logo', 'H'), element('h1', 'entry-title', 'HTVVM Studio'), element('p', 'entry-copy', 'Soạn đề chuẩn in, tách & trộn đề Word/PDF, tổ chức thi trên phiếu OMR 2025 và ôn tập Hóa – Toán – Anh.'));
     const featureList = element('div', 'entry-feature-list');
-    for (const [iconName, title, desc] of [['exam-room','Phòng thi OMR','Tách đôi đề PDF/Drive bên trái và phiếu tô bên phải'],['exam-paper','Soạn đề','Gõ trực tiếp trên trang, định dạng từng đoạn, công thức KaTeX và xuất .docx / PDF'],['focus','Góc tập trung','Bấm giờ Pomodoro, Focus Mode và tài liệu học tập']]) {
-      const item = element('div', 'entry-feature'); const ic = element('span',''); ic.append(icon(iconName, 18)); item.append(ic, element('div','', ''));
-      item.lastChild.append(element('strong','',title), element('small','',desc)); featureList.append(item);
+    for (const [iconName, title, desc] of [['exam-room', 'Phòng thi OMR', 'Tách đôi đề PDF/Drive bên trái và phiếu tô chuẩn 2025 bên phải'], ['exam-paper', 'Soạn đề', 'Gõ trực tiếp trên trang, tách đề .docx/.pdf, công thức KaTeX và trộn mã đề'], ['focus', 'Góc tập trung', 'Đồng hồ Pomodoro, YouTube chạy nền xuyên tác vụ & cửa sổ nổi PiP']]) {
+      const item = element('div', 'entry-feature'); const ic = element('span', ''); ic.append(icon(iconName, 18)); item.append(ic, element('div', '', ''));
+      item.lastChild.append(element('strong', '', title), element('small', '', desc)); featureList.append(item);
     }
     intro.append(featureList);
     const login = element('div', 'entry-login-card');
-    login.append(element('span','entry-google-mark','G'), element('h2','entry-login-title','Đăng nhập để bắt đầu'), element('p','entry-login-copy','Dùng tài khoản Google để đồng bộ hồ sơ và lưu tiến trình học tập của bạn.'));
+    login.append(element('span', 'entry-google-mark', 'G'), element('h2', 'entry-login-title', 'Đăng nhập để bắt đầu'), element('p', 'entry-login-copy', 'Dùng tài khoản Google để đồng bộ hồ sơ và lưu tiến trình học tập của bạn.'));
     const inApp = detectInAppBrowser();
     if (inApp.isInApp) {
       const tip = element('div', 'entry-webview-tip');
@@ -228,16 +481,17 @@ function drawEntryScreen() {
         if (!inApp.isInApp && error?.code !== 'auth/popup-closed-by-user') redirectFallbackBtn.hidden = false;
       }
     });
-    login.append(loginButton, redirectFallbackBtn, authError, element('p','entry-privacy-note','Thông tin xác thực được xử lý qua Firebase Authentication.'));
+    login.append(loginButton, redirectFallbackBtn, authError, element('p', 'entry-privacy-note', 'Thông tin xác thực được xử lý qua Firebase Authentication.'));
     layout.append(intro, login); screen.append(layout);
   } else if (!safeWelcomeSeen(user.uid)) {
+    const cleanFirstName = String(user.displayName || '').trim().split(/\s+/).filter(Boolean).slice(-1)[0] || 'bạn';
     const card = element('div', 'entry-welcome-card');
     card.append(
       element('span', 'entry-logo', 'H'),
-      element('h1', 'entry-title', `Chào ${user.displayName ? user.displayName.split(' ').slice(-1)[0] : 'bạn'}`),
-      element('p', 'entry-copy', 'Tài khoản đã đồng bộ. Bạn có thể vào ngay bảng điều khiển để làm đề thi, soạn bài A4 hoặc luyện tập.')
+      element('h1', 'entry-title', `Chào ${cleanFirstName}`),
+      element('p', 'entry-copy', 'Tài khoản đã đồng bộ. Bạn có thể vào ngay không gian học tập để làm đề OMR, tách đề Word/PDF hoặc bật Pomodoro.')
     );
-    const enter = makeButton('Mở bảng điều khiển', 'entry-google-button', () => { markWelcomeSeen(user.uid); removeEntryScreen(); });
+    const enter = makeButton('Mở không gian học tập', 'entry-google-button', () => { markWelcomeSeen(user.uid); removeEntryScreen(); });
     card.append(enter); screen.append(card);
   } else {
     entryScreen = null;
@@ -247,17 +501,24 @@ function drawEntryScreen() {
 }
 
 async function runFirebaseDiagnostics() {
+  const prevFocused = document.activeElement;
   const overlay = element('div', 'firebase-diagnostic-backdrop');
   const dialog = element('section', 'firebase-diagnostic-dialog');
   dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-labelledby', 'firebase-diagnostic-title'); dialog.tabIndex = -1;
+  const closeDiag = () => {
+    overlay.remove();
+    if (prevFocused && typeof prevFocused.focus === 'function') prevFocused.focus();
+  };
   const heading = element('div', 'firebase-diagnostic-heading');
-  heading.append(element('h2', '', 'Chẩn đoán Firebase'), makeButton('Đóng', 'firebase-diagnostic-close', () => overlay.remove()));
+  const h2 = element('h2', '', 'Chẩn đoán Firebase');
+  h2.id = 'firebase-diagnostic-title';
+  heading.append(h2, makeButton('Đóng', 'firebase-diagnostic-close', closeDiag));
   const summary = element('p', 'firebase-diagnostic-summary', 'Đang kiểm tra cấu hình phía máy chủ…');
   const results = element('div', 'firebase-diagnostic-results');
   const steps = element('ol', 'firebase-diagnostic-steps');
   dialog.append(heading, summary, results, steps); overlay.append(dialog);
-  overlay.addEventListener('click', event => { if (event.target === overlay) overlay.remove(); });
-  dialog.addEventListener('keydown', event => { if (event.key === 'Escape') overlay.remove(); });
+  overlay.addEventListener('click', event => { if (event.target === overlay) closeDiag(); });
+  dialog.addEventListener('keydown', event => { if (event.key === 'Escape') closeDiag(); });
   root.append(overlay); dialog.focus();
   try {
     const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
@@ -290,7 +551,7 @@ async function runFirebaseDiagnostics() {
     if (data.checks) {
       for (const [key, check] of Object.entries(data.checks)) {
         const line = element('div', `firebase-diagnostic-row ${(check?.ok === false) ? 'is-fail' : 'is-ok'}`);
-        const labelText = ({databaseUrl:'URL Realtime Database',adminCredentials:'Thông tin xác thực Firebase Admin',projectIds:'Project ID frontend/backend',databaseConnection:'Kết nối Realtime Database',authenticationAdmin:'Firebase Admin Authentication',frontend:'Biến Firebase frontend'})[key] || key;
+        const labelText = ({ databaseUrl: 'URL Realtime Database', adminCredentials: 'Thông tin xác thực Firebase Admin', projectIds: 'Project ID frontend/backend', databaseConnection: 'Kết nối Realtime Database', authenticationAdmin: 'Firebase Admin Authentication', frontend: 'Biến Firebase frontend' })[key] || key;
         line.append(element('strong', '', `${check?.ok === false ? '✕' : '✓'} ${labelText}`));
         const detail = Object.entries(check || {}).filter(([field]) => !['ok'].includes(field)).map(([field, value]) => `${field}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join(' · ');
         if (detail) line.append(element('small', '', detail));
@@ -299,14 +560,20 @@ async function runFirebaseDiagnostics() {
     }
     if (data.rootCauseHint) results.append(element('p', 'firebase-diagnostic-hint', data.rootCauseHint));
     for (const text of (data.nextSteps || [])) steps.append(element('li', '', text));
-    if (!response.ok) AppStore.set('notice', 'Firebase cần được sửa cấu hình. Mở “Chẩn đoán Firebase” để xem chính xác biến nào thiếu hoặc sai.');
+    if (!response.ok) AppStore.set('notice', 'Firebase cần được sửa cấu hình. Mở Cài đặt (⚙) → Chẩn đoán Firebase để xem biến còn thiếu.');
   } catch (error) {
     summary.textContent = `Không gọi được API chẩn đoán: ${error.message || 'Lỗi mạng'}`;
-    results.append(element('p', 'firebase-diagnostic-hint', 'Kiểm tra deployment có chứa api/diagnostics/firebase.js không; mở Vercel → Deployments → Functions Logs để xem lỗi serverless.'));
+    results.append(element('p', 'firebase-diagnostic-hint', 'Kiểm tra deployment có chứa api/diagnostics/firebase.js không.'));
   }
 }
 
-function toggleSidebar() {
+function toggleSidebar(fromKeyboard = false) {
+  if (fromKeyboard && frame?.shell) {
+    frame.shell.classList.add('is-keyboard-toggle');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => frame?.shell?.classList.remove('is-keyboard-toggle'));
+    });
+  }
   if (window.matchMedia('(max-width: 780px)').matches) {
     sidebarOpen = !sidebarOpen;
   } else {
@@ -331,31 +598,77 @@ function updateSidebar() {
 }
 
 window.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
-    const target = e.target;
-    if (target && typeof target.closest === 'function' && target.closest('input, textarea, select, [contenteditable="true"]')) {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+    const key = e.key.toLowerCase();
+    if (key === 'k') {
+      e.preventDefault();
+      openQuickCommandModal();
       return;
     }
-    e.preventDefault();
-    toggleSidebar();
+    if (key === 'b') {
+      const target = e.target;
+      if (target && typeof target.closest === 'function' && target.closest('input, textarea, select, [contenteditable="true"]')) {
+        return;
+      }
+      e.preventDefault();
+      toggleSidebar(true);
+    }
   }
 });
+
+function buildAvatarNode(user) {
+  if (user?.photoURL?.startsWith('https://')) {
+    const avatar = document.createElement('img');
+    avatar.src = user.photoURL;
+    avatar.alt = '';
+    avatar.referrerPolicy = 'no-referrer';
+    return avatar;
+  }
+  const initial = String(user?.displayName || 'H').trim().slice(0, 1).toUpperCase() || 'H';
+  return element('span', 'avatar-fallback', initial);
+}
+
 function drawAccount() {
   const { user, authLoading } = AppStore.getState();
   frame.account.replaceChildren();
-  if (authLoading) { frame.account.append(element('span', 'account-loading', 'Đang xác thực…')); return; }
-  if (!firebaseReady) { frame.account.append(element('span', 'setup-pill', 'Chưa cấu hình Firebase')); return; }
-  if (!user) {
-    frame.account.append(makeButton('Đăng nhập Google', 'login-btn', async () => {
-      try { await signInGoogle(); } catch (error) { AppStore.set('notice', `Không thể đăng nhập: ${describeAuthError(error)}`); }
-    })); return;
+  frame.sideUserSlot.replaceChildren();
+
+  if (authLoading) {
+    frame.account.append(element('span', 'account-loading', 'Đang xác thực…'));
+    frame.sideUserSlot.append(element('span', 'sidebar-user-guest', 'Đang kết nối…'));
+    return;
   }
+  if (!firebaseReady) {
+    frame.account.append(element('span', 'setup-pill', 'Chế độ xem thử'));
+    frame.sideUserSlot.append(element('span', 'sidebar-user-guest', 'Khách · Xem thử'));
+    return;
+  }
+  if (!user) {
+    frame.account.append(makeButton('Đăng nhập', 'login-btn', async () => {
+      try { await signInGoogle(); } catch (error) { AppStore.set('notice', `Không thể đăng nhập: ${describeAuthError(error)}`); }
+    }));
+    frame.sideUserSlot.append(element('span', 'sidebar-user-guest', 'Chưa đăng nhập'));
+    return;
+  }
+
+  const fullName = user.displayName || 'Người học';
+  // Sidebar profile row
+  const sideProfile = element('div', 'sidebar-user-profile');
+  sideProfile.title = `${fullName} (${user.email || 'Google'})`;
+  sideProfile.append(
+    buildAvatarNode(user),
+    element('strong', 'sidebar-user-name', fullName)
+  );
+  frame.sideUserSlot.append(sideProfile);
+
+  // Topbar compact account + logout
   const badge = element('div', 'user-chip');
-  if (user.photoURL?.startsWith('https://')) {
-    const avatar = document.createElement('img'); avatar.src = user.photoURL; avatar.alt = ''; avatar.referrerPolicy = 'no-referrer'; badge.append(avatar);
-  } else { badge.append(element('span', 'avatar-fallback', (user.displayName || 'H').slice(0, 1).toUpperCase())); }
-  const texts = element('div', 'user-meta'); texts.append(element('strong', '', user.displayName || 'Người học'), element('small', '', 'Tài khoản Google'));
+  badge.title = `${fullName} (${user.email || 'Tài khoản Google'})`;
+  badge.append(buildAvatarNode(user));
+  const texts = element('div', 'user-meta');
+  texts.append(element('strong', '', fullName));
   badge.append(texts);
+
   frame.account.append(badge, makeButton('Thoát', 'logout-btn', () => {
     if (AppStore.get('examLockdown')) {
       AppStore.set('notice', 'Không thể đăng xuất khi đang làm bài thi. Hãy nộp bài trước.');
@@ -364,6 +677,7 @@ function drawAccount() {
     signOutUser().catch((error) => AppStore.set('notice', error.message));
   }));
 }
+
 async function drawRoute() {
   const state = AppStore.getState();
   const route = resolveRoute(state.route);
@@ -371,8 +685,8 @@ async function drawRoute() {
     return;
   }
   const id = ++renderId;
-  document.getElementById('page-title').textContent = route.title;
-  for (const link of frame.links.children) {
+  document.getElementById('page-title').textContent = route.path === '/' ? 'Không gian học tập' : route.title;
+  for (const link of frame.navAnchors) {
     const active = link.dataset.path === route.path;
     link.classList.toggle('active', active);
     if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
@@ -395,17 +709,58 @@ async function drawRoute() {
     }
   }
 }
+
 function updateNotice() {
   const message = AppStore.get('notice');
   frame.notice.hidden = !message;
   frame.notice.textContent = message;
 }
-function setSyncBadge() { frame.status.textContent = AppClock.isSynced ? 'Giờ máy chủ đã đồng bộ' : 'Giờ máy chủ chưa đồng bộ'; frame.status.classList.toggle('synced', AppClock.isSynced); }
+function setSyncBadge() {
+  frame.status.textContent = AppClock.isSynced ? 'Giờ máy chủ đã đồng bộ' : 'Giờ máy chủ chưa đồng bộ';
+  frame.status.classList.toggle('synced', AppClock.isSynced);
+}
 async function syncClock() { await AppClock.syncWithServer(); AppStore.set('timeSynced', AppClock.isSynced); setSyncBadge(); }
 
-initializeTheme(); createShell(); mountAIBot(); mountPersistentMusicPlayer(); mountPersistentFocusWidget(); startRouter(); startAuth();
-frame.select.value = AppStore.get('theme');
-AppStore.subscribe('theme', value => { frame.select.value = value; });
+initializeTheme();
+createShell();
+mountAIBot();
+mountPersistentMusicPlayer();
+mountPersistentFocusWidget();
+mountPersistentYouTubePlayer();
+startRouter();
+startAuth();
+
+const syncSelects = (val) => {
+  if (frame?.select) frame.select.value = val;
+  if (frame?.topThemeSelect) frame.topThemeSelect.value = val;
+};
+syncSelects(AppStore.get('theme'));
+AppStore.subscribe('theme', syncSelects);
+
+// Wire Topbar Live Dock to Focus, Music & YouTube states
+subscribeFocus((fState) => {
+  if (!frame || !fState) return;
+  frame.dockDot.classList.toggle('is-running', Boolean(fState.running || fState.counting));
+  frame.dockFocusText.textContent = `${fState.selectedMode === 'break' ? 'Nghỉ' : 'Tập trung'} ${formatTimerClock(fState.seconds)}`;
+  frame.dockPipBtn.classList.toggle('is-active', Boolean(fState.popupOpen));
+});
+
+subscribeMusic((mState) => {
+  if (!frame || !mState) return;
+  frame.dockAudioBtn.classList.toggle('is-active', Boolean(mState.playing));
+  const lbl = frame.dockAudioBtn.querySelector('.dock-audio-label');
+  if (lbl) lbl.textContent = mState.playing ? (mState.title || 'Đang phát').slice(0, 16) : 'Lofi Study';
+});
+
+subscribeYouTube((ytState) => {
+  if (!frame || !ytState) return;
+  frame.dockYtBtn.hidden = !ytState.active;
+  frame.dockYtBtn.classList.toggle('is-active', Boolean(ytState.active));
+});
+
+window.setInterval(refreshTopCountdown, 1000);
+window.addEventListener('htvvm-events-updated', refreshTopCountdown);
+
 AppStore.subscribe('route', drawRoute);
 AppStore.subscribe('role', drawRoute);
 AppStore.subscribe('roleVerified', drawRoute);
@@ -417,7 +772,7 @@ AppStore.subscribe('user', drawEntryScreen);
 AppStore.subscribe('authLoading', drawEntryScreen);
 AppStore.subscribe('notice', updateNotice);
 if (!firebaseReady) AppStore.set('notice', 'Chế độ xem thử: thêm các biến VITE_FIREBASE_* để bật đăng nhập.');
-else if (!databaseReady) AppStore.set('notice', 'Chưa cấu hình URL Realtime Database hợp lệ. Bấm “Chẩn đoán Firebase” để xem biến còn thiếu hoặc URL sai.');
+else if (!databaseReady) AppStore.set('notice', 'Chưa cấu hình URL Realtime Database hợp lệ. Mở Cài đặt (⚙) → Chẩn đoán Firebase để xem chi tiết.');
 window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); window.__htvvmInstallPrompt = event; if (frame?.installApp) frame.installApp.hidden = false; });
 window.addEventListener('appinstalled', () => { window.__htvvmInstallPrompt = null; if (frame?.installApp) frame.installApp.hidden = true; });
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('PWA worker registration failed:', error));

@@ -408,6 +408,12 @@ export function mountPersistentMusicPlayer() {
 
   subscribeMusic(renderMini);
   AppStore.subscribe('route', renderMini);
-  AppStore.subscribe('examLockdown', renderMini);
+  AppStore.subscribe('examLockdown', (locked) => {
+    if (locked && audio && !audio.paused) {
+      audio.pause();
+      notify();
+    }
+    renderMini();
+  });
   return host;
 }
