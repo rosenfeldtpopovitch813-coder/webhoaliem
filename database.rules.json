@@ -34,7 +34,7 @@
         "preferences": {
           "theme": {
             ".write": "auth != null && auth.uid === $uid",
-            ".validate": "newData.isString() && (newData.val() === 'aurora' || newData.val() === 'light' || newData.val() === 'midnight' || newData.val() === 'clay' || newData.val() === 'pine')"
+            ".validate": "newData.isString() && (newData.val() === 'aurora' || newData.val() === 'light' || newData.val() === 'midnight' || newData.val() === 'clay')"
           },
           "$other": {
             ".validate": false

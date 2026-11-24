@@ -124,11 +124,8 @@ function exportExamPDF({ title, durationMinutes, questions }, includeAnswers) {
   win.document.open();
   win.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}<title>${pageTitle}</title><style>
     @page{size:A4;margin:17mm 16mm 18mm}*{box-sizing:border-box}body{font-family:Arial,"DejaVu Sans",sans-serif;color:#171b23;font-size:11pt;line-height:1.55;margin:0}.paper-head{text-align:center;margin:0 0 24px;padding-bottom:15px;border-bottom:1px solid #aab2bf}.paper-head .eyebrow{font-size:9pt;letter-spacing:.12em;color:#596579;font-weight:700}.paper-head h1{font-size:18pt;margin:8px 0}.paper-head p{margin:4px 0;color:#4d5867}.question{break-inside:avoid;page-break-inside:avoid;margin:0 0 19px}.question-image{max-width:100%;max-height:360px;object-fit:contain}.question h3{font-size:11pt;margin:0 0 6px}.question h3 small{font-weight:400;color:#596579}.prompt{white-space:normal;overflow-wrap:anywhere}.question-latex{margin:8px 0 12px;overflow-x:auto}.options{margin:8px 0 0 28px;padding-left:10px}.options li{margin:4px 0;padding-left:4px}.answer-key{break-before:page;page-break-before:always;border-top:2px solid #536071;padding-top:14px}.answer-key h2{text-align:center}.answer-key li{margin:7px 0}.katex-display{overflow-x:auto;overflow-y:hidden}@media screen{body{max-width:800px;margin:30px auto;padding:24px;border:1px solid #dbe1e8;border-radius:12px}.print-tip{background:#eef5ff;padding:10px;border-radius:8px;margin:15px 0;color:#24496b}}@media print{.print-tip{display:none}}
-  </style></head><body><header class="paper-head"><div class="eyebrow">HTVVM STUDIO · PHÒNG THI</div><h1>${pageTitle}</h1><p>Thời gian làm bài: ${escapeHTML(durationMinutes)} phút</p><p>Họ và tên: ............................................................. Lớp: ....................</p></header><div class="print-tip">Chọn “Save as PDF / Lưu dưới dạng PDF” trong hộp thoại in để tải file PDF.</div>${blocks}${answerKey}</body></html>`);
+  </style></head><body><header class="paper-head"><div class="eyebrow">HTVVM STUDIO · PHÒNG THI</div><h1>${pageTitle}</h1><p>Thời gian làm bài: ${escapeHTML(durationMinutes)} phút</p><p>Họ và tên: ............................................................. Lớp: ....................</p></header><div class="print-tip">Chọn “Save as PDF / Lưu dưới dạng PDF” trong hộp thoại in để tải file PDF.</div>${blocks}${answerKey}<script>window.addEventListener('load',()=>setTimeout(()=>{window.focus();window.print()},650));</script></body></html>`);
   win.document.close();
-  setTimeout(() => {
-    try { win.focus(); win.print(); } catch {}
-  }, 550);
 }
 let ticker = null, autosaveTicker = null, draftSaveTimer = null, lockdownCleanup = null;
 let current = null, answers = {}, currentExamId = null;
@@ -304,14 +301,8 @@ export function renderExam() {
   bar.append(openA4Top);
   wrap.append(showcase, bar, body);
   let hasPendingPaper = false;
-  let requestedTab = '';
-  try {
-    hasPendingPaper = Boolean(localStorage.getItem('htvvm_pending_exam_paper'));
-    requestedTab = sessionStorage.getItem('htvvm_exam_open_tab') || '';
-    if (requestedTab) sessionStorage.removeItem('htvvm_exam_open_tab');
-  } catch { /* ignore */ }
+  try { hasPendingPaper = Boolean(localStorage.getItem('htvvm_pending_exam_paper')); } catch { /* ignore */ }
   if (hasPendingPaper) showCreator(body);
-  else if (requestedTab === 'mistakes') showMistakes(body);
   else showList(body);
   return wrap;
 }

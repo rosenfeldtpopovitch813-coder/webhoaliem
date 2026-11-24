@@ -39,14 +39,6 @@ import {
   titleFor
 } from '../../../shared/study-core.js';
 import { resolveResourceLink } from '../../../shared/resource-links.js';
-import {
-  startYouTubePlayer,
-  stopYouTubePlayer,
-  subscribeYouTube,
-  attachYouTubeFocusSlot,
-  readLastYouTubeInput,
-  requestYouTubeGeometrySync
-} from '../../core/youtube-player.js';
 
 const fmt = formatTimerClock;
 const fmtFull = formatFullDuration;
@@ -425,33 +417,30 @@ export function renderFocus() {
   const resourceStatus = element('p', 'focus-muted', 'Mở video bài giảng YouTube hoặc tài liệu PDF / Google Drive để học song song.');
   const resourceSplit = element('div', 'focus-resource-split');
 
-  // Khung YouTube (Chạy nền xuyên tác vụ — chỉ dừng khi vào phòng thi hoặc bấm Tắt)
+  // Khung YouTube
   const youtubePane = element('section', 'focus-resource-pane');
-  youtubePane.append(
-    element('h4', '', 'Video & Nhạc bài giảng (YouTube chạy nền)'),
-    element('p', 'focus-muted', 'Hỗ trợ video lẻ hoặc danh sách phát — vẫn tiếp tục phát khi chuyển sang mục khác, chỉ tự dừng khi làm bài thi hoặc tắt.')
-  );
+  youtubePane.append(element('h4', '', 'Video bài giảng (YouTube)'), element('p', 'focus-muted', 'Hỗ trợ link video lẻ hoặc danh sách phát (playlist).'));
   const ytInputRow = element('div', 'focus-inline-input-row');
   const youtubeInput = document.createElement('input');
   youtubeInput.type = 'url';
   youtubeInput.className = 'exam-input';
   youtubeInput.placeholder = 'Dán link YouTube rồi nhấn Enter…';
   youtubeInput.setAttribute('aria-label', 'Liên kết YouTube');
-  youtubeInput.value = readLastYouTubeInput();
-  const openYoutube = button('Phát YouTube', 'focus-btn primary', () => playYoutube());
-  const clearYoutube = button('Tắt YouTube', 'focus-btn', () => {
+  const openYoutube = button('Phát video', 'focus-btn primary', () => playYoutube());
+  const clearYoutube = button('Xóa', 'focus-btn', () => {
     youtubeInput.value = '';
-    stopYouTubePlayer('user');
-    resourceStatus.textContent = 'Đã tắt trình phát YouTube.';
+    youtubeFrame.removeAttribute('src');
+    youtubeFrame.hidden = true;
+    youtubeOpen.hidden = true;
   });
   ytInputRow.append(youtubeInput, openYoutube, clearYoutube);
-
-  const youtubeSlot = element('div', 'focus-youtube-slot');
-  youtubeSlot.id = 'focus-youtube-slot';
-  youtubeSlot.append(
-    element('span', 'focus-youtube-slot-hint', 'Dán link YouTube để nghe nhạc học tập hoặc xem bài giảng (giữ nguyên âm thanh khi chuyển tác vụ).')
-  );
-
+  const youtubeFrame = document.createElement('iframe');
+  youtubeFrame.className = 'focus-youtube-frame';
+  youtubeFrame.title = 'Trình phát YouTube';
+  youtubeFrame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+  youtubeFrame.allowFullscreen = true;
+  youtubeFrame.referrerPolicy = 'strict-origin-when-cross-origin';
+  youtubeFrame.hidden = true;
   const youtubeOpen = document.createElement('a');
   youtubeOpen.className = 'focus-resource-open';
   youtubeOpen.target = '_blank';
@@ -460,11 +449,19 @@ export function renderFocus() {
   youtubeOpen.hidden = true;
   function playYoutube() {
     try {
-      const st = startYouTubePlayer(youtubeInput.value, focusConfig);
-      youtubeOpen.href = st.openUrl;
-      youtubeOpen.hidden = !st.openUrl;
-      resourceStatus.textContent = 'Đang phát YouTube chạy nền (chuyển sang mục khác không bị mất tiếng).';
+      const resource = resolveResourceLink(youtubeInput.value);
+      if (resource.type !== 'youtube') throw Error('Khung này chỉ nhận link YouTube.');
+      if (focusConfig.enabled && !isUrlAllowedInFocus(resource.openUrl, focusConfig.allowlist)) {
+        throw Error('Focus Mode đang bật — hãy thêm YouTube vào danh sách tối đa 3 mục trước khi mở.');
+      }
+      youtubeFrame.src = resource.embedUrl;
+      youtubeFrame.hidden = false;
+      youtubeOpen.href = resource.openUrl;
+      youtubeOpen.hidden = false;
+      resourceStatus.textContent = 'Đã mở video YouTube.';
     } catch (error) {
+      youtubeFrame.hidden = true;
+      youtubeOpen.hidden = true;
       resourceStatus.textContent = error.message;
     }
   }
@@ -477,20 +474,7 @@ export function renderFocus() {
   youtubeInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') { event.preventDefault(); playYoutube(); }
   });
-  youtubePane.append(ytInputRow, youtubeSlot, youtubeOpen);
-  const detachYouTubeSlot = attachYouTubeFocusSlot(youtubeSlot);
-  const unsubYouTube = subscribeYouTube((ytState) => {
-    youtubeSlot.hidden = !ytState.active;
-    youtubeSlot.classList.toggle('has-active-yt', ytState.active);
-    if (ytState.active && ytState.openUrl) {
-      youtubeOpen.href = ytState.openUrl;
-      youtubeOpen.hidden = false;
-      if (!youtubeInput.value && ytState.rawInput) youtubeInput.value = ytState.rawInput;
-    } else {
-      youtubeOpen.hidden = true;
-    }
-    requestYouTubeGeometrySync();
-  });
+  youtubePane.append(ytInputRow, youtubeFrame, youtubeOpen);
 
   // Khung Tài liệu PDF / Google Drive
   const documentPane = element('section', 'focus-resource-pane');
@@ -621,7 +605,6 @@ export function renderFocus() {
     workspaceBody.className = `focus-workspace-body mode-${mode}`;
     resourcesPane.hidden = mode === 'board';
     notesPane.hidden = mode === 'media';
-    requestYouTubeGeometrySync();
   }
   setWorkspaceMode('split');
 
@@ -743,14 +726,12 @@ export function renderFocus() {
   });
   watcher.observe(document.getElementById('main-content') || document.body, { childList: true });
 
-  // Chỉ gỡ listener giao diện khi rời /focus — tuyệt đối không tắt đồng hồ, YouTube hay phiên tính giờ nền!
+  // Chỉ gỡ listener giao diện khi rời /focus — tuyệt đối không tắt đồng hồ hay phiên tính giờ nền!
   cleanup = () => {
     if (!alive) return;
     alive = false;
     unsubFocus();
     unsubMusic();
-    unsubYouTube();
-    detachYouTubeSlot();
     watcher.disconnect();
     if (pdfURL) URL.revokeObjectURL(pdfURL);
   };
