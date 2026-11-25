@@ -16,7 +16,10 @@ import {
 import type { ExamQuestion, QuestionType } from './types';
 import { applyBulkAnswerKeyText, distributeExamPoints, validateQuestion } from './examFsm';
 import { parsePlainTextExam } from './latexParser';
-import { sanitizeExamHtml } from './MathContent';
+import { MathContent, sanitizeExamHtml } from './MathContent';
+
+const PREVIEW_MEDIA_TAG_RE = /<(?:img|table|thead|tbody|tr|th|td)\b[^>]*>[\s\S]*?<\/(?:table|thead|tbody|tr|th|td)>|<img\b[^>]*\/?>/gi;
+const REAL_HTML_TAG_RE = /<\/?(?:strong|b|em|i|u|sub|sup|br|p|span|div|img|table|thead|tbody|tr|th|td|code)\b[^>]*>/gi;
 
 interface FullExamEditorProps {
   questions: ExamQuestion[];
@@ -372,7 +375,11 @@ export const FullExamEditor: React.FC<FullExamEditorProps> = ({
                 livePreview.map((q) => {
                   const hasImg = /<img\b/i.test(q.stem) || q.options.some((o) => /<img\b/i.test(o.content));
                   const hasTbl = /<table\b/i.test(q.stem);
-                  const plainStem = q.stem.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                  const compactStem = q.stem.replace(PREVIEW_MEDIA_TAG_RE, ' ').replace(/\s+/g, ' ').trim();
+                  const rightMc =
+                    q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE'
+                      ? q.options.filter((o) => o.isCorrect)
+                      : [];
                   return (
                     <div key={q.id} className="exu-preview-item">
                       <div className="exu-preview-item-top">
@@ -390,7 +397,64 @@ export const FullExamEditor: React.FC<FullExamEditorProps> = ({
                           <CheckCircle2 size={14} className="exu-ok-icon" />
                         )}
                       </div>
-                      <p className="exu-preview-stem">{plainStem || '(Hình minh họa / bảng)'}</p>
+                      {compactStem ? (
+                        <MathContent content={compactStem} className="exu-preview-stem" />
+                      ) : (
+                        <p className="exu-preview-stem">(Hình minh họa / bảng)</p>
+                      )}
+                      <div className="exu-preview-ans-row exu-tabular">
+                        {(q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE') && (
+                          <>
+                            <span className="exu-preview-ans-label">Đáp án:</span>
+                            {q.options.length > 0 ? (
+                              q.options.map((opt) => (
+                                <span
+                                  key={opt.label}
+                                  className={`exu-preview-ans-chip ${opt.isCorrect ? 'is-correct' : ''}`}
+                                >
+                                  {opt.label}
+                                </span>
+                              ))
+                            ) : null}
+                            {rightMc.length === 0 && (
+                              <span className="exu-preview-ans-chip is-missing">Chưa đánh dấu *</span>
+                            )}
+                          </>
+                        )}
+                        {q.type === 'TRUE_FALSE' && (
+                          <>
+                            <span className="exu-preview-ans-label">Đáp án:</span>
+                            {q.options.map((opt) => {
+                              const status = !opt.detectionSource
+                                ? 'is-missing'
+                                : opt.isCorrect
+                                  ? 'is-correct'
+                                  : 'is-false';
+                              const mark = !opt.detectionSource ? '?' : opt.isCorrect ? 'Đ' : 'S';
+                              return (
+                                <span key={opt.label} className={`exu-preview-ans-chip ${status}`}>
+                                  {opt.label}) {mark}
+                                </span>
+                              );
+                            })}
+                          </>
+                        )}
+                        {q.type === 'SHORT_ANSWER' && (
+                          <>
+                            <span className="exu-preview-ans-label">Đáp số:</span>
+                            {q.acceptedAnswers.length > 0 ? (
+                              <span className="exu-preview-ans-chip is-correct is-mono">
+                                {q.acceptedAnswers.join(' | ')}
+                              </span>
+                            ) : (
+                              <span className="exu-preview-ans-chip is-missing">Chưa nhập</span>
+                            )}
+                          </>
+                        )}
+                        {q.type === 'ESSAY' && (
+                          <span className="exu-preview-ans-chip">Tự luận</span>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -514,7 +578,7 @@ export const FullExamEditor: React.FC<FullExamEditorProps> = ({
                 <tbody>
                   {questions.map((q, idx) => {
                     const checked = selectedIds.has(q.id);
-                    const plainStem = q.stem.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    const plainStem = q.stem.replace(REAL_HTML_TAG_RE, ' ').replace(/\s+/g, ' ').trim();
                     let ansSummary = '—';
                     if (q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE') {
                       const right = q.options.filter((o) => o.isCorrect).map((o) => o.label);
