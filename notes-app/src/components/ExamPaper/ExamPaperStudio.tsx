@@ -76,6 +76,7 @@ import {
   stripRichHtmlToPlainText
 } from './examTemplates';
 import {
+  buildRawExamTextFromPaper,
   convertExamPaperToOnlineQuestions,
   exportExamPaperToDocx,
   exportExamPaperToPDF
@@ -1472,12 +1473,15 @@ export default function ExamPaperStudio({
       alert('Đề chưa có câu hỏi nào để tạo phòng thi.');
       return;
     }
+    const rawExamText = buildRawExamTextFromPaper(paper);
     try {
       localStorage.setItem(
         'htvvm_pending_exam_paper',
         JSON.stringify({
           title: paper.header.examTitle,
           questions,
+          rawExamText,
+          source: 'exam-paper',
           exportedAt: Date.now()
         })
       );
@@ -1489,11 +1493,12 @@ export default function ExamPaperStudio({
         {
           type: 'HTVVM_EXAM_PAPER_EXPORT',
           title: paper.header.examTitle,
-          questions
+          questions,
+          rawExamText
         },
         '*'
       );
-      setSaveBadge(`Đã chuyển ${questions.length} câu hỏi sang Phòng thi!`);
+      setSaveBadge(`Đã chuyển ${questions.length} câu hỏi sang Phòng thi (Kiểu 2)!`);
     } else {
       window.open('/exam', '_blank');
     }

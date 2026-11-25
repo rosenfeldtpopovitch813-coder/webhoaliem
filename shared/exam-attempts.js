@@ -138,8 +138,8 @@ export function collectUserAttempts(attemptsMap, legacySession) {
   });
 }
 
-export function buildAutoSubmitRecord({ active, questions, existingCount = 0, now = Date.now() }) {
-  const grading = gradeExam(questions, active?.draftAnswers || {});
+export function buildAutoSubmitRecord({ active, questions, scoringConfig = null, existingCount = 0, now = Date.now() }) {
+  const grading = gradeExam(questions, active?.draftAnswers || {}, scoringConfig);
   const startedAt = Number(active?.startedAt) || now;
   const endsAt = Number(active?.endsAt) || now;
   const submittedAt = Math.max(startedAt, Math.min(now, endsAt));
@@ -209,4 +209,29 @@ export function aggregateExamLeaderboard({ attemptsByUid = {}, legacyByUid = {},
       a.submittedAt - b.submittedAt
   );
   return ranking;
+}
+
+export function serializeExamSummary(meta, now, extra = {}) {
+  const maxAttempts = Number(meta.maxAttempts) || 0;
+  return {
+    id: meta.id,
+    title: meta.title,
+    durationMinutes: meta.durationMinutes,
+    maxAttempts,
+    createdAt: meta.createdAt,
+    status: meta.status,
+    ownerName: meta.ownerName || 'Giáo viên',
+    isOwner: extra.isOwner ?? false,
+    counts: meta.counts,
+    displayMode: meta.displayMode === 'unified_inline' ? 'unified_inline' : 'split_omr',
+    hasSourceDocument: Boolean(meta.sourceUrl),
+    hasPassword: Boolean(meta.hasPassword),
+    scoringConfig: meta.scoringConfig || null,
+    shuffleQuestions: Boolean(meta.shuffleQuestions),
+    shuffleOptions: Boolean(meta.shuffleOptions),
+    deadlineAt: meta.deadlineAt || null,
+    manualLocked: Boolean(meta.manualLocked),
+    isLocked: isExamLocked(meta, now),
+    ...extra
+  };
 }

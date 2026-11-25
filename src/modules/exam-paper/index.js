@@ -41,6 +41,8 @@ export function renderExamPaperApp() {
       localStorage.setItem('htvvm_pending_exam_paper', JSON.stringify({
         title: payload.title,
         questions: payload.questions,
+        rawExamText: payload.rawExamText || '',
+        source: 'exam-paper',
         exportedAt: Date.now()
       }));
     } catch { /* ignore */ }

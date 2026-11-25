@@ -944,25 +944,41 @@ export function exportExamPaperToPDF(paper: ExamPaperDocument, mode: 'student' |
 export function convertExamPaperToOnlineQuestions(paper: ExamPaperDocument) {
   const questions: Array<{
     part: 'I' | 'II' | 'III';
+    partTitle?: string;
     prompt: string;
     image?: string;
+    extraImages?: string[];
     options?: string[];
     answer: string | boolean[];
     tolerance?: number;
+    explanation?: string;
   }> = [];
 
+  let activePartTitle = '';
   for (const block of paper.blocks) {
+    if (block.type === 'section') {
+      activePartTitle = stripRichHtmlToPlainText(block.title || '').trim();
+      continue;
+    }
     if (block.type !== 'question') continue;
-    const firstFig = block.figures?.[0]?.src || '';
-    const image = firstFig.startsWith('data:image/') && firstFig.length <= 300000 ? firstFig : '';
+    const validFigs = (block.figures || [])
+      .map(f => f?.src || '')
+      .filter(src => src.startsWith('data:image/') && src.length <= 300000);
+    const image = validFigs[0] || '';
+    const extraImages = validFigs.slice(1, 4);
+    const explanation = block.solution ? stripRichHtmlToPlainText(block.solution).trim() : '';
+
     if (block.questionType === 'mcq') {
       const opts = (block.options || ['A', 'B', 'C', 'D']).map((o, i) => stripRichHtmlToPlainText(o) || `Phương án ${'ABCD'[i]}`);
       questions.push({
         part: 'I',
+        ...(activePartTitle ? { partTitle: activePartTitle } : {}),
         prompt: stripRichHtmlToPlainText(block.prompt) || 'Câu hỏi trắc nghiệm',
         ...(image ? { image } : {}),
+        ...(extraImages.length ? { extraImages } : {}),
         options: opts,
-        answer: block.correctChoice || 'A'
+        answer: block.correctChoice || 'A',
+        ...(explanation ? { explanation } : {})
       });
     } else if (block.questionType === 'tf') {
       const sts = block.statements || [];
@@ -970,21 +986,58 @@ export function convertExamPaperToOnlineQuestions(paper: ExamPaperDocument) {
       const ans = [0, 1, 2, 3].map(i => (sts[i]?.correct === false ? false : true));
       questions.push({
         part: 'II',
+        ...(activePartTitle ? { partTitle: activePartTitle } : {}),
         prompt: stripRichHtmlToPlainText(block.prompt) || 'Câu hỏi đúng sai',
         ...(image ? { image } : {}),
+        ...(extraImages.length ? { extraImages } : {}),
         options: opts,
-        answer: ans
+        answer: ans,
+        ...(explanation ? { explanation } : {})
       });
     } else if (block.questionType === 'short') {
       const numeric = Number(stripRichHtmlToPlainText(block.shortAnswer || '0').replace(',', '.'));
       questions.push({
         part: 'III',
+        ...(activePartTitle ? { partTitle: activePartTitle } : {}),
         prompt: stripRichHtmlToPlainText(block.prompt) || 'Câu hỏi trả lời ngắn',
         ...(image ? { image } : {}),
+        ...(extraImages.length ? { extraImages } : {}),
         answer: Number.isFinite(numeric) ? String(numeric) : '0',
-        tolerance: 0.0001
+        tolerance: 0.0001,
+        ...(explanation ? { explanation } : {})
       });
     }
   }
   return questions;
+}
+
+export function buildRawExamTextFromPaper(paper: ExamPaperDocument): string {
+  const lines: string[] = [];
+  if (paper.header?.examTitle) lines.push(stripRichHtmlToPlainText(paper.header.examTitle));
+  let qNo = 0;
+  for (const block of paper.blocks) {
+    if (block.type === 'section') {
+      lines.push('', stripRichHtmlToPlainText(block.title || ''));
+      qNo = 0;
+    } else if (block.type === 'question') {
+      qNo += 1;
+      lines.push(`Câu ${qNo}. ${stripRichHtmlToPlainText(block.prompt || '')}`);
+      if (block.questionType === 'mcq') {
+        const opts = block.options || [];
+        opts.forEach((o, i) => {
+          const letter = 'ABCD'[i] || String(i + 1);
+          const star = (block.correctChoice || 'A') === letter ? '*' : '';
+          lines.push(`${star}${letter}. ${stripRichHtmlToPlainText(o)}`);
+        });
+      } else if (block.questionType === 'tf') {
+        (block.statements || []).forEach((s, i) => {
+          lines.push(`${'abcd'[i]}) ${stripRichHtmlToPlainText(s.text)} [${s.correct === false ? 'S' : 'Đ'}]`);
+        });
+      } else if (block.questionType === 'short') {
+        lines.push(`Đáp án: ${stripRichHtmlToPlainText(block.shortAnswer || '0')}`);
+      }
+      if (block.solution) lines.push(`Lời giải: ${stripRichHtmlToPlainText(block.solution)}`);
+    }
+  }
+  return lines.join('\n').trim();
 }

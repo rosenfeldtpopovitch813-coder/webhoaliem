@@ -1,5 +1,15 @@
 import { db, identity, fail, assert, newId } from '../lib/exam-server.js';
-import { validateQuestions, publicQuestions, gradeExam, sanitizeDraftAnswers, sanitizeFlaggedQuestions, MAX_EXAM_QUESTIONS } from '../shared/exam-grading.js';
+import { hashExamPassword, verifyExamPassword } from '../lib/exam-password.js';
+import {
+  validateQuestions,
+  publicQuestions,
+  reviewQuestions,
+  gradeExam,
+  normalizeScoringConfig,
+  sanitizeDraftAnswers,
+  sanitizeFlaggedQuestions,
+  MAX_EXAM_QUESTIONS
+} from '../shared/exam-grading.js';
 import {
   SUBMISSION_GRACE_MS,
   MAX_VIOLATION_EVENTS,
@@ -14,7 +24,8 @@ import {
   summarizeUserModerationStatus,
   collectUserAttempts,
   buildAutoSubmitRecord,
-  aggregateExamLeaderboard
+  aggregateExamLeaderboard,
+  serializeExamSummary
 } from '../shared/exam-attempts.js';
 import { resolveResourceLink } from '../shared/resource-links.js';
 const MAX_BODY = 4 * 1024 * 1024;
@@ -55,7 +66,7 @@ async function clearExamLockIfMatching(database, uid, id) {
   }
 }
 
-async function finalizeActiveIfExpired(database, id, uid, questionsCache = null, now = Date.now()) {
+async function finalizeActiveIfExpired(database, id, uid, questionsCache = null, now = Date.now(), scoringConfigCache = undefined) {
   const activeInfo = await readActiveAttempt(database, id, uid);
   if (!activeInfo) return null;
   const active = activeInfo.val;
@@ -69,10 +80,13 @@ async function finalizeActiveIfExpired(database, id, uid, questionsCache = null,
     const history = await readUserAttemptHistory(database, id, uid);
     return { expired: true, archived: history[0] || null };
   }
-  const questions = questionsCache || (await database.ref(`exams_private/${id}`).get()).val();
+  const [questions, scoringConfig] = await Promise.all([
+    questionsCache ? Promise.resolve(questionsCache) : database.ref(`exams_private/${id}`).get().then(s => s.val()),
+    scoringConfigCache !== undefined ? Promise.resolve(scoringConfigCache) : database.ref(`exams_meta/${id}/scoringConfig`).get().then(s => s.val() || null)
+  ]);
   if (!Array.isArray(questions)) return { expired: true, archived: null };
   const existing = await readUserAttemptHistory(database, id, uid);
-  const record = buildAutoSubmitRecord({ active: tx.snapshot.val(), questions, existingCount: existing.length, now });
+  const record = buildAutoSubmitRecord({ active: tx.snapshot.val(), questions, scoringConfig, existingCount: existing.length, now });
   await database.ref().update({
     [`exam_attempts/${id}/${uid}/${record.attemptId}`]: record,
     [`exam_active_attempts/${id}/${uid}`]: null,
@@ -89,7 +103,7 @@ async function finalizeActiveIfExpired(database, id, uid, questionsCache = null,
   return { expired: true, archived: record };
 }
 
-async function finalizeExpiredForExam(database, id, now = Date.now()) {
+async function finalizeExpiredForExam(database, id, now = Date.now(), scoringConfigCache = undefined) {
   const [activeSnap, legacySnap] = await Promise.all([
     database.ref(`exam_active_attempts/${id}`).get(),
     database.ref(`exam_sessions/${id}`).get()
@@ -104,9 +118,12 @@ async function finalizeExpiredForExam(database, id, now = Date.now()) {
     if (val?.status === 'active' && now > Number(val.endsAt || 0) + SUBMISSION_GRACE_MS && !expiredUids.includes(uid)) expiredUids.push(uid);
   }
   if (expiredUids.length) {
-    const questions = (await database.ref(`exams_private/${id}`).get()).val();
+    const [questions, scoringConfig] = await Promise.all([
+      database.ref(`exams_private/${id}`).get().then(s => s.val()),
+      scoringConfigCache !== undefined ? Promise.resolve(scoringConfigCache) : database.ref(`exams_meta/${id}/scoringConfig`).get().then(s => s.val() || null)
+    ]);
     if (Array.isArray(questions)) {
-      await Promise.all(expiredUids.map(uid => finalizeActiveIfExpired(database, id, uid, questions, now)));
+      await Promise.all(expiredUids.map(uid => finalizeActiveIfExpired(database, id, uid, questions, now, scoringConfig)));
     }
   }
 }
@@ -137,6 +154,7 @@ function collectExamSubmissionRows(attemptsByUid = {}, legacyByUid = {}, maxDura
         attemptId: item.attemptId,
         attemptNumber: item.attemptNumber || 1,
         score: Number(item.result?.score) || 0,
+        maxScore: Number(item.result?.maxScore) || 10,
         fullyCorrect: Number(item.result?.fullyCorrect) || 0,
         total: Number(item.result?.total) || 0,
         startedAt: Number(item.startedAt) || 0,
@@ -164,24 +182,8 @@ function collectExamSubmissionRows(attemptsByUid = {}, legacyByUid = {}, maxDura
   };
 }
 
-function serializeExamSummary(meta, now, extra = {}) {
-  const maxAttempts = Number(meta.maxAttempts) || 0;
-  return {
-    id: meta.id,
-    title: meta.title,
-    durationMinutes: meta.durationMinutes,
-    maxAttempts,
-    createdAt: meta.createdAt,
-    status: meta.status,
-    isOwner: extra.isOwner ?? false,
-    counts: meta.counts,
-    hasSourceDocument: Boolean(meta.sourceUrl),
-    deadlineAt: meta.deadlineAt || null,
-    manualLocked: Boolean(meta.manualLocked),
-    isLocked: isExamLocked(meta, now),
-    ...extra
-  };
-}
+export { serializeExamSummary };
+
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store, private');
   if (!['GET','POST'].includes(req.method)) return res.status(405).json({error:'Method not allowed'});
@@ -200,7 +202,7 @@ export default async function handler(req,res) {
         .slice(0, 70);
       const list = await Promise.all(metas.map(async (meta) => {
         const isOwner = meta.owner === user.uid;
-        const finalized = await finalizeActiveIfExpired(database, meta.id, user.uid, null, now);
+        const finalized = await finalizeActiveIfExpired(database, meta.id, user.uid, null, now, meta.scoringConfig || null);
         const attempts = await readUserAttemptHistory(database, meta.id, user.uid);
         const hasActiveAttempt = Boolean(finalized && !finalized.expired);
         const activeEndsAt = hasActiveAttempt ? Number(finalized.activeInfo.val.endsAt) || null : null;
@@ -232,12 +234,16 @@ export default async function handler(req,res) {
     }
     if (action === 'create') {
       assert(req.method==='POST','POST bắt buộc.');
-      // Any authenticated HTVVM user may create a practice exam; no role tiers are used in this build.
       const title = String(req.body.title || '').trim(); assert(title.length>=3 && title.length<=140,'Tên đề từ 3–140 ký tự.');
       const durationMinutes=Number(req.body.durationMinutes); assert(Number.isInteger(durationMinutes) && durationMinutes>=5 && durationMinutes<=240,'Thời gian 5–240 phút.');
       const maxAttempts = parseMaxAttempts(req.body.maxAttempts);
       const createdAt=Date.now();
       const deadlineAt = parseOptionalDeadline(req.body.deadlineAt, createdAt);
+      const displayMode = req.body.displayMode === 'unified_inline' ? 'unified_inline' : 'split_omr';
+      const scoringConfig = normalizeScoringConfig(req.body.scoringConfig);
+      const passwordSecret = hashExamPassword(req.body.password);
+      const shuffleQuestions = Boolean(req.body.shuffleQuestions);
+      const shuffleOptions = Boolean(req.body.shuffleOptions);
       const questions=validateQuestions(req.body.questions); const id=newId();
       let sourceUrl = '', sourceOpenUrl = '';
       if (req.body.sourceUrl) {
@@ -250,8 +256,31 @@ export default async function handler(req,res) {
         sourceOpenUrl ||= resource.openUrl;
       }
       const counts={I:questions.filter(q=>q.part==='I').length, II:questions.filter(q=>q.part==='II').length,III:questions.filter(q=>q.part==='III').length};
-      const meta={id,title,durationMinutes,maxAttempts,createdAt,status:'published',owner:user.uid,ownerName:user.name,counts,manualLocked:false,...(deadlineAt?{deadlineAt}:{}),...(sourceUrl ? {sourceUrl,sourceOpenUrl} : {})};
-      await database.ref().update({[`exams_meta/${id}`]:meta,[`exams_private/${id}`]:questions,[`exams_public/${id}`]:publicQuestions(questions)});
+      const meta={
+        id,
+        title,
+        durationMinutes,
+        maxAttempts,
+        createdAt,
+        status:'published',
+        owner:user.uid,
+        ownerName:user.name,
+        counts,
+        displayMode,
+        hasPassword: Boolean(passwordSecret),
+        shuffleQuestions,
+        shuffleOptions,
+        manualLocked:false,
+        ...(scoringConfig ? { scoringConfig } : {}),
+        ...(deadlineAt?{deadlineAt}:{}),
+        ...(sourceUrl ? {sourceUrl,sourceOpenUrl} : {})
+      };
+      await database.ref().update({
+        [`exams_meta/${id}`]:meta,
+        [`exams_private/${id}`]:questions,
+        [`exams_public/${id}`]:publicQuestions(questions),
+        ...(passwordSecret ? { [`exams_secrets/${id}`]: passwordSecret } : {})
+      });
       return res.status(201).json({exam:serializeExamSummary(meta, createdAt, { isOwner: true, ownerName: user.name })});
     }
     if (action === 'update-lock') {
@@ -277,8 +306,41 @@ export default async function handler(req,res) {
         nextManualLocked || !nextDeadline || nextDeadline > now,
         'Hạn chót cũ đã qua. Hãy gia hạn thêm hoặc bỏ hạn chót để mở lại phòng thi.'
       );
-      await metaRef.update({ manualLocked: nextManualLocked, deadlineAt: nextDeadline, maxAttempts: nextMaxAttempts });
-      const updatedMeta = { ...meta, manualLocked: nextManualLocked, maxAttempts: nextMaxAttempts, ...(nextDeadline ? { deadlineAt: nextDeadline } : { deadlineAt: null }) };
+      let nextHasPassword = Boolean(meta.hasPassword);
+      const rootPatch = {};
+      if ('password' in (req.body || {})) {
+        if (req.body.password === null || String(req.body.password).trim() === '') {
+          nextHasPassword = false;
+          rootPatch[`exams_secrets/${id}`] = null;
+        } else {
+          const nextSecret = hashExamPassword(req.body.password);
+          nextHasPassword = Boolean(nextSecret);
+          rootPatch[`exams_secrets/${id}`] = nextSecret;
+        }
+      }
+      let nextScoringConfig = meta.scoringConfig || null;
+      if ('scoringConfig' in (req.body || {})) {
+        nextScoringConfig = normalizeScoringConfig(req.body.scoringConfig);
+      }
+      const metaPatch = {
+        manualLocked: nextManualLocked,
+        deadlineAt: nextDeadline,
+        maxAttempts: nextMaxAttempts,
+        hasPassword: nextHasPassword,
+        scoringConfig: nextScoringConfig
+      };
+      for (const [k, v] of Object.entries(metaPatch)) {
+        rootPatch[`exams_meta/${id}/${k}`] = v;
+      }
+      await database.ref().update(rootPatch);
+      const updatedMeta = {
+        ...meta,
+        manualLocked: nextManualLocked,
+        maxAttempts: nextMaxAttempts,
+        hasPassword: nextHasPassword,
+        scoringConfig: nextScoringConfig,
+        ...(nextDeadline ? { deadlineAt: nextDeadline } : { deadlineAt: null })
+      };
       return res.json({ exam: serializeExamSummary(updatedMeta, now, { isOwner: true }) });
     }
     if (action === 'delete') {
@@ -295,6 +357,7 @@ export default async function handler(req,res) {
         [`exams_meta/${id}`]: null,
         [`exams_private/${id}`]: null,
         [`exams_public/${id}`]: null,
+        [`exams_secrets/${id}`]: null,
         [`exam_sessions/${id}`]: null,
         [`exam_attempts/${id}`]: null,
         [`exam_active_attempts/${id}`]: null,
@@ -305,26 +368,43 @@ export default async function handler(req,res) {
     }
     if (action === 'detail') {
       const id=String(req.query.id || '').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
-      const snap=await database.ref(`exams_meta/${id}`).get(); assert(snap.exists(),'Không tìm thấy đề.',404);
+      const snap=await database.ref(`exams_meta/${id}`).get(); assert(snap.exists(),'Không tìm thấy đề thi hoặc liên kết không hợp lệ.',404);
       const meta=snap.val(); assert(meta.status==='published' || meta.owner===user.uid,'Đề chưa được phát hành.',403);
-      return res.json({exam:serializeExamSummary(meta, Date.now(), { isOwner: meta.owner === user.uid })});
+      const now = Date.now();
+      const finalized = await finalizeActiveIfExpired(database, id, user.uid, null, now, meta.scoringConfig || null);
+      const attempts = await readUserAttemptHistory(database, id, user.uid);
+      const hasActiveAttempt = Boolean(finalized && !finalized.expired);
+      const activeEndsAt = hasActiveAttempt ? Number(finalized.activeInfo.val.endsAt) || null : null;
+      const myBestScore = attempts.length ? Math.max(...attempts.map(a => Number(a.result?.score) || 0)) : null;
+      const maxAttempts = Number(meta.maxAttempts) || 0;
+      const locked = isExamLocked(meta, now);
+      return res.json({
+        exam: serializeExamSummary(meta, now, {
+          isOwner: meta.owner === user.uid,
+          hasActiveAttempt,
+          activeEndsAt,
+          myAttemptsCount: attempts.length,
+          myBestScore,
+          canRetake: !locked && hasRemainingAttempts(maxAttempts, attempts.length)
+        })
+      });
     }
     if (action==='start') {
       assert(req.method==='POST','POST bắt buộc.'); const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
       const metaSnap=await database.ref(`exams_meta/${id}`).get(); assert(metaSnap.exists() && metaSnap.val().status==='published','Phòng thi không tồn tại.',404);
       const meta=metaSnap.val(), now=Date.now(), retake=Boolean(req.body.retake);
       const maxAttempts = Number(meta.maxAttempts) || 0;
-      const finalized = await finalizeActiveIfExpired(database, id, user.uid, null, now);
+      const finalized = await finalizeActiveIfExpired(database, id, user.uid, null, now, meta.scoringConfig || null);
       if (finalized?.expired && finalized.archived && !retake) {
         const locked = isExamLocked(meta, now);
-        const questions = (await database.ref(`exams_public/${id}`).get()).val() || [];
+        const privateQs = (await database.ref(`exams_private/${id}`).get()).val() || [];
         return res.json({
           exam: serializeExamSummary(meta, now, { isOwner: meta.owner === user.uid, sourceUrl: meta.sourceUrl || null, sourceOpenUrl: meta.sourceOpenUrl || meta.sourceUrl || null }),
           session: { status: 'submitted', autoSubmitted: true, attemptNumber: finalized.archived.attemptNumber },
           autoSubmittedSession: true,
           canRetake: !locked && hasRemainingAttempts(maxAttempts, finalized.archived.attemptNumber),
           maxAttempts,
-          questions,
+          questions: reviewQuestions(privateQs),
           leaveScreenCount: normalizeLeaveScreenCount(finalized.archived.leaveScreenCount),
           violationEvents: normalizeViolationEvents(finalized.archived.violationEvents),
           reviewStatus: resolveAttemptReviewStatus(finalized.archived),
@@ -333,6 +413,19 @@ export default async function handler(req,res) {
         });
       }
       const existingActive = finalized && !finalized.expired ? finalized.activeInfo : await readActiveAttempt(database, id, user.uid);
+      if (!existingActive && meta.hasPassword && meta.owner !== user.uid) {
+        const secretSnap = await database.ref(`exams_secrets/${id}`).get();
+        const secret = secretSnap.val();
+        if (secret?.hash) {
+          const rawPass = typeof req.body.password === 'string' ? req.body.password.trim() : '';
+          if (!rawPass) {
+            throw Object.assign(Error('Phòng thi này yêu cầu mật khẩu để vào làm bài.'), { status: 403, code: 'PASSWORD_REQUIRED' });
+          }
+          if (!verifyExamPassword(rawPass, secret)) {
+            throw Object.assign(Error('Mật khẩu phòng thi không đúng. Vui lòng thử lại.'), { status: 403, code: 'PASSWORD_INVALID' });
+          }
+        }
+      }
       const locked = isExamLocked(meta, now);
       const history = await readUserAttemptHistory(database, id, user.uid);
       const endsAt = computeAttemptEndsAt(now, meta.durationMinutes, meta.deadlineAt);
@@ -456,7 +549,6 @@ export default async function handler(req,res) {
       assert(activeInfo, 'Phiên thi đã kết thúc hoặc chưa bắt đầu.', 409);
       const now=Date.now();
       const tx=await activeInfo.ref.transaction(session=>{
-        // First call sees the empty local cache (null); returning undefined would abort before reading the server.
         if(session===null) return null;
         if(session.status!=='active' || now>Number(session.endsAt||0)+SUBMISSION_GRACE_MS) return;
         return {...session,draftAnswers,flaggedQuestions,draftUpdatedAt:now};
@@ -467,12 +559,11 @@ export default async function handler(req,res) {
     if (action==='history') {
       assert(req.method==='GET','GET bắt buộc.');
       const now = Date.now();
-      // Keep history independent of a manually configured Realtime Database index.
       const metaSnap=await database.ref('exams_meta').get();
       const metas=Object.values(metaSnap.val()||{}).filter(x=>x && x.id).sort((a,b)=>(Number(b.createdAt)||0)-(Number(a.createdAt)||0)).slice(0,100);
       const perExam = await Promise.all(metas.map(async meta=>{
         if(!meta?.id) return [];
-        await finalizeActiveIfExpired(database, meta.id, user.uid, null, now);
+        await finalizeActiveIfExpired(database, meta.id, user.uid, null, now, meta.scoringConfig || null);
         const attempts = await readUserAttemptHistory(database, meta.id, user.uid);
         return attempts.map(attempt => ({
           examId:meta.id,
@@ -485,6 +576,7 @@ export default async function handler(req,res) {
           submittedAt:attempt.submittedAt||0,
           elapsedMs:Math.max(0,(attempt.submittedAt||0)-(attempt.startedAt||0)),
           score:Number(attempt.result?.score)||0,
+          maxScore:Number(attempt.result?.maxScore)||10,
           total:Number(attempt.result?.total)||0,
           fullyCorrect:Number(attempt.result?.fullyCorrect)||0
         }));
@@ -496,24 +588,32 @@ export default async function handler(req,res) {
     if (action==='submit') {
       assert(req.method==='POST','POST bắt buộc.'); const id=String(req.body.id||'').toUpperCase(); assert(/^[A-Z0-9]{12}$/.test(id),'Mã đề không hợp lệ.');
       const answers=req.body.answers; assert(answers && typeof answers==='object' && !Array.isArray(answers) && Object.keys(answers).length <= MAX_EXAM_QUESTIONS,'Bài làm không hợp lệ.');
-      const questions=(await database.ref(`exams_private/${id}`).get()).val(); assert(Array.isArray(questions),'Không tìm thấy bộ đáp án.',404);
+      const [privateSnap, metaSnap] = await Promise.all([
+        database.ref(`exams_private/${id}`).get(),
+        database.ref(`exams_meta/${id}`).get()
+      ]);
+      const questions=privateSnap.val(); assert(Array.isArray(questions),'Không tìm thấy bộ đáp án.',404);
+      const metaVal = metaSnap.val() || {};
+      const scoringConfig = metaVal.scoringConfig || null;
       const now = Date.now();
       const activeInfo = await readActiveAttempt(database, id, user.uid);
       if (!activeInfo) {
         const prev = await readUserAttemptHistory(database, id, user.uid);
         if (prev.length && prev[0].submittedAt && now - prev[0].submittedAt < 120_000) {
-          return res.json({ result: prev[0].result, attemptNumber: prev[0].attemptNumber, attemptId: prev[0].attemptId, alreadySubmitted: true });
+          return res.json({ result: prev[0].result, attemptNumber: prev[0].attemptNumber, attemptId: prev[0].attemptId, questions: reviewQuestions(questions), scoringConfig, alreadySubmitted: true });
         }
         assert(false, 'Bạn chưa bắt đầu lượt thi này.', 403);
       }
       const active = activeInfo.val;
       if (now > Number(active.endsAt || 0) + SUBMISSION_GRACE_MS) {
-        const finalized = await finalizeActiveIfExpired(database, id, user.uid, questions, now);
+        const finalized = await finalizeActiveIfExpired(database, id, user.uid, questions, now, scoringConfig);
         assert(finalized?.archived, 'Đã quá hạn nộp bài và không tìm thấy bản nháp trước hạn.', 409);
         return res.json({
           result: finalized.archived.result,
           attemptNumber: finalized.archived.attemptNumber,
           attemptId: finalized.archived.attemptId,
+          questions: reviewQuestions(questions),
+          scoringConfig,
           autoSubmitted: true,
           alreadySubmitted: true
         });
@@ -525,15 +625,15 @@ export default async function handler(req,res) {
         return { ...current, status: 'submitting' };
       }, undefined, false);
       if (!tx.committed) {
-        const finalized = await finalizeActiveIfExpired(database, id, user.uid, questions, now);
+        const finalized = await finalizeActiveIfExpired(database, id, user.uid, questions, now, scoringConfig);
         if (finalized?.archived) {
-          return res.json({ result: finalized.archived.result, attemptNumber: finalized.archived.attemptNumber, autoSubmitted: true, alreadySubmitted: true });
+          return res.json({ result: finalized.archived.result, attemptNumber: finalized.archived.attemptNumber, questions: reviewQuestions(questions), scoringConfig, autoSubmitted: true, alreadySubmitted: true });
         }
         assert(false, 'Không thể ghi bài nộp lúc này.', 409);
       }
       const claimed = tx.snapshot.val();
       const existing = await readUserAttemptHistory(database, id, user.uid);
-      const grading=gradeExam(questions,answers), submittedAt=Date.now();
+      const grading=gradeExam(questions, answers, scoringConfig), submittedAt=Date.now();
       const attemptId = claimed.attemptId || active.attemptId || newId();
       const attemptNumber = existing.length + 1;
       const serverLeaveCount = normalizeLeaveScreenCount(claimed.leaveScreenCount);
@@ -570,7 +670,6 @@ export default async function handler(req,res) {
         ...(activeInfo.source === 'legacy' ? { [`exam_sessions/${id}/${user.uid}`]: null } : {})
       });
       await clearExamLockIfMatching(database, user.uid, id);
-      const metaVal = (await database.ref(`exams_meta/${id}`).get()).val() || {};
       const maxAttempts = Number(metaVal.maxAttempts) || 0;
       return res.json({
         result,
@@ -578,8 +677,10 @@ export default async function handler(req,res) {
         attemptNumber,
         maxAttempts,
         canRetake: !isExamLocked(metaVal, Date.now()) && hasRemainingAttempts(maxAttempts, attemptNumber),
-        questions: publicQuestions(questions),
+        questions: reviewQuestions(questions),
         examTitle: metaVal.title || id,
+        displayMode: metaVal.displayMode === 'unified_inline' ? 'unified_inline' : 'split_omr',
+        scoringConfig,
         sourceUrl: metaVal.sourceUrl || null,
         sourceOpenUrl: metaVal.sourceOpenUrl || metaVal.sourceUrl || null,
         leaveScreenCount: finalLeaveCount,
@@ -603,10 +704,10 @@ export default async function handler(req,res) {
       if (targetUid !== user.uid) {
         assert(isOwner, 'Chỉ người tạo đề mới có quyền xem bài làm của học sinh khác.', 403);
       }
-      await finalizeActiveIfExpired(database, id, targetUid);
-      const [attempts, publicSnap] = await Promise.all([
+      await finalizeActiveIfExpired(database, id, targetUid, null, Date.now(), meta.scoringConfig || null);
+      const [attempts, privateSnap] = await Promise.all([
         readUserAttemptHistory(database, id, targetUid),
-        database.ref(`exams_public/${id}`).get()
+        database.ref(`exams_private/${id}`).get()
       ]);
       assert(attempts.length > 0, targetUid === user.uid ? 'Chưa có kết quả đã nộp cho đề này.' : 'Học sinh này chưa có bài nộp cho đề thi này.', 404);
       const maxAttempts = Number(meta.maxAttempts) || 0;
@@ -615,6 +716,8 @@ export default async function handler(req,res) {
       return res.json({
         examId: id,
         examTitle: meta.title || id,
+        displayMode: meta.displayMode === 'unified_inline' ? 'unified_inline' : 'split_omr',
+        scoringConfig: meta.scoringConfig || null,
         studentUid: targetUid,
         studentName: chosen.name || (targetUid === user.uid ? user.name : 'Học sinh'),
         isOwner,
@@ -634,11 +737,12 @@ export default async function handler(req,res) {
         reviewStatus: resolveAttemptReviewStatus(chosen),
         reviewedAt: Number(chosen.reviewedAt) || 0,
         reviewNote: chosen.reviewNote || '',
-        questions: Array.isArray(publicSnap.val()) ? publicSnap.val() : [],
+        questions: Array.isArray(privateSnap.val()) ? reviewQuestions(privateSnap.val()) : [],
         attempts: attempts.map((a) => ({
           attemptId: a.attemptId,
           attemptNumber: a.attemptNumber || 1,
           score: Number(a.result?.score) || 0,
+          maxScore: Number(a.result?.maxScore) || 10,
           submittedAt: a.submittedAt || 0,
           autoSubmitted: Boolean(a.autoSubmitted),
           elapsedMs: a.elapsedMs || 0,
@@ -656,7 +760,7 @@ export default async function handler(req,res) {
       const meta = metaSnap.val() || {};
       assert(meta.owner === user.uid, 'Chỉ người tạo đề mới có quyền xem danh sách bài làm của học sinh.', 403);
       const now = Date.now();
-      await finalizeExpiredForExam(database, id, now);
+      await finalizeExpiredForExam(database, id, now, meta.scoringConfig || null);
       const [freshAttemptsSnap, freshLegacySnap] = await Promise.all([
         database.ref(`exam_attempts/${id}`).get(),
         database.ref(`exam_sessions/${id}`).get()
@@ -731,7 +835,6 @@ export default async function handler(req,res) {
       const indexSnap = await database.ref(`user_exam_ids/${user.uid}`).get();
       let examIds = Object.keys(indexSnap.val() || {}).filter((key) => /^[A-Z0-9]{12}$/.test(key));
       if (!examIds.length) {
-        // One-time lazy backfill for legacy accounts without scanning other users' attempts.
         const metaSnap = await database.ref('exams_meta').get();
         const candidateIds = Object.values(metaSnap.val() || {})
           .filter(x => x && x.id)
@@ -779,7 +882,7 @@ export default async function handler(req,res) {
       const metaSnap = await database.ref(`exams_meta/${id}`).get();
       const meta = metaSnap.val() || {};
       const isOwner = meta.owner === user.uid;
-      await finalizeExpiredForExam(database, id, now);
+      await finalizeExpiredForExam(database, id, now, meta.scoringConfig || null);
       const [freshAttemptsSnap, freshLegacySnap] = await Promise.all([
         database.ref(`exam_attempts/${id}`).get(),
         database.ref(`exam_sessions/${id}`).get()
